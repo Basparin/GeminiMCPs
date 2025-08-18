@@ -69,6 +69,33 @@ def semantic_search_codebase_tool(
         }
 
 
+def find_duplicate_code_tool(
+    codebase_path: str,
+    min_similarity: float = 0.8,
+    min_lines: int = 10,
+) -> dict:
+    """Finds duplicate code sections within the indexed codebase."""
+    try:
+        duplicates = codebase_manager.find_duplicate_code(
+            codebase_path, min_similarity, min_lines
+        )
+        return {
+            "message": f"Found {len(duplicates)} duplicate code sections.",
+            "duplicates": duplicates,
+        }
+    except ValueError as e:
+        return {"error": {"code": "INVALID_INPUT", "message": str(e)}}
+    except Exception as e:
+        return {
+            "error": {
+                "code": "DUPLICATE_CODE_ERROR",
+                "message": (
+                    f"An unexpected error occurred during duplicate code detection: {e}"
+                ),
+            }
+        }
+
+
 def summarize_code_section_tool(
     file_path: str,
     start_line: int = None,

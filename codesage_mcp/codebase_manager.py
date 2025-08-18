@@ -309,6 +309,109 @@ class CodebaseManager:
                 )
         return search_results
 
+    def find_duplicate_code(
+        self, 
+        codebase_path: str, 
+        min_similarity: float = 0.8, 
+        min_lines: int = 10
+    ) -> list[dict]:
+        """
+        Finds duplicate code sections within the indexed codebase.
+        
+        Args:
+            codebase_path (str): Path to the indexed codebase.
+            min_similarity (float): Minimum similarity score to consider 
+                snippets as duplicates.
+            min_lines (int): Minimum number of lines a code section must have.
+            
+        Returns:
+            list[dict]: List of duplicate code pairs with file paths, line 
+                numbers, and similarity scores.
+        """
+        abs_codebase_path = str(Path(codebase_path).resolve())
+        if abs_codebase_path not in self.indexed_codebases:
+            raise ValueError(
+                f"Codebase at {codebase_path} has not been indexed. "
+                f"Please index it first."
+            )
+
+        if self.faiss_index is None or self.faiss_index.ntotal == 0:
+            return []  # No index or no embeddings
+
+        # Get all indexed file paths
+        indexed_files = self.indexed_codebases[abs_codebase_path]["files"]
+        duplicates = []
+        
+        # For each file, split into sections and compare
+        for relative_file_path in indexed_files:
+            file_path = Path(codebase_path) / relative_file_path
+            
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                
+                # Split file into sections of at least min_lines
+                for i in range(0, len(lines), min_lines):
+                    section_lines = lines[i:i + min_lines]
+                    if len(section_lines) < min_lines:
+                        continue  # Skip sections shorter than min_lines
+                    
+                    section_content = "".join(section_lines)
+                    
+                    # Encode the section
+                    section_embedding = self.sentence_transformer_model.encode(
+                        section_content
+                    )
+                    section_embedding = np.array([section_embedding]).astype("float32")
+                    
+                    # Search for similar sections in the entire codebase
+                    distances, indices = self.faiss_index.search(
+                        section_embedding, 10
+                    )  # Search for top 10
+                    
+                    # Check results
+                    for j, dist in zip(indices[0], distances[0]):
+                        if j == -1:  # -1 indicates no result found
+                            continue
+                        
+                        # Calculate similarity score (convert distance to similarity)
+                        # Assuming L2 distance, convert to similarity
+                        similarity = 1 - (dist / 2)  
+                        
+                        if similarity >= min_similarity:
+                            # Get the file path of the matching section
+                            matching_file_path = self.file_paths_map.get(str(j))
+                            
+                            # Skip if it's the same file and section
+                            if matching_file_path == str(file_path) and i == j:
+                                continue
+                                
+                            duplicates.append({
+                                "file1": str(file_path),
+                                "file2": matching_file_path,
+                                "start_line1": i + 1,
+                                "end_line1": i + min_lines,
+                                "start_line2": j + 1,  # This is approximate
+                                "end_line2": j + min_lines,  # This is approximate
+                                "similarity": similarity
+                            })
+                            
+            except Exception as e:
+                print(f"Error processing file {file_path}: {e}")
+                continue
+                
+        # Remove duplicates from the results list (since we're comparing 
+        # bidirectionally)
+        seen_pairs = set()
+        unique_duplicates = []
+        for dup in duplicates:
+            pair_key = tuple(sorted([dup["file1"], dup["file2"]]))
+            if pair_key not in seen_pairs:
+                seen_pairs.add(pair_key)
+                unique_duplicates.append(dup)
+                
+        return unique_duplicates
+
     def get_file_structure(self, codebase_path: str, file_path: str) -> list[str]:
         abs_codebase_path = str(Path(codebase_path).resolve())
         if abs_codebase_path not in self.indexed_codebases:

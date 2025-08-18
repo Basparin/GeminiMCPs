@@ -8,7 +8,8 @@ from pydantic import BaseModel, ValidationError
 from codesage_mcp.tools import (
     read_code_file_tool,
     search_codebase_tool,
-    semantic_search_codebase_tool, # Import the new tool function
+    semantic_search_codebase_tool,
+    find_duplicate_code_tool, # Import the new tool function
     summarize_code_section_tool,
     get_file_structure_tool,
     index_codebase_tool,
@@ -94,6 +95,22 @@ def get_all_tools_definitions_as_object():
                     "top_k": {"type": "integer", "default": 5},
                 },
                 "required": ["codebase_path", "query"],
+            },
+            "type": "function",
+        },
+        "find_duplicate_code": {
+            "name": "find_duplicate_code",
+            "description": (
+                "Finds duplicate code sections within the indexed codebase."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "codebase_path": {"type": "string"},
+                    "min_similarity": {"type": "number", "default": 0.8},
+                    "min_lines": {"type": "integer", "default": 10},
+                },
+                "required": ["codebase_path"],
             },
             "type": "function",
         },
@@ -186,7 +203,8 @@ TOOL_FUNCTIONS = {
     "read_code_file": read_code_file_tool,
     "index_codebase": index_codebase_tool,
     "search_codebase": search_codebase_tool,
-    "semantic_search_codebase": semantic_search_codebase_tool, # Register the new tool
+    "semantic_search_codebase": semantic_search_codebase_tool,
+    "find_duplicate_code": find_duplicate_code_tool, # Register the new tool
     "get_file_structure": get_file_structure_tool,
     "summarize_code_section": summarize_code_section_tool,
     "list_undocumented_functions": list_undocumented_functions_tool,

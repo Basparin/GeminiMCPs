@@ -12,6 +12,9 @@ The CodeSage MCP Server exposes a powerful set of tools to the Gemini CLI:
 *   **Code Search:** Performs regex-based searches across all indexed files to quickly find code snippets, function definitions, or any other pattern.
 *   **File Structure Overview:** Provides a tree-like view of the directory structure.
 *   **LLM-Powered Code Summarization:** Summarizes sections of code using the Groq, OpenRouter, or Google AI APIs. This feature requires an API key for the desired service.
+*   **Duplicate Code Detection:** Identifies duplicate or highly similar code sections within the indexed codebase using semantic similarity analysis.
+
+For a complete reference of all available tools and their parameters, see the [Tools Reference](docs/tools_reference.md).
 
 ## Setup
 
@@ -71,6 +74,10 @@ docker compose up --build
 ```
 
 This will build the Docker image (if not already built) and start the server in a container. The server will be accessible at `http://localhost:8000`.
+
+## Tool Documentation
+
+For detailed documentation on all available tools, including parameters and usage examples, see the [Tools Reference](docs/tools_reference.md).
 
 ## Configuring Gemini CLI
 

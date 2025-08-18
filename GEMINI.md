@@ -86,6 +86,12 @@ The project leverages `fastapi` for API development, `uvicorn` for serving the a
 *   `search_codebase`: Searches for a pattern within indexed code files.
 *   `get_file_structure`: Provides a high-level overview of a file's structure.
 *   `summarize_code_section`: Summarizes a specific section of code using the Groq, OpenRouter, or Google AI APIs.
+*   `semantic_search_codebase`: Performs a semantic search within the indexed codebase to find code snippets semantically similar to the given query.
+*   `find_duplicate_code`: Identifies duplicate or highly similar code sections within the indexed codebase using semantic similarity analysis.
+*   `list_undocumented_functions`: Identifies and lists Python functions in a specified file that are missing docstrings.
+*   `count_lines_of_code`: Counts lines of code (LOC) in the indexed codebase, providing a summary by file type.
+*   `get_dependencies_overview`: Analyzes Python files in the indexed codebase and extracts import statements, providing a high-level overview of internal and external dependencies.
+*   `configure_api_key`: Configures API keys for LLMs (e.g., Groq, OpenRouter, Google AI).
 
 **Planned Features:**
 The project aims to implement more advanced features, including:

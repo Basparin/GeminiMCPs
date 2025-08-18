@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 import shutil
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 from codesage_mcp.main import app
 
 client = TestClient(app)
@@ -187,3 +188,216 @@ def test_mcp_tool_call_list_undocumented_functions(temp_code_file_for_docs):
     # Verify line numbers are present (basic check)
     for func in undocumented_funcs:
         assert "line_number" in func and isinstance(func["line_number"], int)
+
+from unittest.mock import patch, MagicMock
+# ... (other imports are already at the top) ...
+
+# --- New Tests for Semantic Search Tool Function ---
+
+@patch('codesage_mcp.tools.codebase_manager')
+def test_semantic_search_codebase_tool_success(mock_codebase_manager):
+    """Test the semantic_search_codebase_tool function for a successful search."""
+    # Arrange: Mock the manager's method to return a specific result
+    mock_results = [
+        {"file_path": "/path/to/file1.py", "score": 0.1},
+        {"file_path": "/path/to/file2.py", "score": 0.2}
+    ]
+    mock_codebase_manager.semantic_search_codebase.return_value = mock_results
+
+    # Act: Call the tool function
+    from codesage_mcp.tools import semantic_search_codebase_tool
+    result = semantic_search_codebase_tool(
+        codebase_path="/test/codebase",
+        query="test query",
+        top_k=2
+    )
+
+    # Assert: Check the structure and content of the result
+    assert "message" in result
+    assert "Found 2 semantically similar code snippets" in result["message"]
+    assert "results" in result
+    assert result["results"] == mock_results
+
+    # Verify the mock was called correctly
+    mock_codebase_manager.semantic_search_codebase.assert_called_once_with("test query", 2)
+
+@patch('codesage_mcp.tools.codebase_manager')
+def test_semantic_search_codebase_tool_error(mock_codebase_manager):
+    """Test the semantic_search_codebase_tool function when the manager raises an error."""
+    # Arrange: Mock the manager's method to raise an exception
+    mock_codebase_manager.semantic_search_codebase.side_effect = Exception("Test error from FAISS")
+
+    # Act: Call the tool function
+    from codesage_mcp.tools import semantic_search_codebase_tool
+    result = semantic_search_codebase_tool(
+        codebase_path="/test/codebase",
+        query="test query",
+        top_k=2
+    )
+
+    # Assert: Check the structure and content of the error result
+    assert "error" in result
+    assert result["error"]["code"] == "SEMANTIC_SEARCH_ERROR"
+    assert "Test error from FAISS" in result["error"]["message"]
+
+    # Verify the mock was called
+    mock_codebase_manager.semantic_search_codebase.assert_called_once_with("test query", 2)
+
+# --- New Tests for Semantic Search Tool Function ---
+
+@patch('codesage_mcp.tools.codebase_manager')
+def test_semantic_search_codebase_tool_success(mock_codebase_manager):
+    """Test the semantic_search_codebase_tool function for a successful search."""
+    # Arrange: Mock the manager's method to return a specific result
+    mock_results = [
+        {"file_path": "/path/to/file1.py", "score": 0.1},
+        {"file_path": "/path/to/file2.py", "score": 0.2}
+    ]
+    mock_codebase_manager.semantic_search_codebase.return_value = mock_results
+
+    # Act: Call the tool function
+    from codesage_mcp.tools import semantic_search_codebase_tool
+    result = semantic_search_codebase_tool(
+        codebase_path="/test/codebase",
+        query="test query",
+        top_k=2
+    )
+
+    # Assert: Check the structure and content of the result
+    assert "message" in result
+    assert "Found 2 semantically similar code snippets" in result["message"]
+    assert "results" in result
+    assert result["results"] == mock_results
+
+    # Verify the mock was called correctly
+    mock_codebase_manager.semantic_search_codebase.assert_called_once_with("test query", 2)
+
+@patch('codesage_mcp.tools.codebase_manager')
+def test_semantic_search_codebase_tool_error(mock_codebase_manager):
+    """Test the semantic_search_codebase_tool function when the manager raises an error."""
+    # Arrange: Mock the manager's method to raise an exception
+    mock_codebase_manager.semantic_search_codebase.side_effect = Exception("Test error from FAISS")
+
+    # Act: Call the tool function
+    from codesage_mcp.tools import semantic_search_codebase_tool
+    result = semantic_search_codebase_tool(
+        codebase_path="/test/codebase",
+        query="test query",
+        top_k=2
+    )
+
+    # Assert: Check the structure and content of the error result
+    assert "error" in result
+    assert result["error"]["code"] == "SEMANTIC_SEARCH_ERROR"
+    assert "Test error from FAISS" in result["error"]["message"]
+
+    # Verify the mock was called
+    mock_codebase_manager.semantic_search_codebase.assert_called_once_with("test query", 2)
+
+# --- New Integration Tests for Semantic Search MCP Endpoint ---
+
+def test_mcp_tool_call_semantic_search_success(temp_dir):
+    """Test calling the semantic_search_codebase tool via the MCP endpoint successfully."""
+    # Step 1: Index the temporary codebase
+    index_response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": "index_codebase",
+                "arguments": {"path": str(temp_dir)},
+            },
+            "id": "index_for_semantic_search_test",
+        },
+    )
+    assert index_response.status_code == 200
+    index_result = index_response.json()["result"]
+    assert "message" in index_result
+    assert "indexed successfully" in index_result["message"]
+
+    # Step 2: Perform semantic search (using a generic query)
+    # Note: In a real test, we'd mock sentence-transformers and faiss for predictability.
+    # Here, we test the endpoint mechanics and assume the underlying logic is tested in unit tests.
+    search_response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": "semantic_search_codebase",
+                "arguments": {
+                    "codebase_path": str(temp_dir),
+                    "query": "find text",
+                    "top_k": 2,
+                },
+            },
+            "id": "semantic_search_test_1",
+        },
+    )
+    assert search_response.status_code == 200
+    search_data = search_response.json()
+    assert search_data["jsonrpc"] == "2.0"
+    assert search_data["id"] == "semantic_search_test_1"
+    
+    result = search_data["result"]
+    assert "message" in result
+    assert "semantically similar code snippets" in result["message"]
+    assert "results" in result
+    # We can't assert specific results without mocking, but we can check it's a list
+    assert isinstance(result["results"], list)
+
+
+# --- New Integration Tests for Find Duplicate Code MCP Endpoint ---
+
+def test_mcp_tool_call_find_duplicate_code_success(temp_dir):
+    """Test calling the find_duplicate_code tool via the MCP endpoint successfully."""
+    # Step 1: Index the temporary codebase
+    index_response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": "index_codebase",
+                "arguments": {"path": str(temp_dir)},
+            },
+            "id": "index_for_duplicate_code_test",
+        },
+    )
+    assert index_response.status_code == 200
+    index_result = index_response.json()["result"]
+    assert "message" in index_result
+    assert "indexed successfully" in index_result["message"]
+
+    # Step 2: Perform duplicate code detection
+    # Note: In a real test, we'd mock sentence-transformers and faiss for predictability.
+    # Here, we test the endpoint mechanics and assume the underlying logic is tested in unit tests.
+    duplicate_response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": "find_duplicate_code",
+                "arguments": {
+                    "codebase_path": str(temp_dir),
+                    "min_similarity": 0.8,
+                    "min_lines": 3,
+                },
+            },
+            "id": "find_duplicate_code_test_1",
+        },
+    )
+    assert duplicate_response.status_code == 200
+    duplicate_data = duplicate_response.json()
+    assert duplicate_data["jsonrpc"] == "2.0"
+    assert duplicate_data["id"] == "find_duplicate_code_test_1"
+    
+    result = duplicate_data["result"]
+    assert "message" in result
+    assert "duplicate code sections" in result["message"]
+    assert "duplicates" in result
+    # We can't assert specific results without mocking, but we can check it's a list
+    assert isinstance(result["duplicates"], list)
+
