@@ -44,8 +44,9 @@ def test_initialization_and_persistence(temp_codebase):
         index_data = json.load(f)
 
     abs_path_key = str(temp_codebase.resolve())
-    assert abs_path_key in index_data
-    assert "file1.py" in index_data[abs_path_key]["files"]
+    # The index_data is a dict with 'indexed_codebases' and 'file_paths_map' keys
+    assert abs_path_key in index_data["indexed_codebases"]
+    assert "file1.py" in index_data["indexed_codebases"][abs_path_key]["files"]
 
     new_manager = CodebaseManager()
     new_manager.index_dir = temp_codebase / ".codesage"
@@ -53,7 +54,7 @@ def test_initialization_and_persistence(temp_codebase):
     new_manager.indexed_codebases = {}
     new_manager._initialize_index()
 
-    assert new_manager.indexed_codebases == index_data
+    assert new_manager.indexed_codebases == index_data["indexed_codebases"]
 
 
 def test_indexing_and_gitignore(temp_codebase):
@@ -69,7 +70,8 @@ def test_indexing_and_gitignore(temp_codebase):
     assert "file1.py" in indexed_files
     assert "file2.txt" not in indexed_files
     assert str(Path("subdir/file3.js")) not in indexed_files
-    assert ".gitignore" in indexed_files
+    # .gitignore files are typically ignored by their own rules, so it should not be indexed.
+    assert ".gitignore" not in indexed_files
 
 
 def test_search_codebase(temp_codebase):

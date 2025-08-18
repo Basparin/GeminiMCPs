@@ -90,6 +90,29 @@ def test_mcp_tools_list():
 
 def test_mcp_tool_call_success(temp_dir):
     # Use a real tool that doesn't have complex dependencies
+    # get_file_structure requires the codebase to be indexed first.
+    
+    # Step 1: Index the codebase
+    index_response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": "index_codebase",
+                "arguments": {"path": str(temp_dir)},
+            },
+            "id": "index_for_get_structure_test",
+        },
+    )
+    assert index_response.status_code == 200
+    index_data = index_response.json()
+    assert index_data["jsonrpc"] == "2.0"
+    assert "result" in index_data
+    assert "message" in index_data["result"]
+    assert "indexed successfully" in index_data["result"]["message"]
+
+    # Step 2: Call get_file_structure
     response = client.post(
         "/mcp",
         json={
@@ -97,7 +120,10 @@ def test_mcp_tool_call_success(temp_dir):
             "method": "tools/call",
             "params": {
                 "name": "get_file_structure",
-                "arguments": {"path": str(temp_dir)},
+                "arguments": {
+                    "codebase_path": str(temp_dir),
+                    "file_path": "file1.txt", # File created by temp_dir fixture
+                },
             },
             "id": "3",
         },
@@ -107,6 +133,7 @@ def test_mcp_tool_call_success(temp_dir):
     assert data["jsonrpc"] == "2.0"
     assert data["id"] == "3"
     assert "structure" in data["result"]
+    # The structure should contain the filename
     assert any("file1.txt" in s for s in data["result"]["structure"])
 
 
