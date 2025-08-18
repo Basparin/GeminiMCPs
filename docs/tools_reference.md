@@ -85,6 +85,12 @@ Returns the current configuration, with API keys masked for security.
 **Parameters:**
 None
 
+### analyze_codebase_improvements
+Analyzes the codebase for potential improvements and suggestions.
+
+**Parameters:**
+- `codebase_path` (str, required): Path to the indexed codebase.
+
 ## Configuration Tools
 
 ### configure_api_key

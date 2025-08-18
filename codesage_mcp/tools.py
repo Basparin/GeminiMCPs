@@ -451,3 +451,119 @@ def get_configuration_tool() -> dict:
                 ),
             }
         }
+
+
+def analyze_codebase_improvements_tool(codebase_path: str) -> dict:
+    """Analyzes the codebase for potential improvements and suggestions."""
+    try:
+        # Import codebase manager
+        from codesage_mcp.codebase_manager import codebase_manager
+        from pathlib import Path
+        
+        # Check if codebase is indexed
+        abs_codebase_path = str(Path(codebase_path).resolve())
+        if abs_codebase_path not in codebase_manager.indexed_codebases:
+            return {
+                "error": {
+                    "code": "NOT_INDEXED",
+                    "message": (
+                        f"Codebase at {codebase_path} has not been indexed. "
+                        "Please index it first using the 'index_codebase' tool."
+                    ),
+                }
+            }
+        
+        # Get indexed files
+        indexed_files = codebase_manager.indexed_codebases[abs_codebase_path]["files"]
+        
+        # Initialize analysis results
+        analysis = {
+            "total_files": len(indexed_files),
+            "python_files": 0,
+            "todo_comments": 0,
+            "fixme_comments": 0,
+            "undocumented_functions": 0,
+            "potential_duplicates": 0,
+            "large_files": [],  # Files with > 500 lines
+            "suggestions": []
+        }
+        
+        # Analyze each file
+        for relative_file_path in indexed_files:
+            file_path = Path(codebase_path) / relative_file_path
+            
+            # Only analyze Python files for detailed metrics
+            if file_path.suffix == ".py":
+                analysis["python_files"] += 1
+                
+                try:
+                    # Count lines
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        lines = f.readlines()
+                    
+                    line_count = len(lines)
+                    if line_count > 500:
+                        analysis["large_files"].append({
+                            "file": str(file_path),
+                            "lines": line_count
+                        })
+                    
+                    # Search for TODO and FIXME comments
+                    todo_count = sum(1 for line in lines if "TODO" in line)
+                    fixme_count = sum(1 for line in lines if "FIXME" in line)
+                    analysis["todo_comments"] += todo_count
+                    analysis["fixme_comments"] += fixme_count
+                    
+                    # For Python files, check for undocumented functions
+                    # This is a simplified check - in a real implementation, we'd use AST
+                    func_lines = [i for i, line in enumerate(lines) if line.strip().startswith("def ")]
+                    docstring_lines = [i for i, line in enumerate(lines) if '"""' in line or "'''" in line]
+                    
+                    # Very rough estimate - in a real implementation, we'd do a proper AST analysis
+                    analysis["undocumented_functions"] += max(0, len(func_lines) - len(docstring_lines) // 2)
+                    
+                except Exception:
+                    # Skip files that can't be read
+                    continue
+        
+        # Generate suggestions based on analysis
+        if analysis["todo_comments"] > 0:
+            analysis["suggestions"].append(
+                f"Address {analysis['todo_comments']} TODO comments in the codebase"
+            )
+        
+        if analysis["fixme_comments"] > 0:
+            analysis["suggestions"].append(
+                f"Fix {analysis['fixme_comments']} FIXME issues in the codebase"
+            )
+        
+        if analysis["undocumented_functions"] > 0:
+            analysis["suggestions"].append(
+                f"Document {analysis['undocumented_functions']} functions missing docstrings"
+            )
+        
+        if len(analysis["large_files"]) > 0:
+            analysis["suggestions"].append(
+                f"Refactor {len(analysis['large_files'])} large files (>500 lines)"
+            )
+        
+        # Add general suggestions
+        analysis["suggestions"].append(
+            "Consider using the 'find_duplicate_code' tool to identify duplicated code sections"
+        )
+        analysis["suggestions"].append(
+            "Use the 'list_undocumented_functions' tool for detailed analysis of missing documentation"
+        )
+        
+        return {
+            "message": "Codebase analysis completed successfully.",
+            "analysis": analysis
+        }
+        
+    except Exception as e:
+        return {
+            "error": {
+                "code": "ANALYSIS_ERROR",
+                "message": f"An unexpected error occurred during codebase analysis: {e}",
+            }
+        }

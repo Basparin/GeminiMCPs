@@ -10,7 +10,8 @@ from codesage_mcp.tools import (
     search_codebase_tool,
     semantic_search_codebase_tool,
     find_duplicate_code_tool,
-    get_configuration_tool, # Import the new tool function
+    get_configuration_tool,
+    analyze_codebase_improvements_tool, # Import the new tool function
     summarize_code_section_tool,
     get_file_structure_tool,
     index_codebase_tool,
@@ -204,6 +205,20 @@ def get_all_tools_definitions_as_object():
             "inputSchema": {"type": "object", "properties": {}, "required": []},
             "type": "function",
         },
+        "analyze_codebase_improvements": {
+            "name": "analyze_codebase_improvements",
+            "description": (
+                "Analyzes the codebase for potential improvements and suggestions."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "codebase_path": {"type": "string"},
+                },
+                "required": ["codebase_path"],
+            },
+            "type": "function",
+        },
     }
 
 
@@ -220,7 +235,8 @@ TOOL_FUNCTIONS = {
     "count_lines_of_code": count_lines_of_code_tool,
     "configure_api_key": configure_api_key_tool,
     "get_dependencies_overview": get_dependencies_overview_tool,
-    "get_configuration": get_configuration_tool, # Register the new tool
+    "get_configuration": get_configuration_tool,
+    "analyze_codebase_improvements": analyze_codebase_improvements_tool, # Register the new tool
 }
 
 

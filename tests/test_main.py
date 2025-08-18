@@ -440,3 +440,62 @@ def test_mcp_tool_call_get_configuration_success():
     assert config["openrouter_api_key"] == "sk-o...94a7"
     assert config["google_api_key"] == "AIza...dqmA"
 
+
+# --- New Integration Tests for Analyze Codebase Improvements MCP Endpoint ---
+
+def test_mcp_tool_call_analyze_codebase_improvements_success(temp_dir):
+    """Test calling the analyze_codebase_improvements tool via the MCP endpoint successfully."""
+    # Step 1: Index the temporary codebase
+    index_response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": "index_codebase",
+                "arguments": {"path": str(temp_dir)},
+            },
+            "id": "index_for_analysis_test",
+        },
+    )
+    assert index_response.status_code == 200
+    index_result = index_response.json()["result"]
+    assert "message" in index_result
+    assert "indexed successfully" in index_result["message"]
+
+    # Step 2: Perform codebase analysis
+    analysis_response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": "analyze_codebase_improvements",
+                "arguments": {
+                    "codebase_path": str(temp_dir),
+                },
+            },
+            "id": "analyze_codebase_improvements_test_1",
+        },
+    )
+    assert analysis_response.status_code == 200
+    analysis_data = analysis_response.json()
+    assert analysis_data["jsonrpc"] == "2.0"
+    assert analysis_data["id"] == "analyze_codebase_improvements_test_1"
+    
+    result = analysis_data["result"]
+    assert "message" in result
+    assert "analysis" in result
+    assert result["message"] == "Codebase analysis completed successfully."
+    
+    # Check the analysis structure
+    analysis = result["analysis"]
+    assert "total_files" in analysis
+    assert "python_files" in analysis
+    assert "todo_comments" in analysis
+    assert "fixme_comments" in analysis
+    assert "undocumented_functions" in analysis
+    assert "potential_duplicates" in analysis
+    assert "large_files" in analysis
+    assert "suggestions" in analysis
+

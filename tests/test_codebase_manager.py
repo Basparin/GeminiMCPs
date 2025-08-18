@@ -428,3 +428,48 @@ def test_get_configuration_tool():
     assert config["groq_api_key"] == "gsk_...2riH"
     assert config["openrouter_api_key"] == "sk-o...94a7"
     assert config["google_api_key"] == "AIza...dqmA"
+
+
+# --- New Tests for Analyze Codebase Improvements Tool ---
+
+def test_analyze_codebase_improvements_tool(temp_codebase):
+    """Test the analyze_codebase_improvements_tool function."""
+    from codesage_mcp.tools import analyze_codebase_improvements_tool
+    from codesage_mcp.codebase_manager import codebase_manager
+    
+    # First, index the codebase
+    codebase_manager.index_codebase(str(temp_codebase))
+    
+    # Test the analysis tool
+    result = analyze_codebase_improvements_tool(str(temp_codebase))
+    
+    # Check the structure of the result
+    assert "message" in result
+    assert "analysis" in result
+    assert result["message"] == "Codebase analysis completed successfully."
+    
+    # Check the analysis structure
+    analysis = result["analysis"]
+    assert "total_files" in analysis
+    assert "python_files" in analysis
+    assert "todo_comments" in analysis
+    assert "fixme_comments" in analysis
+    assert "undocumented_functions" in analysis
+    assert "potential_duplicates" in analysis
+    assert "large_files" in analysis
+    assert "suggestions" in analysis
+    
+    # With our test codebase, we should have at least one Python file
+    assert analysis["python_files"] >= 1
+
+
+def test_analyze_codebase_improvements_tool_not_indexed():
+    """Test the analyze_codebase_improvements_tool function with an unindexed codebase."""
+    from codesage_mcp.tools import analyze_codebase_improvements_tool
+    
+    # Test with an unindexed codebase
+    result = analyze_codebase_improvements_tool("/test/nonexistent/codebase")
+    
+    # Check that we get an error
+    assert "error" in result
+    assert result["error"]["code"] == "NOT_INDEXED"
