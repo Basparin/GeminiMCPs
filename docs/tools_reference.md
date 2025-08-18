@@ -79,6 +79,12 @@ Analyzes Python files in the indexed codebase and extracts import statements, pr
 **Parameters:**
 None
 
+### get_configuration
+Returns the current configuration, with API keys masked for security.
+
+**Parameters:**
+None
+
 ## Configuration Tools
 
 ### configure_api_key

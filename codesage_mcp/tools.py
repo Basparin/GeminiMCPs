@@ -418,3 +418,36 @@ def get_dependencies_overview_tool() -> dict:
             k: sorted(list(v)) for k, v in external_dependencies.items()
         },
     }
+
+
+def get_configuration_tool() -> dict:
+    """Returns the current configuration, with API keys masked for security."""
+    try:
+        from codesage_mcp.config import GROQ_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY
+        
+        def mask_api_key(key: str) -> str:
+            """Mask an API key, showing only the first and last few characters."""
+            if not key:
+                return "Not set"
+            if len(key) <= 8:
+                return "*" * len(key)
+            return f"{key[:4]}...{key[-4:]}"
+        
+        return {
+            "message": "Current configuration retrieved successfully.",
+            "configuration": {
+                "groq_api_key": mask_api_key(GROQ_API_KEY),
+                "openrouter_api_key": mask_api_key(OPENROUTER_API_KEY),
+                "google_api_key": mask_api_key(GOOGLE_API_KEY)
+            }
+        }
+    except Exception as e:
+        return {
+            "error": {
+                "code": "CONFIGURATION_ERROR",
+                "message": (
+                    "An unexpected error occurred while retrieving configuration: "
+                    f"{e}"
+                ),
+            }
+        }

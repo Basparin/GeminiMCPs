@@ -401,3 +401,42 @@ def test_mcp_tool_call_find_duplicate_code_success(temp_dir):
     # We can't assert specific results without mocking, but we can check it's a list
     assert isinstance(result["duplicates"], list)
 
+
+# --- New Integration Tests for Get Configuration MCP Endpoint ---
+
+def test_mcp_tool_call_get_configuration_success():
+    """Test calling the get_configuration tool via the MCP endpoint successfully."""
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": "get_configuration",
+                "arguments": {},
+            },
+            "id": "get_configuration_test_1",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["jsonrpc"] == "2.0"
+    assert data["id"] == "get_configuration_test_1"
+    
+    result = data["result"]
+    assert "message" in result
+    assert "configuration" in result
+    assert result["message"] == "Current configuration retrieved successfully."
+    
+    # Check the configuration structure
+    config = result["configuration"]
+    assert "groq_api_key" in config
+    assert "openrouter_api_key" in config
+    assert "google_api_key" in config
+    
+    # Check that the API keys are masked
+    # The default config has specific fake keys, so we can check the masked values
+    assert config["groq_api_key"] == "gsk_...2riH"
+    assert config["openrouter_api_key"] == "sk-o...94a7"
+    assert config["google_api_key"] == "AIza...dqmA"
+

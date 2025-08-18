@@ -24,6 +24,7 @@
 
 ### Configuration Tools
 - `configure_api_key(llm_provider: str, api_key: str)`: Configures API keys for LLMs (e.g., Groq, OpenRouter, Google AI).
+- `get_configuration()`: Returns the current configuration, with API keys masked for security.
 
 ## Tool Parameters and Usage
 

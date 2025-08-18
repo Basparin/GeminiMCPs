@@ -16,6 +16,8 @@ The CodeSage MCP Server exposes a powerful set of tools to the Gemini CLI:
 
 For a complete reference of all available tools and their parameters, see the [Tools Reference](docs/tools_reference.md).
 
+We've also added a new `get_configuration` tool that allows you to check the current configuration, with API keys masked for security.
+
 ## Setup
 
 1.  **Clone the repository:**

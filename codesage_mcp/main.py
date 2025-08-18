@@ -9,7 +9,8 @@ from codesage_mcp.tools import (
     read_code_file_tool,
     search_codebase_tool,
     semantic_search_codebase_tool,
-    find_duplicate_code_tool, # Import the new tool function
+    find_duplicate_code_tool,
+    get_configuration_tool, # Import the new tool function
     summarize_code_section_tool,
     get_file_structure_tool,
     index_codebase_tool,
@@ -195,6 +196,14 @@ def get_all_tools_definitions_as_object():
             "inputSchema": {"type": "object", "properties": {}, "required": []},
             "type": "function",
         },
+        "get_configuration": {
+            "name": "get_configuration",
+            "description": (
+                "Returns the current configuration, with API keys masked for security."
+            ),
+            "inputSchema": {"type": "object", "properties": {}, "required": []},
+            "type": "function",
+        },
     }
 
 
@@ -204,13 +213,14 @@ TOOL_FUNCTIONS = {
     "index_codebase": index_codebase_tool,
     "search_codebase": search_codebase_tool,
     "semantic_search_codebase": semantic_search_codebase_tool,
-    "find_duplicate_code": find_duplicate_code_tool, # Register the new tool
+    "find_duplicate_code": find_duplicate_code_tool,
     "get_file_structure": get_file_structure_tool,
     "summarize_code_section": summarize_code_section_tool,
     "list_undocumented_functions": list_undocumented_functions_tool,
     "count_lines_of_code": count_lines_of_code_tool,
     "configure_api_key": configure_api_key_tool,
     "get_dependencies_overview": get_dependencies_overview_tool,
+    "get_configuration": get_configuration_tool, # Register the new tool
 }
 
 

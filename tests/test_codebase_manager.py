@@ -401,3 +401,30 @@ def test_find_duplicate_code_with_results(temp_codebase):
     
     # Restore original method
     manager.sentence_transformer_model.encode = original_encode
+
+
+# --- New Tests for Get Configuration Tool ---
+
+def test_get_configuration_tool():
+    """Test the get_configuration_tool function."""
+    from codesage_mcp.tools import get_configuration_tool
+    
+    # Test with the default configuration (which has fake API keys)
+    result = get_configuration_tool()
+    
+    # Check the structure of the result
+    assert "message" in result
+    assert "configuration" in result
+    assert result["message"] == "Current configuration retrieved successfully."
+    
+    # Check the configuration structure
+    config = result["configuration"]
+    assert "groq_api_key" in config
+    assert "openrouter_api_key" in config
+    assert "google_api_key" in config
+    
+    # Check that the API keys are masked
+    # The default config has specific fake keys, so we can check the masked values
+    assert config["groq_api_key"] == "gsk_...2riH"
+    assert config["openrouter_api_key"] == "sk-o...94a7"
+    assert config["google_api_key"] == "AIza...dqmA"
