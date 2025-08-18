@@ -1,3 +1,8 @@
 fastapi
 uvicorn
 python-dotenv
+pytest
+groq
+openai
+ruff
+google-generativeai

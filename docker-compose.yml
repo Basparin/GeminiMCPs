@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  codesage-mcp:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      # These will be loaded from your host's environment or a .env file
+      # Make sure to set them in your host environment or in a .env file
+      # in the same directory as docker-compose.yml
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    # Command to run the application, overriding the Dockerfile's CMD
+    # This is useful for development, as changes to code will be reflected
+    # without rebuilding the image.
+    command: uvicorn codesage_mcp.main:app --host 0.0.0.0 --port 8000 --reload

@@ -14,17 +14,25 @@ To establish the foundational project structure for the "CodeSage" MCP server, i
 - Created `requirements.txt` with `fastapi`, `uvicorn`, and `python-dotenv`.
 - Wrote initial `README.md` for the overall project, outlining its purpose, planned features, and setup instructions.
 - Created `codesage_mcp/README.md` for internal documentation of the MCP server's architecture and implemented tools.
+- Initialized Git repository and made the first commit.
+- Created a `.gitignore` file.
+- Updated `README.md` with instructions for running the FastAPI server and configuring the Gemini CLI.
+- Modified `main.py` to implement JSON-RPC 2.0 for tool discovery, handling the `initialize` method.
+- Adjusted tool definition schema in `main.py` to simplify and explicitly include `type: "function"`.
+- Ensured `error: null` is omitted from JSON-RPC responses.
+- Removed `ToolDefinition` Pydantic model and constructed tool dictionaries directly for precise JSON output.
+- Removed `response_model=JSONRPCResponse` from `@app.post("/mcp")` to bypass potential Pydantic serialization issues.
 
 ### Current Status
 - Project structure is in place.
-- Basic FastAPI server is ready to run (though not yet configured for MCP).
-- `read_code_file` tool is functionally implemented at a basic level.
-- Initial documentation is established.
+- FastAPI server is running and responding to `initialize` JSON-RPC requests on `/mcp`.
+- Server logs show correct JSON-RPC 2.0 responses with tool definitions.
+- Gemini CLI still reports "Disconnected (0 tools cached)" despite correct server responses.
+
+### Roadblock
+- The Gemini CLI is not successfully processing or registering the tools, even though the server is sending what appears to be a correctly formatted JSON-RPC `initialize` response. This suggests a very strict or undocumented schema validation within the Gemini CLI itself.
 
 ### Next Steps
-1.  Initialize Git repository and make the first commit.
-2.  Create a `.gitignore` file.
-3.  Add instructions for running the FastAPI server.
-4.  Document how to configure the Gemini CLI to use this MCP server.
-5.  Test the `read_code_file` tool via the Gemini CLI.
-6.  Begin implementing the `index_codebase` functionality in `codebase_manager.py`.
+1.  User to ensure Gemini CLI is up to date.
+2.  User to check for Gemini CLI debug/verbose logging options for more insight.
+3.  User to consider reaching out to Gemini CLI support or community forums for assistance with tool discovery issues.

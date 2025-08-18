@@ -1,7 +1,10 @@
 __pycache__
 *.pyc
 .env
-venv
+virtualenv
 .pytest_cache
 .vscode
 *.log
+
+# CodeSage MCP Server index
+.codesage/
