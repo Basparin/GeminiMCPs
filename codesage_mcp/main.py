@@ -11,6 +11,10 @@ from codesage_mcp.tools import (
     summarize_code_section_tool,
     get_file_structure_tool,
     index_codebase_tool,
+    list_undocumented_functions_tool,
+    count_lines_of_code_tool,
+    configure_api_key_tool,
+    get_dependencies_overview_tool,
 )
 
 # Configure logging
@@ -59,13 +63,14 @@ def get_all_tools_definitions_as_object():
         },
         "search_codebase": {
             "name": "search_codebase",
-            "description": "Searches for a pattern within indexed code files.",
+            "description": "Searches for a pattern within indexed code files, with optional exclusion patterns.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "codebase_path": {"type": "string"},
                     "pattern": {"type": "string"},
                     "file_types": {"type": "array", "items": {"type": "string"}},
+                    "exclude_patterns": {"type": "array", "items": {"type": "string"}}
                 },
                 "required": ["codebase_path", "pattern"],
             },
@@ -73,11 +78,14 @@ def get_all_tools_definitions_as_object():
         },
         "get_file_structure": {
             "name": "get_file_structure",
-            "description": "Provides a high-level overview of a file's structure.",
+            "description": "Provides a high-level overview of a file's structure within a given codebase.",
             "inputSchema": {
                 "type": "object",
-                "properties": {"path": {"type": "string"}},
-                "required": ["path"],
+                "properties": {
+                    "codebase_path": {"type": "string"},
+                    "file_path": {"type": "string"}
+                },
+                "required": ["codebase_path", "file_path"],
             },
             "type": "function",
         },
@@ -91,9 +99,46 @@ def get_all_tools_definitions_as_object():
                     "start_line": {"type": "integer"},
                     "end_line": {"type": "integer"},
                     "llm_model": {"type": "string"},
+                    "function_name": {"type": "string"},
+                    "class_name": {"type": "string"},
                 },
-                "required": ["file_path", "start_line", "end_line", "llm_model"],
+                "required": ["file_path"],
             },
+            "type": "function",
+        },
+        "list_undocumented_functions": {
+            "name": "list_undocumented_functions",
+            "description": "Identifies and lists Python functions in a specified file that are missing docstrings.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"file_path": {"type": "string"}},
+                "required": ["file_path"],
+            },
+            "type": "function",
+        },
+        "count_lines_of_code": {
+            "name": "count_lines_of_code",
+            "description": "Counts lines of code (LOC) in the indexed codebase, providing a summary by file type.",
+            "inputSchema": {"type": "object", "properties": {}, "required": []},
+            "type": "function",
+        },
+        "configure_api_key": {
+            "name": "configure_api_key",
+            "description": "Configures API keys for LLMs (e.g., Groq, OpenRouter, Google AI).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "llm_provider": {"type": "string"},
+                    "api_key": {"type": "string"},
+                },
+                "required": ["llm_provider", "api_key"],
+            },
+            "type": "function",
+        },
+        "get_dependencies_overview": {
+            "name": "get_dependencies_overview",
+            "description": "Analyzes Python files in the indexed codebase and extracts import statements, providing a high-level overview of internal and external dependencies.",
+            "inputSchema": {"type": "object", "properties": {}, "required": []},
             "type": "function",
         },
     }
@@ -106,6 +151,10 @@ TOOL_FUNCTIONS = {
     "search_codebase": search_codebase_tool,
     "get_file_structure": get_file_structure_tool,
     "summarize_code_section": summarize_code_section_tool,
+    "list_undocumented_functions": list_undocumented_functions_tool,
+    "count_lines_of_code": count_lines_of_code_tool,
+    "configure_api_key": configure_api_key_tool,
+    "get_dependencies_overview": get_dependencies_overview_tool,
 }
 
 

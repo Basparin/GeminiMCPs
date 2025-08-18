@@ -6,6 +6,7 @@ from pathlib import Path
 from groq import Groq
 from openai import OpenAI
 import google.generativeai as genai
+import ast # Added this line
 from .config import GROQ_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY
 
 
@@ -70,20 +71,47 @@ class CodebaseManager:
         """Checks if a file or directory should be ignored based on
         .gitignore patterns."""
         relative_path = file_path.relative_to(root_path)
+        
+        # Convert Path objects to strings for fnmatch
+        relative_path_str = str(relative_path)
+        file_name_str = file_path.name
+
+        print(f"\n--- Checking {file_path} (relative: {relative_path_str}) ---")
         for pattern in gitignore_patterns:
-            if pattern.endswith("/"):
-                try:
-                    if relative_path.match(pattern.rstrip("/")) or any(
-                        p.name == pattern.rstrip("/")
-                        for p in relative_path.parents
-                    ):
-                        return True
-                except ValueError:
-                    pass
-            if fnmatch.fnmatch(relative_path, pattern) or fnmatch.fnmatch(
-                file_path.name, pattern
-            ):
+            print(f"  Pattern: {pattern}")
+            # Handle patterns ending with a slash (directories)
+            if pattern.endswith('/'):
+                # Check if the relative path starts with the directory pattern
+                if relative_path_str.startswith(pattern):
+                    print(f"    Match (startswith dir): {pattern} -> True")
+                    return True
+                # Check if any part of the relative path matches the directory name
+                # e.g., "venv/" should ignore "foo/venv/bar"
+                pattern_dir_name = pattern.rstrip('/')
+                if pattern_dir_name in relative_path.parts:
+                    print(f"    Match (part of path dir): {pattern} -> True")
+                    return True
+            
+            # Handle general glob patterns
+            # Check against the full relative path
+            if fnmatch.fnmatch(relative_path_str, pattern):
+                print(f"    Match (fnmatch full path): {pattern} -> True")
                 return True
+            
+            # Check against the file/directory name only
+            if fnmatch.fnmatch(file_name_str, pattern):
+                print(f"    Match (fnmatch file name): {pattern} -> True")
+                return True
+            
+            # Handle patterns like "foo" which should ignore "foo/bar" and "foo"
+            # This is implicitly handled by checking against relative_path_str
+            # but let's be explicit for clarity if the pattern is a directory name
+            if not pattern.endswith('/') and '/' not in pattern: # It's a simple name pattern
+                if pattern in relative_path.parts:
+                    print(f"    Match (simple name in parts): {pattern} -> True")
+                    return True
+
+        print(f"--- No match for {file_path} -> False ---")
         return False
 
     def read_code_file(self, file_path: str) -> str:
@@ -98,11 +126,21 @@ class CodebaseManager:
             raise ValueError(f"Path is not a directory: {path}")
 
         gitignore_patterns = self._get_gitignore_patterns(root_path)
+        # Explicitly add .git/ and venv/ to ignore patterns
+        gitignore_patterns.append(".git/")
+        gitignore_patterns.append("venv/")
         gitignore_patterns.append(self.index_dir.name + "/")
+        gitignore_patterns.append(".gitignore")
 
         indexed_files = []
         for root, dirs, files in os.walk(path, topdown=True):
             current_path = Path(root)
+            
+            # Debugging: Print directories being considered
+            print(f"DEBUG: Current directory: {current_path}")
+            print(f"DEBUG: Dirs before filtering: {dirs}")
+
+            # Filter directories in-place to prevent os.walk from descending into ignored ones
             dirs[:] = [
                 d
                 for d in dirs
@@ -110,8 +148,13 @@ class CodebaseManager:
                     current_path / d, gitignore_patterns, root_path
                 )
             ]
+            # Debugging: Print directories after filtering
+            print(f"DEBUG: Dirs after filtering: {dirs}")
+
             for file in files:
                 file_path = current_path / file
+                # Debugging: Print files being considered
+                # print(f"DEBUG: Checking file: {file_path}")
                 if not self._is_ignored(file_path, gitignore_patterns, root_path):
                     indexed_files.append(str(file_path.relative_to(root_path)))
 
@@ -123,6 +166,7 @@ class CodebaseManager:
         self._save_index()
 
         print(f"Indexed {len(indexed_files)} files in codebase at: {path}")
+        print(f"DEBUG: Indexed files: {indexed_files}") # Added logging
         return indexed_files
 
     def search_codebase(
@@ -130,6 +174,7 @@ class CodebaseManager:
         codebase_path: str,
         pattern: str,
         file_types: list[str] = None,
+        exclude_patterns: list[str] = None,
     ) -> list[dict]:
         abs_codebase_path = str(Path(codebase_path).resolve())
         if abs_codebase_path not in self.indexed_codebases:
@@ -148,8 +193,26 @@ class CodebaseManager:
 
         for relative_file_path in indexed_files:
             file_path = Path(codebase_path) / relative_file_path
+
+            # Apply file_types filter
             if file_types and file_path.suffix.lstrip(".") not in file_types:
                 continue
+
+            # Apply exclude_patterns filter
+            if exclude_patterns:
+                should_exclude = False
+                for exclude_pattern in exclude_patterns:
+                    # Check against the full relative path
+                    if fnmatch.fnmatch(str(relative_file_path), exclude_pattern):
+                        should_exclude = True
+                        break
+                    # Check against the file name only
+                    if fnmatch.fnmatch(file_path.name, exclude_pattern):
+                        should_exclude = True
+                        break
+                if should_exclude:
+                    continue
+
             try:
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     for line_num, line_content in enumerate(f, 1):
@@ -171,19 +234,35 @@ class CodebaseManager:
                 continue
         return search_results
 
-    def get_file_structure(self, path: str) -> list[str]:
-        if not os.path.isdir(path):
-            raise ValueError(f"Path is not a directory: {path}")
+    def get_file_structure(self, codebase_path: str, file_path: str) -> list[str]:
+        abs_codebase_path = str(Path(codebase_path).resolve())
+        if abs_codebase_path not in self.indexed_codebases:
+            raise ValueError(
+                f"Codebase at {codebase_path} has not been indexed. Please index it first."
+            )
+
+        full_file_path = Path(codebase_path) / file_path # file_path is now relative to codebase_path
+        if not full_file_path.exists():
+            raise FileNotFoundError(f"File not found in codebase: {file_path}")
 
         structure = []
-        for root, dirs, files in os.walk(path):
-            level = root.replace(path, "").count(os.sep)
-            indent = " " * 4 * (level)
-            structure.append(f"{indent}{os.path.basename(root)}/")
-            subindent = " " * 4 * (level + 1)
-            for f in files:
-                structure.append(f"{subindent}{f}")
-        return structure
+        try:
+            with open(full_file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            tree = ast.parse(content)
+
+            for node in tree.body:
+                if isinstance(node, ast.FunctionDef):
+                    structure.append(f"  Function: {node.name}")
+                elif isinstance(node, ast.ClassDef):
+                    structure.append(f"  Class: {node.name}")
+                    for item in node.body:
+                        if isinstance(item, ast.FunctionDef):
+                            structure.append(f"    Method: {item.name}")
+        except Exception as e:
+            return [f"Error parsing file structure: {e}"]
+
+        return [f"Structure of {file_path}:"] + structure
 
     def _summarize_with_groq(self, code_snippet: str, llm_model: str) -> str:
         if not self.groq_client:
