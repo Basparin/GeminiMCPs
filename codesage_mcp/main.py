@@ -8,6 +8,7 @@ from pydantic import BaseModel, ValidationError
 from codesage_mcp.tools import (
     read_code_file_tool,
     search_codebase_tool,
+    semantic_search_codebase_tool, # Import the new tool function
     summarize_code_section_tool,
     get_file_structure_tool,
     index_codebase_tool,
@@ -63,7 +64,10 @@ def get_all_tools_definitions_as_object():
         },
         "search_codebase": {
             "name": "search_codebase",
-            "description": "Searches for a pattern within indexed code files, with optional exclusion patterns.",
+            "description": (
+                "Searches for a pattern within indexed code files, "
+                "with optional exclusion patterns."
+            ),
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -76,14 +80,34 @@ def get_all_tools_definitions_as_object():
             },
             "type": "function",
         },
-        "get_file_structure": {
-            "name": "get_file_structure",
-            "description": "Provides a high-level overview of a file's structure within a given codebase.",
+        "semantic_search_codebase": {
+            "name": "semantic_search_codebase",
+            "description": (
+                "Performs a semantic search within the indexed codebase to find "
+                "code snippets semantically similar to the given query."
+            ),
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "codebase_path": {"type": "string"},
-                    "file_path": {"type": "string"}
+                    "query": {"type": "string"},
+                    "top_k": {"type": "integer", "default": 5},
+                },
+                "required": ["codebase_path", "query"],
+            },
+            "type": "function",
+        },
+        "get_file_structure": {
+            "name": "get_file_structure",
+            "description": (
+                "Provides a high-level overview of a file's structure "
+                "within a given codebase."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "codebase_path": {"type": "string"},
+                    "file_path": {"type": "string"},
                 },
                 "required": ["codebase_path", "file_path"],
             },
@@ -108,7 +132,10 @@ def get_all_tools_definitions_as_object():
         },
         "list_undocumented_functions": {
             "name": "list_undocumented_functions",
-            "description": "Identifies and lists Python functions in a specified file that are missing docstrings.",
+            "description": (
+                "Identifies and lists Python functions in a specified file that "
+                "are missing docstrings."
+            ),
             "inputSchema": {
                 "type": "object",
                 "properties": {"file_path": {"type": "string"}},
@@ -118,13 +145,19 @@ def get_all_tools_definitions_as_object():
         },
         "count_lines_of_code": {
             "name": "count_lines_of_code",
-            "description": "Counts lines of code (LOC) in the indexed codebase, providing a summary by file type.",
+            "description": (
+                "Counts lines of code (LOC) in the indexed codebase, "
+                "providing a summary by file type."
+            ),
             "inputSchema": {"type": "object", "properties": {}, "required": []},
             "type": "function",
         },
         "configure_api_key": {
             "name": "configure_api_key",
-            "description": "Configures API keys for LLMs (e.g., Groq, OpenRouter, Google AI).",
+            "description": (
+                "Configures API keys for LLMs (e.g., Groq, OpenRouter, "
+                "Google AI)."
+            ),
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -137,7 +170,11 @@ def get_all_tools_definitions_as_object():
         },
         "get_dependencies_overview": {
             "name": "get_dependencies_overview",
-            "description": "Analyzes Python files in the indexed codebase and extracts import statements, providing a high-level overview of internal and external dependencies.",
+            "description": (
+                "Analyzes Python files in the indexed codebase and extracts "
+                "import statements, providing a high-level overview of internal "
+                "and external dependencies."
+            ),
             "inputSchema": {"type": "object", "properties": {}, "required": []},
             "type": "function",
         },
@@ -149,6 +186,7 @@ TOOL_FUNCTIONS = {
     "read_code_file": read_code_file_tool,
     "index_codebase": index_codebase_tool,
     "search_codebase": search_codebase_tool,
+    "semantic_search_codebase": semantic_search_codebase_tool, # Register the new tool
     "get_file_structure": get_file_structure_tool,
     "summarize_code_section": summarize_code_section_tool,
     "list_undocumented_functions": list_undocumented_functions_tool,

@@ -6,7 +6,10 @@ from pathlib import Path
 from groq import Groq
 from openai import OpenAI
 import google.generativeai as genai
-import ast # Added this line
+import ast
+from sentence_transformers import SentenceTransformer
+import faiss
+import numpy as np
 from .config import GROQ_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY
 
 
@@ -14,7 +17,11 @@ class CodebaseManager:
     def __init__(self):
         self.index_dir = Path(".codesage")
         self.index_file = self.index_dir / "codebase_index.json"
+        self.faiss_index_file = self.index_dir / "codebase_index.faiss"
         self.indexed_codebases = {}
+        self.file_paths_map = {}
+        self.sentence_transformer_model = SentenceTransformer("all-MiniLM-L6-v2")
+        self.faiss_index = None
         self._initialize_index()
         self.groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
         self.openrouter_client = (
@@ -37,18 +44,42 @@ class CodebaseManager:
         if self.index_file.exists():
             try:
                 with open(self.index_file, "r") as f:
-                    self.indexed_codebases = json.load(f)
+                    loaded_data = json.load(f)
+                    self.indexed_codebases = loaded_data.get("indexed_codebases", {})
+                    self.file_paths_map = loaded_data.get("file_paths_map", {})
             except (json.JSONDecodeError, IOError) as e:
                 print(
                     f"Warning: Could not load codebase index. "
                     f"A new one will be created. Error: {e}"
                 )
                 self.indexed_codebases = {}
+                self.file_paths_map = {}
+
+        if self.faiss_index_file.exists():
+            try:
+                self.faiss_index = faiss.read_index(str(self.faiss_index_file))
+            except Exception as e:
+                print(f"Warning: Could not load FAISS index. Error: {e}")
+                self.faiss_index = None
+
+        # If no FAISS index loaded, create a new one
+        if self.faiss_index is None:
+            embedding_size = (
+                self.sentence_transformer_model.get_sentence_embedding_dimension()
+            )
+            self.faiss_index = faiss.IndexFlatL2(embedding_size)
 
     def _save_index(self):
         """Saves the current index to the file."""
+        data_to_save = {
+            "indexed_codebases": self.indexed_codebases,
+            "file_paths_map": self.file_paths_map,
+        }
         with open(self.index_file, "w") as f:
-            json.dump(self.indexed_codebases, f, indent=4)
+            json.dump(data_to_save, f, indent=4)
+
+        if self.faiss_index:
+            faiss.write_index(self.faiss_index, str(self.faiss_index_file))
 
     def _get_gitignore_patterns(self, path: Path) -> list[str]:
         """Finds and parses the .gitignore file in the given path."""
@@ -71,7 +102,7 @@ class CodebaseManager:
         """Checks if a file or directory should be ignored based on
         .gitignore patterns."""
         relative_path = file_path.relative_to(root_path)
-        
+
         # Convert Path objects to strings for fnmatch
         relative_path_str = str(relative_path)
         file_name_str = file_path.name
@@ -80,33 +111,33 @@ class CodebaseManager:
         for pattern in gitignore_patterns:
             print(f"  Pattern: {pattern}")
             # Handle patterns ending with a slash (directories)
-            if pattern.endswith('/'):
+            if pattern.endswith("/"):
                 # Check if the relative path starts with the directory pattern
                 if relative_path_str.startswith(pattern):
                     print(f"    Match (startswith dir): {pattern} -> True")
                     return True
                 # Check if any part of the relative path matches the directory name
                 # e.g., "venv/" should ignore "foo/venv/bar"
-                pattern_dir_name = pattern.rstrip('/')
+                pattern_dir_name = pattern.rstrip("/")
                 if pattern_dir_name in relative_path.parts:
                     print(f"    Match (part of path dir): {pattern} -> True")
                     return True
-            
+
             # Handle general glob patterns
             # Check against the full relative path
             if fnmatch.fnmatch(relative_path_str, pattern):
                 print(f"    Match (fnmatch full path): {pattern} -> True")
                 return True
-            
+
             # Check against the file/directory name only
             if fnmatch.fnmatch(file_name_str, pattern):
                 print(f"    Match (fnmatch file name): {pattern} -> True")
                 return True
-            
+
             # Handle patterns like "foo" which should ignore "foo/bar" and "foo"
             # This is implicitly handled by checking against relative_path_str
             # but let's be explicit for clarity if the pattern is a directory name
-            if not pattern.endswith('/') and '/' not in pattern: # It's a simple name pattern
+            if not pattern.endswith("/") and "/" not in pattern:  # Simple name pattern
                 if pattern in relative_path.parts:
                     print(f"    Match (simple name in parts): {pattern} -> True")
                     return True
@@ -133,20 +164,23 @@ class CodebaseManager:
         gitignore_patterns.append(".gitignore")
 
         indexed_files = []
+        new_embeddings = []
+        new_file_paths = []
+        current_faiss_id = self.faiss_index.ntotal if self.faiss_index else 0
+
         for root, dirs, files in os.walk(path, topdown=True):
             current_path = Path(root)
-            
+
             # Debugging: Print directories being considered
             print(f"DEBUG: Current directory: {current_path}")
             print(f"DEBUG: Dirs before filtering: {dirs}")
 
-            # Filter directories in-place to prevent os.walk from descending into ignored ones
+            # Filter directories in-place to prevent os.walk from
+            # descending into ignored ones
             dirs[:] = [
                 d
                 for d in dirs
-                if not self._is_ignored(
-                    current_path / d, gitignore_patterns, root_path
-                )
+                if not self._is_ignored(current_path / d, gitignore_patterns, root_path)
             ]
             # Debugging: Print directories after filtering
             print(f"DEBUG: Dirs after filtering: {dirs}")
@@ -156,7 +190,25 @@ class CodebaseManager:
                 # Debugging: Print files being considered
                 # print(f"DEBUG: Checking file: {file_path}")
                 if not self._is_ignored(file_path, gitignore_patterns, root_path):
-                    indexed_files.append(str(file_path.relative_to(root_path)))
+                    try:
+                        content = self.read_code_file(str(file_path))
+                        embedding = self.sentence_transformer_model.encode(content)
+                        new_embeddings.append(embedding)
+                        new_file_paths.append(str(file_path.resolve()))
+                        indexed_files.append(str(file_path.relative_to(root_path)))
+                    except Exception as e:
+                        print(
+                            f"Warning: Could not process file {file_path} "
+                            f"for embedding: {e}"
+                        )
+                        continue
+
+        if new_embeddings:
+            # Add new embeddings to FAISS index
+            self.faiss_index.add(np.array(new_embeddings).astype("float32"))
+            # Update file_paths_map
+            for i, fp in enumerate(new_file_paths):
+                self.file_paths_map[str(current_faiss_id + i)] = fp
 
         abs_path_key = str(root_path.resolve())
         self.indexed_codebases[abs_path_key] = {
@@ -166,7 +218,7 @@ class CodebaseManager:
         self._save_index()
 
         print(f"Indexed {len(indexed_files)} files in codebase at: {path}")
-        print(f"DEBUG: Indexed files: {indexed_files}") # Added logging
+        print(f"DEBUG: Indexed files: {indexed_files}")  # Added logging
         return indexed_files
 
     def search_codebase(
@@ -225,23 +277,49 @@ class CodebaseManager:
                                 }
                             )
             except FileNotFoundError:
-                print(
-                    f"Warning: File not found during search: {file_path}. Skipping."
-                )
+                print(f"Warning: File not found during search: {file_path}. Skipping.")
                 continue
             except Exception as e:
                 print(f"Error processing file {file_path}: {e}. Skipping.")
                 continue
         return search_results
 
+    def semantic_search_codebase(self, query: str, top_k: int = 5) -> list[dict]:
+        if self.faiss_index is None or self.faiss_index.ntotal == 0:
+            return []  # No index or no embeddings
+
+        query_embedding = self.sentence_transformer_model.encode(query)
+        # Reshape for FAISS: FAISS expects a 2D array, even for a single query
+        query_embedding = np.array([query_embedding]).astype("float32")
+
+        # Perform search
+        distances, indices = self.faiss_index.search(query_embedding, top_k)
+
+        search_results = []
+        for i, dist in zip(indices[0], distances[0]):
+            if i == -1:  # -1 indicates no result found
+                continue
+            file_path = self.file_paths_map.get(str(i))
+            if file_path:
+                search_results.append(
+                    {
+                        "file_path": file_path,
+                        "score": float(dist),  # Convert numpy float to Python float
+                    }
+                )
+        return search_results
+
     def get_file_structure(self, codebase_path: str, file_path: str) -> list[str]:
         abs_codebase_path = str(Path(codebase_path).resolve())
         if abs_codebase_path not in self.indexed_codebases:
             raise ValueError(
-                f"Codebase at {codebase_path} has not been indexed. Please index it first."
+                f"Codebase at {codebase_path} has not been indexed. "
+                f"Please index it first."
             )
 
-        full_file_path = Path(codebase_path) / file_path # file_path is now relative to codebase_path
+        full_file_path = (
+            Path(codebase_path) / file_path
+        )  # file_path is now relative to codebase_path
         if not full_file_path.exists():
             raise FileNotFoundError(f"File not found in codebase: {file_path}")
 
@@ -312,9 +390,12 @@ class CodebaseManager:
         if not self.google_ai_client:
             return "Error: GOOGLE_API_KEY not configured."
         try:
-            model = self.google_ai_client.GenerativeModel(llm_model.replace("google/", "", 1))
+            model = self.google_ai_client.GenerativeModel(
+                llm_model.replace("google/", "", 1)
+            )
             response = model.generate_content(
-                f"Please summarize the following code snippet:\n\n```\n{code_snippet}```"
+                "Please summarize the following code snippet:\n\n"
+                f"```\n{code_snippet}```"
             )
             return response.text
         except Exception as e:
