@@ -59,6 +59,8 @@ Identifies duplicate or highly similar code sections within the indexed codebase
 - `min_similarity` (float, optional, default 0.8): Minimum similarity score to consider snippets as duplicates (0.0 to 1.0).
 - `min_lines` (int, optional, default 10): Minimum number of lines a code section must have to be considered for duplication.
 
+**Note:** This tool requires the codebase to be indexed first using the `index_codebase` tool. It uses semantic similarity analysis to find duplicate code sections, which may take some time to process depending on the size of the codebase.
+
 ## Analysis Tools
 
 ### list_undocumented_functions

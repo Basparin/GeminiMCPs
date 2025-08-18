@@ -389,11 +389,11 @@ class CodebaseManager:
                             duplicates.append({
                                 "file1": str(file_path),
                                 "file2": matching_file_path,
-                                "start_line1": i + 1,
-                                "end_line1": i + min_lines,
-                                "start_line2": j + 1,  # This is approximate
-                                "end_line2": j + min_lines,  # This is approximate
-                                "similarity": similarity
+                                "start_line1": int(i + 1),  # Convert to Python int
+                                "end_line1": int(i + min_lines),  # Convert to Python int
+                                "start_line2": int(j + 1),  # Convert to Python int, this is approximate
+                                "end_line2": int(j + min_lines),  # Convert to Python int, this is approximate
+                                "similarity": float(similarity)  # Convert to Python float
                             })
                             
             except Exception as e:
