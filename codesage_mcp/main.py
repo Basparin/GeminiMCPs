@@ -22,6 +22,7 @@ from codesage_mcp.tools import (
     get_dependencies_overview_tool,
     profile_code_performance_tool,  # Import the new profiling tool
     generate_unit_tests_tool,  # Import the new test generation tool
+    auto_document_tool,  # Import the new auto documentation tool
 )
 
 # Configure logging
@@ -272,6 +273,22 @@ def get_all_tools_definitions_as_object():
             },
             "type": "function",
         },
+        "auto_document": {
+            "name": "auto_document",
+            "description": (
+                "Automatically generates documentation for tools that lack detailed documentation. "
+                "Analyzes tool functions in the codebase, extracts their signatures and docstrings, "
+                "and uses LLMs to generate human-readable documentation in the existing format."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "tool_name": {"type": "string"},
+                },
+                "required": [],
+            },
+            "type": "function",
+        },
     }
 
 
@@ -292,6 +309,7 @@ TOOL_FUNCTIONS = {
     "analyze_codebase_improvements": analyze_codebase_improvements_tool, # Register the new tool
     "suggest_code_improvements": suggest_code_improvements_tool,  # Register the new code improvement tool
     "generate_unit_tests": generate_unit_tests_tool,  # Register the new test generation tool
+    "auto_document": auto_document_tool,  # Register the new auto documentation tool
     "profile_code_performance": profile_code_performance_tool, # Register the new profiling tool
 }
 

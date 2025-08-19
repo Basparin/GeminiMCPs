@@ -778,3 +778,45 @@ def generate_unit_tests_tool(file_path: str, function_name: str = None) -> dict:
                 "message": f"An unexpected error occurred during test generation: {str(e)}"
             }
         }
+
+
+def auto_document_tool(tool_name: str = None) -> dict:
+    """
+    Automatically generates documentation for tools that lack detailed documentation.
+    
+    This tool analyzes tool functions in the codebase, extracts their signatures
+    and docstrings, and uses LLMs to generate human-readable documentation in
+    the existing format. It can document a specific tool or all tools that lack
+    detailed documentation.
+    
+    Args:
+        tool_name (str, optional): Name of a specific tool to document.
+            If None, documents all tools that lack detailed documentation.
+            
+    Returns:
+        dict: Generated documentation and metadata, or an error message.
+    """
+    try:
+        documentation_results = codebase_manager.auto_document_tool(tool_name)
+        return documentation_results
+    except FileNotFoundError as e:
+        return {
+            "error": {
+                "code": "FILE_NOT_FOUND",
+                "message": str(e)
+            }
+        }
+    except ValueError as e:
+        return {
+            "error": {
+                "code": "INVALID_INPUT",
+                "message": str(e)
+            }
+        }
+    except Exception as e:
+        return {
+            "error": {
+                "code": "DOCUMENTATION_ERROR",
+                "message": f"An unexpected error occurred during documentation generation: {str(e)}"
+            }
+        }

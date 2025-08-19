@@ -91,3 +91,20 @@ Example usage:
   }
 }
 ```
+
+### auto_document
+
+Automatically generates documentation for tools that lack detailed documentation. Analyzes tool functions in the codebase, extracts their signatures and docstrings, and uses LLMs to generate human-readable documentation in the existing format.
+
+Parameters:
+- `tool_name` (str, optional): Name of a specific tool to document. If not provided, documents all tools that lack detailed documentation.
+
+Example usage:
+```json
+{
+  "name": "auto_document",
+  "arguments": {
+    "tool_name": "my_tool"
+  }
+}
+```

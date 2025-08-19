@@ -1263,5 +1263,225 @@ class CodebaseManager:
                     "message": f"An error occurred during test generation: {str(e)}"
                 }
             }
+    
+    def auto_document_tool(self, tool_name: str = None) -> dict:
+        """
+        Automatically generates documentation for tools that lack detailed documentation.
+        
+        This method analyzes tool functions in the codebase, extracts their signatures
+        and docstrings, and uses LLMs to generate human-readable documentation in
+        the existing format. It can document a specific tool or all tools that lack
+        detailed documentation.
+        
+        Args:
+            tool_name (str, optional): Name of a specific tool to document.
+                If None, documents all tools that lack detailed documentation.
+                
+        Returns:
+            dict: Generated documentation and metadata, or an error message.
+        """
+        import textwrap
+        import inspect
+        from codesage_mcp.main import TOOL_FUNCTIONS
+        
+        try:
+            # Get the list of all registered tools
+            registered_tools = list(TOOL_FUNCTIONS.keys())
+            
+            # If a specific tool is requested, check if it exists
+            if tool_name and tool_name not in registered_tools:
+                return {
+                    "error": {
+                        "code": "TOOL_NOT_FOUND",
+                        "message": f"Tool '{tool_name}' not found in registered tools"
+                    }
+                }
+            
+            # Determine which tools to document
+            tools_to_document = [tool_name] if tool_name else registered_tools
+            
+            # For each tool, generate documentation
+            generated_docs = []
+            
+            for tool in tools_to_document:
+                # Get the tool function
+                tool_function = TOOL_FUNCTIONS.get(tool)
+                if not tool_function:
+                    continue
+                
+                # Extract function signature and docstring
+                sig = inspect.signature(tool_function)
+                docstring = inspect.getdoc(tool_function) or "No docstring available"
+                
+                # Prepare code snippet for LLM analysis
+                # We'll need to find the actual function definition in the source files
+                function_info = self._extract_function_info(tool, tool_function)
+                
+                # Generate documentation using LLMs
+                llm_suggestions = []
+                
+                # Prepare the prompt for LLM documentation generation
+                prompt = textwrap.dedent(f"""
+                    Please generate comprehensive documentation for the following Python tool function.
+                    The documentation should follow this format:
+                    
+                    ### {{tool_name}}
+                    {{Brief description of what the tool does}}
+                    
+                    **Parameters:**
+                    {{List each parameter with its type and description}}
+                    {{For optional parameters, indicate the default value}}
+                    
+                    **Returns:**
+                    {{Description of what the function returns}}
+                    
+                    Example usage:
+                    ```json
+                    {{
+                      "name": "{{tool_name}}",
+                      "arguments": {{
+                        {{example arguments}}
+                      }}
+                    }}
+                    ```
+                    
+                    Function to document:
+                    Name: {tool}
+                    Signature: {sig}
+                    Docstring: {docstring}
+                    Function implementation: {function_info.get('source', 'Source not available')}
+                    
+                    Please provide the documentation in the exact format specified above.
+                """).strip()
+                
+                # Try Groq first
+                if self.groq_client:
+                    try:
+                        chat_completion = self.groq_client.chat.completions.create(
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": "You are a helpful assistant that generates documentation for Python tools in a specific format."
+                                },
+                                {
+                                    "role": "user",
+                                    "content": prompt
+                                }
+                            ],
+                            model="llama3-8b-8192",
+                            temperature=0.1,
+                            max_tokens=2048
+                        )
+                        groq_suggestion = chat_completion.choices[0].message.content
+                        llm_suggestions.append({
+                            "provider": "Groq (Llama3)",
+                            "suggestions": groq_suggestion
+                        })
+                    except Exception as e:
+                        llm_suggestions.append({
+                            "provider": "Groq (Llama3)",
+                            "error": f"Failed to get suggestions from Groq: {str(e)}"
+                        })
+                
+                # Try OpenRouter
+                if self.openrouter_client:
+                    try:
+                        chat_completion = self.openrouter_client.chat.completions.create(
+                            model="openrouter/google/gemini-pro",
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": "You are a helpful assistant that generates documentation for Python tools in a specific format."
+                                },
+                                {
+                                    "role": "user",
+                                    "content": prompt
+                                }
+                            ],
+                            temperature=0.1,
+                            max_tokens=2048
+                        )
+                        openrouter_suggestion = chat_completion.choices[0].message.content
+                        llm_suggestions.append({
+                            "provider": "OpenRouter (Gemini)",
+                            "suggestions": openrouter_suggestion
+                        })
+                    except Exception as e:
+                        llm_suggestions.append({
+                            "provider": "OpenRouter (Gemini)",
+                            "error": f"Failed to get suggestions from OpenRouter: {str(e)}"
+                        })
+                
+                # Try Google AI
+                if self.google_ai_client:
+                    try:
+                        model = self.google_ai_client.GenerativeModel("gemini-pro")
+                        response = model.generate_content(
+                            prompt,
+                            generation_config=self.google_ai_client.types.GenerationConfig(
+                                temperature=0.1,
+                                max_output_tokens=2048
+                            )
+                        )
+                        google_suggestion = response.text
+                        llm_suggestions.append({
+                            "provider": "Google AI (Gemini)",
+                            "suggestions": google_suggestion
+                        })
+                    except Exception as e:
+                        llm_suggestions.append({
+                            "provider": "Google AI (Gemini)",
+                            "error": f"Failed to get suggestions from Google AI: {str(e)}"
+                        })
+                
+                generated_docs.append({
+                    "tool_name": tool,
+                    "signature": str(sig),
+                    "docstring": docstring,
+                    "function_info": function_info,
+                    "llm_suggestions": llm_suggestions
+                })
+            
+            return {
+                "message": f"Auto documentation generation completed" + 
+                          (f" for tool '{tool_name}'" if tool_name else " for all tools"),
+                "tools_documented": len(generated_docs),
+                "generated_docs": generated_docs
+            }
+            
+        except Exception as e:
+            return {
+                "error": {
+                    "code": "DOCUMENTATION_ERROR",
+                    "message": f"An error occurred during documentation generation: {str(e)}"
+                }
+            }
+    
+    def _extract_function_info(self, tool_name: str, tool_function) -> dict:
+        """
+        Extract information about a tool function.
+        
+        Args:
+            tool_name (str): Name of the tool.
+            tool_function: The tool function object.
+            
+        Returns:
+            dict: Information about the function.
+        """
+        try:
+            # Try to get the source code
+            source = inspect.getsource(tool_function)
+            filename = inspect.getfile(tool_function)
+            lineno = inspect.getsourcelines(tool_function)[1]
+            
+            return {
+                "source": source,
+                "filename": filename,
+                "line_number": lineno
+            }
+        except Exception as e:
+            return {
+                "error": f"Failed to extract function info: {str(e)}"
+            }
 
 codebase_manager = CodebaseManager()

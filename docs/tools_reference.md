@@ -135,6 +135,17 @@ Generates unit tests for functions in a Python file. The generated tests can be 
 - `generated_tests` (list): List of generated test templates.
 - `llm_suggestions` (list): List of test suggestions from LLM providers, if available.
 
+### auto_document
+Automatically generates documentation for tools that lack detailed documentation. Analyzes tool functions in the codebase, extracts their signatures and docstrings, and uses LLMs to generate human-readable documentation in the existing format.
+
+**Parameters:**
+- `tool_name` (str, optional): Name of a specific tool to document. If not provided, documents all tools that lack detailed documentation.
+
+**Returns:**
+- `message` (str): Success message indicating the documentation generation was completed.
+- `tools_documented` (int): Number of tools documented.
+- `generated_docs` (list): List of generated documentation with LLM suggestions.
+
 ## Configuration Tools
 
 ### configure_api_key
