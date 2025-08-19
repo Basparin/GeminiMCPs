@@ -12,6 +12,7 @@ from codesage_mcp.tools import (
     find_duplicate_code_tool,
     get_configuration_tool,
     analyze_codebase_improvements_tool, # Import the new tool function
+    suggest_code_improvements_tool,  # Import the new code improvement tool
     summarize_code_section_tool,
     get_file_structure_tool,
     index_codebase_tool,
@@ -214,6 +215,24 @@ def get_all_tools_definitions_as_object():
             },
             "type": "function",
         },
+        "suggest_code_improvements": {
+            "name": "suggest_code_improvements",
+            "description": (
+                "Analyzes a code section and suggests improvements by consulting "
+                "external LLMs. It identifies potential code quality issues and "
+                "provides suggestions for improvements."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string"},
+                    "start_line": {"type": "integer"},
+                    "end_line": {"type": "integer"},
+                },
+                "required": ["file_path"],
+            },
+            "type": "function",
+        },
         "get_configuration": {
             "name": "get_configuration",
             "description": (
@@ -254,6 +273,7 @@ TOOL_FUNCTIONS = {
     "get_dependencies_overview": get_dependencies_overview_tool,
     "get_configuration": get_configuration_tool,
     "analyze_codebase_improvements": analyze_codebase_improvements_tool, # Register the new tool
+    "suggest_code_improvements": suggest_code_improvements_tool,  # Register the new code improvement tool
     "profile_code_performance": profile_code_performance_tool, # Register the new profiling tool
 }
 

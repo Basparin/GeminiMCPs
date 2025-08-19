@@ -106,6 +106,21 @@ Analyzes the codebase for potential improvements and suggestions.
 **Parameters:**
 - `codebase_path` (str, required): Path to the indexed codebase.
 
+### suggest_code_improvements
+Analyzes a code section and suggests improvements by consulting external LLMs. It identifies potential code quality issues and provides suggestions for improvements.
+
+**Parameters:**
+- `file_path` (str, required): Path to the file to analyze.
+- `start_line` (int, optional): Starting line number of the section to analyze. If not provided, analyzes from the beginning of the file.
+- `end_line` (int, optional): Ending line number of the section to analyze. If not provided, analyzes to the end of the file.
+
+**Returns:**
+- `message` (str): Success message indicating the analysis was completed.
+- `file_path` (str): Path to the analyzed file.
+- `start_line` (int): Starting line number of the analyzed section.
+- `end_line` (int): Ending line number of the analyzed section.
+- `suggestions` (list): List of suggestions from different providers (LLMs or static analysis).
+
 ## Configuration Tools
 
 ### configure_api_key

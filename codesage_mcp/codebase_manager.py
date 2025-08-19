@@ -847,5 +847,189 @@ class CodebaseManager:
                     "message": f"An error occurred during performance profiling: {str(e)}"
                 }
             }
+    
+    def suggest_code_improvements(self, file_path: str, start_line: int = None, end_line: int = None) -> dict:
+        """
+        Analyzes a code section and suggests improvements by consulting external LLMs.
+        
+        This method extracts a code snippet from the specified file and sends it to
+        external LLMs for analysis. It identifies potential code quality issues and
+        provides suggestions for improvements, following the "Flag and Suggest"
+        philosophy.
+        
+        Args:
+            file_path (str): Path to the file to analyze.
+            start_line (int, optional): Starting line number of the section to analyze.
+                If None, analyzes from the beginning of the file.
+            end_line (int, optional): Ending line number of the section to analyze.
+                If None, analyzes to the end of the file.
+                
+        Returns:
+            dict: Analysis results with suggestions for improvements, or an error message.
+            
+        Raises:
+            FileNotFoundError: If the specified file does not exist.
+        """
+        import textwrap
+        
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        try:
+            # Read the file content
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            
+            # Determine the range of lines to analyze
+            if start_line is None:
+                start_line = 1
+            if end_line is None:
+                end_line = len(lines)
+                
+            # Validate line numbers
+            if start_line < 1:
+                start_line = 1
+            if end_line > len(lines):
+                end_line = len(lines)
+            if start_line > end_line:
+                return {
+                    "error": {
+                        "code": "INVALID_INPUT",
+                        "message": "Start line must be less than or equal to end line."
+                    }
+                }
+            
+            # Extract the code snippet
+            code_snippet = "".join(lines[start_line-1:end_line])
+            
+            # Prepare the prompt for LLM analysis
+            prompt = textwrap.dedent(f"""
+                Please analyze the following Python code snippet and suggest improvements.
+                Focus on:
+                1. Code readability and maintainability
+                2. Performance optimizations
+                3. Python best practices
+                4. Potential bugs or issues
+                
+                For each suggestion, provide:
+                - A clear description of the issue
+                - An explanation of why it's a problem
+                - A specific recommendation for improvement
+                - An example of the improved code if applicable
+                
+                Code snippet:
+                ```python
+                {code_snippet}
+                ```
+                
+                Please format your response as a clear, structured list of suggestions.
+            """).strip()
+            
+            # Try to get suggestions from different LLM providers
+            suggestions = []
+            
+            # Try Groq first
+            if self.groq_client:
+                try:
+                    chat_completion = self.groq_client.chat.completions.create(
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "You are a helpful assistant that suggests code improvements."
+                            },
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        model="llama3-8b-8192",
+                        temperature=0.1,
+                        max_tokens=2048
+                    )
+                    groq_suggestion = chat_completion.choices[0].message.content
+                    suggestions.append({
+                        "provider": "Groq (Llama3)",
+                        "suggestions": groq_suggestion
+                    })
+                except Exception as e:
+                    suggestions.append({
+                        "provider": "Groq (Llama3)",
+                        "error": f"Failed to get suggestions from Groq: {str(e)}"
+                    })
+            
+            # Try OpenRouter
+            if self.openrouter_client:
+                try:
+                    chat_completion = self.openrouter_client.chat.completions.create(
+                        model="openrouter/google/gemini-pro",
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "You are a helpful assistant that suggests code improvements."
+                            },
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        temperature=0.1,
+                        max_tokens=2048
+                    )
+                    openrouter_suggestion = chat_completion.choices[0].message.content
+                    suggestions.append({
+                        "provider": "OpenRouter (Gemini)",
+                        "suggestions": openrouter_suggestion
+                    })
+                except Exception as e:
+                    suggestions.append({
+                        "provider": "OpenRouter (Gemini)",
+                        "error": f"Failed to get suggestions from OpenRouter: {str(e)}"
+                    })
+            
+            # Try Google AI
+            if self.google_ai_client:
+                try:
+                    model = self.google_ai_client.GenerativeModel("gemini-pro")
+                    response = model.generate_content(
+                        prompt,
+                        generation_config=self.google_ai_client.types.GenerationConfig(
+                            temperature=0.1,
+                            max_output_tokens=2048
+                        )
+                    )
+                    google_suggestion = response.text
+                    suggestions.append({
+                        "provider": "Google AI (Gemini)",
+                        "suggestions": google_suggestion
+                    })
+                except Exception as e:
+                    suggestions.append({
+                        "provider": "Google AI (Gemini)",
+                        "error": f"Failed to get suggestions from Google AI: {str(e)}"
+                    })
+            
+            # If no LLM providers are configured, provide a basic static analysis
+            if not suggestions:
+                suggestions.append({
+                    "provider": "Static Analysis",
+                    "suggestions": "No LLM providers configured. Please configure API keys for Groq, OpenRouter, or Google AI to get detailed suggestions."
+                })
+            
+            return {
+                "message": f"Code improvements analysis completed for {file_path}" + 
+                          (f" (lines {start_line}-{end_line})" if start_line != 1 or end_line != len(lines) else ""),
+                "file_path": file_path,
+                "start_line": start_line,
+                "end_line": end_line,
+                "suggestions": suggestions
+            }
+            
+        except Exception as e:
+            return {
+                "error": {
+                    "code": "ANALYSIS_ERROR",
+                    "message": f"An error occurred during code analysis: {str(e)}"
+                }
+            }
 
 codebase_manager = CodebaseManager()

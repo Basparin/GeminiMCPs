@@ -692,3 +692,47 @@ def profile_code_performance_tool(file_path: str, function_name: str = None) -> 
                 "message": f"An unexpected error occurred during performance profiling: {str(e)}"
             }
         }
+
+
+def suggest_code_improvements_tool(file_path: str, start_line: int = None, end_line: int = None) -> dict:
+    """
+    Analyzes a code section and suggests improvements by consulting external LLMs.
+    
+    This tool extracts a code snippet from the specified file and sends it to
+    external LLMs for analysis. It identifies potential code quality issues and
+    provides suggestions for improvements.
+    
+    Args:
+        file_path (str): Path to the file to analyze.
+        start_line (int, optional): Starting line number of the section to analyze.
+            If None, analyzes from the beginning of the file.
+        end_line (int, optional): Ending line number of the section to analyze.
+            If None, analyzes to the end of the file.
+            
+    Returns:
+        dict: Analysis results with suggestions for improvements, or an error message.
+    """
+    try:
+        analysis_results = codebase_manager.suggest_code_improvements(file_path, start_line, end_line)
+        return analysis_results
+    except FileNotFoundError as e:
+        return {
+            "error": {
+                "code": "FILE_NOT_FOUND",
+                "message": str(e)
+            }
+        }
+    except ValueError as e:
+        return {
+            "error": {
+                "code": "INVALID_INPUT",
+                "message": str(e)
+            }
+        }
+    except Exception as e:
+        return {
+            "error": {
+                "code": "ANALYSIS_ERROR",
+                "message": f"An unexpected error occurred during code analysis: {str(e)}"
+            }
+        }

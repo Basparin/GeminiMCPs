@@ -22,6 +22,7 @@
 - `count_lines_of_code()`: Counts lines of code (LOC) in the indexed codebase, providing a summary by file type.
 - `get_dependencies_overview()`: Analyzes Python files in the indexed codebase and extracts import statements, providing a high-level overview of internal and external dependencies.
 - `profile_code_performance(file_path: str, function_name: str)`: Profiles the performance of a specific function or the entire file using cProfile to measure execution time and resource usage.
+- `suggest_code_improvements(file_path: str, start_line: int, end_line: int)`: Analyzes a code section and suggests improvements by consulting external LLMs. It identifies potential code quality issues and provides suggestions for improvements.
 
 ### Configuration Tools
 - `configure_api_key(llm_provider: str, api_key: str)`: Configures API keys for LLMs (e.g., Groq, OpenRouter, Google AI).
@@ -46,6 +47,27 @@ Example usage:
     "codebase_path": "/path/to/your/codebase",
     "min_similarity": 0.85,
     "min_lines": 15
+  }
+}
+```
+
+### suggest_code_improvements
+
+Analyzes a code section and suggests improvements by consulting external LLMs. It identifies potential code quality issues and provides suggestions for improvements.
+
+Parameters:
+- `file_path` (str, required): Path to the file to analyze.
+- `start_line` (int, optional): Starting line number of the section to analyze. If not provided, analyzes from the beginning of the file.
+- `end_line` (int, optional): Ending line number of the section to analyze. If not provided, analyzes to the end of the file.
+
+Example usage:
+```json
+{
+  "name": "suggest_code_improvements",
+  "arguments": {
+    "file_path": "/path/to/your/code/file.py",
+    "start_line": 10,
+    "end_line": 25
   }
 }
 ```
