@@ -21,6 +21,7 @@ from codesage_mcp.tools import (
     configure_api_key_tool,
     get_dependencies_overview_tool,
     profile_code_performance_tool,  # Import the new profiling tool
+    generate_unit_tests_tool,  # Import the new test generation tool
 )
 
 # Configure logging
@@ -255,6 +256,22 @@ def get_all_tools_definitions_as_object():
             },
             "type": "function",
         },
+        "generate_unit_tests": {
+            "name": "generate_unit_tests",
+            "description": (
+                "Generates unit tests for functions in a Python file. The generated tests "
+                "can be manually reviewed and added to the test suite."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string"},
+                    "function_name": {"type": "string"},
+                },
+                "required": ["file_path"],
+            },
+            "type": "function",
+        },
     }
 
 
@@ -274,6 +291,7 @@ TOOL_FUNCTIONS = {
     "get_configuration": get_configuration_tool,
     "analyze_codebase_improvements": analyze_codebase_improvements_tool, # Register the new tool
     "suggest_code_improvements": suggest_code_improvements_tool,  # Register the new code improvement tool
+    "generate_unit_tests": generate_unit_tests_tool,  # Register the new test generation tool
     "profile_code_performance": profile_code_performance_tool, # Register the new profiling tool
 }
 

@@ -121,6 +121,20 @@ Analyzes a code section and suggests improvements by consulting external LLMs. I
 - `end_line` (int): Ending line number of the analyzed section.
 - `suggestions` (list): List of suggestions from different providers (LLMs or static analysis).
 
+### generate_unit_tests
+Generates unit tests for functions in a Python file. The generated tests can be manually reviewed and added to the test suite.
+
+**Parameters:**
+- `file_path` (str, required): Path to the Python file to analyze.
+- `function_name` (str, optional): Name of a specific function to generate tests for. If not provided, generates tests for all functions in the file.
+
+**Returns:**
+- `message` (str): Success message indicating the test generation was completed.
+- `file_path` (str): Path to the analyzed file.
+- `function_name` (str, optional): Name of the specific function analyzed.
+- `generated_tests` (list): List of generated test templates.
+- `llm_suggestions` (list): List of test suggestions from LLM providers, if available.
+
 ## Configuration Tools
 
 ### configure_api_key

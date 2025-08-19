@@ -736,3 +736,45 @@ def suggest_code_improvements_tool(file_path: str, start_line: int = None, end_l
                 "message": f"An unexpected error occurred during code analysis: {str(e)}"
             }
         }
+
+
+def generate_unit_tests_tool(file_path: str, function_name: str = None) -> dict:
+    """
+    Generates unit tests for functions in a Python file.
+    
+    This tool analyzes function signatures and return types to generate
+    appropriate test cases with edge cases. The generated tests can be
+    manually reviewed and added to the test suite.
+    
+    Args:
+        file_path (str): Path to the Python file to analyze.
+        function_name (str, optional): Name of a specific function to generate tests for.
+            If None, generates tests for all functions in the file.
+            
+    Returns:
+        dict: Generated test code and metadata, or an error message.
+    """
+    try:
+        test_results = codebase_manager.generate_unit_tests(file_path, function_name)
+        return test_results
+    except FileNotFoundError as e:
+        return {
+            "error": {
+                "code": "FILE_NOT_FOUND",
+                "message": str(e)
+            }
+        }
+    except ValueError as e:
+        return {
+            "error": {
+                "code": "INVALID_INPUT",
+                "message": str(e)
+            }
+        }
+    except Exception as e:
+        return {
+            "error": {
+                "code": "TEST_GENERATION_ERROR",
+                "message": f"An unexpected error occurred during test generation: {str(e)}"
+            }
+        }

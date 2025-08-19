@@ -1031,5 +1031,237 @@ class CodebaseManager:
                     "message": f"An error occurred during code analysis: {str(e)}"
                 }
             }
+    
+    def generate_unit_tests(self, file_path: str, function_name: str = None) -> dict:
+        """
+        Generates unit tests for functions in a Python file.
+        
+        This method analyzes function signatures and return types to generate
+        appropriate test cases with edge cases. The generated tests can be
+        manually reviewed and added to the test suite.
+        
+        Args:
+            file_path (str): Path to the Python file to analyze.
+            function_name (str, optional): Name of a specific function to generate tests for.
+                If None, generates tests for all functions in the file.
+                
+        Returns:
+            dict: Generated test code and metadata, or an error message.
+            
+        Raises:
+            FileNotFoundError: If the specified file does not exist.
+        """
+        import textwrap
+        import inspect
+        
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        try:
+            # Read the file content
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Parse the file to find functions
+            tree = ast.parse(content)
+            
+            # Find all functions or the specific function
+            functions_to_test = []
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    if function_name is None or node.name == function_name:
+                        functions_to_test.append(node)
+            
+            if not functions_to_test:
+                if function_name:
+                    return {
+                        "error": {
+                            "code": "FUNCTION_NOT_FOUND",
+                            "message": f"Function '{function_name}' not found in {file_path}"
+                        }
+                    }
+                else:
+                    return {
+                        "error": {
+                            "code": "NO_FUNCTIONS_FOUND",
+                            "message": f"No functions found in {file_path}"
+                        }
+                    }
+            
+            # Generate tests for each function
+            generated_tests = []
+            
+            for func_node in functions_to_test:
+                # Extract function name and arguments
+                func_name = func_node.name
+                args = [arg.arg for arg in func_node.args.args]
+                
+                # Try to infer return type from annotation
+                return_type = None
+                if func_node.returns:
+                    return_type = ast.unparse(func_node.returns)
+                
+                # Try to extract docstring
+                docstring = ast.get_docstring(func_node)
+                
+                # Generate a basic test template
+                test_template = textwrap.dedent(f'''
+                    def test_{func_name}():
+                        """Test the {func_name} function."""
+                        # TODO: Add actual test implementation
+                        # Function signature: {func_name}({', '.join(args)})
+                        # Return type: {return_type or 'Unknown'}
+                        # Docstring: {docstring or 'None'}
+                        
+                        # Test with typical inputs
+                        # result = {func_name}(...)
+                        # assert result == expected_value
+                        
+                        # Test edge cases
+                        # ...
+                        
+                        # Test error conditions
+                        # ...
+                        pass
+                ''').strip()
+                
+                generated_tests.append({
+                    "function_name": func_name,
+                    "test_code": test_template,
+                    "arguments": args,
+                    "return_type": return_type,
+                    "docstring": docstring
+                })
+            
+            # Try to get suggestions from LLM providers if available
+            llm_suggestions = []
+            
+            # Prepare code snippet for LLM analysis
+            if functions_to_test:
+                # Get the full function definitions
+                function_definitions = []
+                for func_node in functions_to_test:
+                    # Extract the function source code
+                    func_start = func_node.lineno - 1
+                    func_end = func_node.end_lineno
+                    func_lines = content.splitlines()[func_start:func_end]
+                    function_definitions.append('\n'.join(func_lines))
+                
+                code_snippet = '\n\n'.join(function_definitions)
+                
+                # Prepare the prompt for LLM test generation
+                prompt = textwrap.dedent(f"""
+                    Please generate comprehensive unit tests for the following Python function(s).
+                    Focus on:
+                    1. Testing typical use cases
+                    2. Testing edge cases and boundary conditions
+                    3. Testing error conditions and exceptions
+                    4. Following pytest conventions
+                    5. Including descriptive test names and docstrings
+                    
+                    Functions to test:
+                    ```python
+                    {code_snippet}
+                    ```
+                    
+                    Please provide the test code in a format ready to be added to a pytest test file.
+                """).strip()
+                
+                # Try Groq first
+                if self.groq_client:
+                    try:
+                        chat_completion = self.groq_client.chat.completions.create(
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": "You are a helpful assistant that generates unit tests for Python code."
+                                },
+                                {
+                                    "role": "user",
+                                    "content": prompt
+                                }
+                            ],
+                            model="llama3-8b-8192",
+                            temperature=0.1,
+                            max_tokens=2048
+                        )
+                        groq_suggestion = chat_completion.choices[0].message.content
+                        llm_suggestions.append({
+                            "provider": "Groq (Llama3)",
+                            "suggestions": groq_suggestion
+                        })
+                    except Exception as e:
+                        llm_suggestions.append({
+                            "provider": "Groq (Llama3)",
+                            "error": f"Failed to get suggestions from Groq: {str(e)}"
+                        })
+                
+                # Try OpenRouter
+                if self.openrouter_client:
+                    try:
+                        chat_completion = self.openrouter_client.chat.completions.create(
+                            model="openrouter/google/gemini-pro",
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": "You are a helpful assistant that generates unit tests for Python code."
+                                },
+                                {
+                                    "role": "user",
+                                    "content": prompt
+                                }
+                            ],
+                            temperature=0.1,
+                            max_tokens=2048
+                        )
+                        openrouter_suggestion = chat_completion.choices[0].message.content
+                        llm_suggestions.append({
+                            "provider": "OpenRouter (Gemini)",
+                            "suggestions": openrouter_suggestion
+                        })
+                    except Exception as e:
+                        llm_suggestions.append({
+                            "provider": "OpenRouter (Gemini)",
+                            "error": f"Failed to get suggestions from OpenRouter: {str(e)}"
+                        })
+                
+                # Try Google AI
+                if self.google_ai_client:
+                    try:
+                        model = self.google_ai_client.GenerativeModel("gemini-pro")
+                        response = model.generate_content(
+                            prompt,
+                            generation_config=self.google_ai_client.types.GenerationConfig(
+                                temperature=0.1,
+                                max_output_tokens=2048
+                            )
+                        )
+                        google_suggestion = response.text
+                        llm_suggestions.append({
+                            "provider": "Google AI (Gemini)",
+                            "suggestions": google_suggestion
+                        })
+                    except Exception as e:
+                        llm_suggestions.append({
+                            "provider": "Google AI (Gemini)",
+                            "error": f"Failed to get suggestions from Google AI: {str(e)}"
+                        })
+            
+            return {
+                "message": f"Unit test generation completed for {file_path}" + 
+                          (f" function '{function_name}'" if function_name else ""),
+                "file_path": file_path,
+                "function_name": function_name,
+                "generated_tests": generated_tests,
+                "llm_suggestions": llm_suggestions
+            }
+            
+        except Exception as e:
+            return {
+                "error": {
+                    "code": "TEST_GENERATION_ERROR",
+                    "message": f"An error occurred during test generation: {str(e)}"
+                }
+            }
 
 codebase_manager = CodebaseManager()

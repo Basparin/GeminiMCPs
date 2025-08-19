@@ -23,6 +23,7 @@
 - `get_dependencies_overview()`: Analyzes Python files in the indexed codebase and extracts import statements, providing a high-level overview of internal and external dependencies.
 - `profile_code_performance(file_path: str, function_name: str)`: Profiles the performance of a specific function or the entire file using cProfile to measure execution time and resource usage.
 - `suggest_code_improvements(file_path: str, start_line: int, end_line: int)`: Analyzes a code section and suggests improvements by consulting external LLMs. It identifies potential code quality issues and provides suggestions for improvements.
+- `generate_unit_tests(file_path: str, function_name: str)`: Generates unit tests for functions in a Python file. The generated tests can be manually reviewed and added to the test suite.
 
 ### Configuration Tools
 - `configure_api_key(llm_provider: str, api_key: str)`: Configures API keys for LLMs (e.g., Groq, OpenRouter, Google AI).
@@ -68,6 +69,25 @@ Example usage:
     "file_path": "/path/to/your/code/file.py",
     "start_line": 10,
     "end_line": 25
+  }
+}
+```
+
+### generate_unit_tests
+
+Generates unit tests for functions in a Python file. The generated tests can be manually reviewed and added to the test suite.
+
+Parameters:
+- `file_path` (str, required): Path to the Python file to analyze.
+- `function_name` (str, optional): Name of a specific function to generate tests for. If not provided, generates tests for all functions in the file.
+
+Example usage:
+```json
+{
+  "name": "generate_unit_tests",
+  "arguments": {
+    "file_path": "/path/to/your/code/file.py",
+    "function_name": "calculate_sum"
   }
 }
 ```
