@@ -130,7 +130,7 @@ def main():
         print(f"\nDetailed undocumented functions in codebase_manager.py: {undocumented.get('message', 'N/A')}")
         if "undocumented_functions" in undocumented:
             for func in undocumented["undocumented_functions"]:
-                print(f"  - {func.get('name', 'Unknown')} (line {func.get('line_number', 'Unknown')})
+                print(f"  - {func.get('name', 'Unknown')} (line {func.get('line_number', 'Unknown')})")
 
 if __name__ == "__main__":
     main()
