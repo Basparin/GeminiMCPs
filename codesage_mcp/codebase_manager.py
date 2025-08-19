@@ -15,6 +15,12 @@ from .config import GROQ_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY
 
 class CodebaseManager:
     def __init__(self):
+        """
+        Initializes the CodebaseManager with default settings and clients.
+        
+        Sets up the index directory, file paths, sentence transformer model,
+        FAISS index, and API clients for Groq, OpenRouter, and Google AI.
+        """
         self.index_dir = Path(".codesage")
         self.index_file = self.index_dir / "codebase_index.json"
         self.faiss_index_file = self.index_dir / "codebase_index.faiss"
@@ -146,12 +152,39 @@ class CodebaseManager:
         return False
 
     def read_code_file(self, file_path: str) -> str:
+        """
+        Reads and returns the content of a specified code file.
+        
+        Args:
+            file_path (str): Path to the file to read.
+            
+        Returns:
+            str: Content of the file.
+            
+        Raises:
+            FileNotFoundError: If the file does not exist.
+        """
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
         with open(file_path, "r") as f:
             return f.read()
 
     def index_codebase(self, path: str) -> list[str]:
+        """
+        Indexes a given codebase path for analysis, respecting .gitignore rules.
+        
+        Recursively scans the directory, processes files for embedding, and 
+        creates a persistent index of all relevant files.
+        
+        Args:
+            path (str): Path to the codebase directory to index.
+            
+        Returns:
+            list[str]: List of indexed file paths relative to the codebase root.
+            
+        Raises:
+            ValueError: If the path is not a directory.
+        """
         root_path = Path(path)
         if not root_path.is_dir():
             raise ValueError(f"Path is not a directory: {path}")
