@@ -464,6 +464,8 @@ def test_mcp_tool_call_analyze_codebase_improvements_success(temp_dir):
     assert "indexed successfully" in index_result["message"]
 
     # Step 2: Perform codebase analysis
+    # Note: In a real test, we'd mock sentence-transformers and faiss for predictability.
+    # Here, we test the endpoint mechanics and assume the underlying logic is tested in unit tests.
     analysis_response = client.post(
         "/mcp",
         json={
@@ -498,4 +500,129 @@ def test_mcp_tool_call_analyze_codebase_improvements_success(temp_dir):
     assert "potential_duplicates" in analysis
     assert "large_files" in analysis
     assert "suggestions" in analysis
+    
+    # We can't assert specific values without mocking, but we can check the structure
+    assert isinstance(analysis["total_files"], int)
+    assert isinstance(analysis["python_files"], int)
+    assert isinstance(analysis["todo_comments"], int)
+    assert isinstance(analysis["fixme_comments"], int)
+    assert isinstance(analysis["undocumented_functions"], int)
+    assert isinstance(analysis["potential_duplicates"], int)
+    assert isinstance(analysis["large_files"], list)
+    assert isinstance(analysis["suggestions"], list)
+
+
+# --- New Integration Tests for Profile Code Performance MCP Endpoint ---
+
+def test_mcp_tool_call_profile_code_performance_success(temp_dir):
+    """Test calling the profile_code_performance tool via the MCP endpoint successfully."""
+    import tempfile
+    import os
+    
+    # Create a simple test Python file in the temp directory
+    test_file_path = temp_dir / "test_module.py"
+    with open(test_file_path, "w") as f:
+        f.write("""
+def simple_function():
+    return 1 + 1
+
+def another_function():
+    return simple_function() * 2
+
+if __name__ == "__main__":
+    result = another_function()
+    print(result)
+""")
+    
+    # Test profiling the entire file
+    profile_response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": "profile_code_performance",
+                "arguments": {
+                    "file_path": str(test_file_path),
+                },
+            },
+            "id": "profile_code_performance_test_1",
+        },
+    )
+    assert profile_response.status_code == 200
+    profile_data = profile_response.json()
+    assert profile_data["jsonrpc"] == "2.0"
+    assert profile_data["id"] == "profile_code_performance_test_1"
+    
+    result = profile_data["result"]
+    assert "message" in result
+    assert "total_functions_profiled" in result
+    assert "top_bottlenecks" in result
+    assert "raw_stats" in result
+    assert f"Performance profiling completed for {test_file_path}" in result["message"]
+    
+    # Check the structure of the results
+    assert isinstance(result["total_functions_profiled"], int)
+    assert isinstance(result["top_bottlenecks"], list)
+    assert isinstance(result["raw_stats"], str)
+    
+    # Test profiling a specific function
+    profile_response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": "profile_code_performance",
+                "arguments": {
+                    "file_path": str(test_file_path),
+                    "function_name": "simple_function",
+                },
+            },
+            "id": "profile_code_performance_test_2",
+        },
+    )
+    assert profile_response.status_code == 200
+    profile_data = profile_response.json()
+    assert profile_data["jsonrpc"] == "2.0"
+    assert profile_data["id"] == "profile_code_performance_test_2"
+    
+    result = profile_data["result"]
+    assert "message" in result
+    assert "total_functions_profiled" in result
+    assert "top_bottlenecks" in result
+    assert "raw_stats" in result
+    assert f"Performance profiling completed for {test_file_path} function 'simple_function'" in result["message"]
+
+
+def test_mcp_tool_call_profile_code_performance_error():
+    """Test calling the profile_code_performance tool via the MCP endpoint with an error."""
+    # Test with a non-existent file
+    profile_response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "method": "tools/call",
+            "params": {
+                "name": "profile_code_performance",
+                "arguments": {
+                    "file_path": "/test/nonexistent/file.py",
+                },
+            },
+            "id": "profile_code_performance_test_3",
+        },
+    )
+    assert profile_response.status_code == 200
+    profile_data = profile_response.json()
+    assert profile_data["jsonrpc"] == "2.0"
+    assert profile_data["id"] == "profile_code_performance_test_3"
+    
+    # Check that we get an error in the result field
+    assert "result" in profile_data
+    result = profile_data["result"]
+    assert "error" in result
+    error = result["error"]
+    assert error is not None
+    assert "code" in error
+    assert error["code"] == "FILE_NOT_FOUND"
 

@@ -19,6 +19,7 @@ from codesage_mcp.tools import (
     count_lines_of_code_tool,
     configure_api_key_tool,
     get_dependencies_overview_tool,
+    profile_code_performance_tool,  # Import the new profiling tool
 )
 
 # Configure logging
@@ -197,6 +198,22 @@ def get_all_tools_definitions_as_object():
             "inputSchema": {"type": "object", "properties": {}, "required": []},
             "type": "function",
         },
+        "profile_code_performance": {
+            "name": "profile_code_performance",
+            "description": (
+                "Profiles the performance of a specific function or the entire file "
+                "using cProfile to measure execution time and resource usage."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string"},
+                    "function_name": {"type": "string"},
+                },
+                "required": ["file_path"],
+            },
+            "type": "function",
+        },
         "get_configuration": {
             "name": "get_configuration",
             "description": (
@@ -237,6 +254,7 @@ TOOL_FUNCTIONS = {
     "get_dependencies_overview": get_dependencies_overview_tool,
     "get_configuration": get_configuration_tool,
     "analyze_codebase_improvements": analyze_codebase_improvements_tool, # Register the new tool
+    "profile_code_performance": profile_code_performance_tool, # Register the new profiling tool
 }
 
 

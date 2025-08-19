@@ -21,6 +21,7 @@
 - `list_undocumented_functions(file_path: str)`: Identifies and lists Python functions in a specified file that are missing docstrings.
 - `count_lines_of_code()`: Counts lines of code (LOC) in the indexed codebase, providing a summary by file type.
 - `get_dependencies_overview()`: Analyzes Python files in the indexed codebase and extracts import statements, providing a high-level overview of internal and external dependencies.
+- `profile_code_performance(file_path: str, function_name: str)`: Profiles the performance of a specific function or the entire file using cProfile to measure execution time and resource usage.
 
 ### Configuration Tools
 - `configure_api_key(llm_provider: str, api_key: str)`: Configures API keys for LLMs (e.g., Groq, OpenRouter, Google AI).

@@ -81,6 +81,19 @@ Analyzes Python files in the indexed codebase and extracts import statements, pr
 **Parameters:**
 None
 
+### profile_code_performance
+Profiles the performance of a specific function or the entire file using cProfile to measure execution time and resource usage.
+
+**Parameters:**
+- `file_path` (str, required): Path to the Python file to profile.
+- `function_name` (str, optional): Name of the specific function to profile. If not provided, profiles the entire file.
+
+**Returns:**
+- `message` (str): Success message indicating the profiling was completed.
+- `total_functions_profiled` (int): Number of functions profiled.
+- `top_bottlenecks` (list): Top 10 performance bottlenecks with details.
+- `raw_stats` (str): Raw profiling statistics output.
+
 ### get_configuration
 Returns the current configuration, with API keys masked for security.
 

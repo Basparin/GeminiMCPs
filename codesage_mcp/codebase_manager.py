@@ -715,5 +715,137 @@ class CodebaseManager:
         else:
             return f"LLM model '{llm_model}' not supported yet."
 
+    def profile_code_performance(self, file_path: str, function_name: str = None) -> dict:
+        """
+        Profiles the performance of a specific function or the entire file.
+        
+        This method uses cProfile to measure the execution time and resource usage
+        of Python code. It can profile either a specific function or the entire file.
+        
+        Args:
+            file_path (str): Path to the Python file to profile.
+            function_name (str, optional): Name of the specific function to profile.
+                If None, profiles the entire file.
+                
+        Returns:
+            dict: Profiling results including execution time, function calls, and
+                performance bottlenecks.
+                
+        Raises:
+            FileNotFoundError: If the specified file does not exist.
+            ValueError: If the specified function is not found in the file.
+        """
+        import cProfile
+        import pstats
+        import io
+        import tempfile
+        import os
+        
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+        
+        try:
+            # Read the file content
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # Create a temporary file for profiling
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as temp_file:
+                temp_file.write(content)
+                temp_file_path = temp_file.name
+            
+            try:
+                # Create a profiler instance
+                profiler = cProfile.Profile()
+                
+                if function_name:
+                    # Profile a specific function
+                    # First, we need to import the function
+                    import importlib.util
+                    spec = importlib.util.spec_from_file_location("temp_module", temp_file_path)
+                    temp_module = importlib.util.module_from_spec(spec)
+                    
+                    # We'll execute the file and then try to find the function
+                    profiler.enable()
+                    spec.loader.exec_module(temp_module)
+                    profiler.disable()
+                    
+                    # Check if the function exists
+                    if hasattr(temp_module, function_name):
+                        func = getattr(temp_module, function_name)
+                        # Profile the function call
+                        profiler.enable()
+                        func()
+                        profiler.disable()
+                    else:
+                        raise ValueError(f"Function '{function_name}' not found in {file_path}")
+                else:
+                    # Profile the entire file
+                    profiler.enable()
+                    exec(content)
+                    profiler.disable()
+                
+                # Create a stats object to analyze the profiling data
+                stats_stream = io.StringIO()
+                stats = pstats.Stats(profiler, stream=stats_stream)
+                stats.sort_stats('cumulative')
+                stats.print_stats(20)  # Print top 20 functions
+                
+                # Get the stats as a string
+                stats_str = stats_stream.getvalue()
+                
+                # Parse the stats to extract key metrics
+                lines = stats_str.split('\n')
+                parsed_stats = []
+                header_found = False
+                
+                for line in lines:
+                    if line.strip().startswith('ncalls'):
+                        header_found = True
+                        continue
+                    if header_found and line.strip():
+                        # Parse each line of stats
+                        parts = line.split()
+                        if len(parts) >= 6:
+                            try:
+                                ncalls = parts[0]
+                                tottime = float(parts[1])
+                                percall_tot = float(parts[2])
+                                cumtime = float(parts[3])
+                                percall_cum = float(parts[4])
+                                filename_lineno = ' '.join(parts[5:])
+                                
+                                parsed_stats.append({
+                                    'ncalls': ncalls,
+                                    'tottime': tottime,
+                                    'percall_tot': percall_tot,
+                                    'cumtime': cumtime,
+                                    'percall_cum': percall_cum,
+                                    'filename_lineno': filename_lineno
+                                })
+                            except (ValueError, IndexError):
+                                # Skip lines that can't be parsed
+                                continue
+                
+                return {
+                    "message": f"Performance profiling completed for {file_path}" + 
+                              (f" function '{function_name}'" if function_name else ""),
+                    "total_functions_profiled": len(parsed_stats),
+                    "top_bottlenecks": parsed_stats[:10],  # Top 10 bottlenecks
+                    "raw_stats": stats_str
+                }
+            
+            finally:
+                # Clean up the temporary file
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+        
+        except Exception as e:
+            return {
+                "error": {
+                    "code": "PROFILING_ERROR",
+                    "message": f"An error occurred during performance profiling: {str(e)}"
+                }
+            }
 
 codebase_manager = CodebaseManager()

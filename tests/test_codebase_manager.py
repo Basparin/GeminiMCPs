@@ -473,3 +473,96 @@ def test_analyze_codebase_improvements_tool_not_indexed():
     # Check that we get an error
     assert "error" in result
     assert result["error"]["code"] == "NOT_INDEXED"
+
+
+# --- New Tests for Profile Code Performance Tool ---
+
+def test_profile_code_performance_tool():
+    """Test the profile_code_performance_tool function."""
+    from codesage_mcp.tools import profile_code_performance_tool
+    import tempfile
+    import os
+    
+    # Create a simple test Python file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        f.write("""
+def simple_function():
+    return 1 + 1
+
+def another_function():
+    return simple_function() * 2
+
+if __name__ == "__main__":
+    result = another_function()
+    print(result)
+""")
+        temp_file_path = f.name
+    
+    try:
+        # Test profiling the entire file
+        result = profile_code_performance_tool(temp_file_path)
+        
+        # Check the structure of the result
+        assert "message" in result
+        assert "total_functions_profiled" in result
+        assert "top_bottlenecks" in result
+        assert "raw_stats" in result
+        assert result["message"] == f"Performance profiling completed for {temp_file_path}"
+        
+        # Check that we got some profiling data
+        assert isinstance(result["total_functions_profiled"], int)
+        assert isinstance(result["top_bottlenecks"], list)
+        assert isinstance(result["raw_stats"], str)
+        
+        # Test profiling a specific function
+        result = profile_code_performance_tool(temp_file_path, "simple_function")
+        
+        # Check the structure of the result
+        assert "message" in result
+        assert "total_functions_profiled" in result
+        assert "top_bottlenecks" in result
+        assert "raw_stats" in result
+        assert result["message"] == f"Performance profiling completed for {temp_file_path} function 'simple_function'"
+        
+    finally:
+        # Clean up the temporary file
+        os.unlink(temp_file_path)
+
+
+def test_profile_code_performance_tool_not_found():
+    """Test the profile_code_performance_tool function with a non-existent file."""
+    from codesage_mcp.tools import profile_code_performance_tool
+    
+    # Test with a non-existent file
+    result = profile_code_performance_tool("/test/nonexistent/file.py")
+    
+    # Check that we get an error
+    assert "error" in result
+    assert result["error"]["code"] == "FILE_NOT_FOUND"
+
+
+def test_profile_code_performance_tool_invalid_function():
+    """Test the profile_code_performance_tool function with a non-existent function."""
+    from codesage_mcp.tools import profile_code_performance_tool
+    import tempfile
+    import os
+    
+    # Create a simple test Python file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        f.write("""
+def simple_function():
+    return 1 + 1
+""")
+        temp_file_path = f.name
+    
+    try:
+        # Test profiling a non-existent function
+        result = profile_code_performance_tool(temp_file_path, "non_existent_function")
+        
+        # Check that we get an error
+        assert "error" in result
+        assert result["error"]["code"] == "PROFILING_ERROR"
+        
+    finally:
+        # Clean up the temporary file
+        os.unlink(temp_file_path)

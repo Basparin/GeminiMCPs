@@ -650,3 +650,45 @@ def analyze_codebase_improvements_tool(codebase_path: str) -> dict:
                 "message": f"An unexpected error occurred during codebase analysis: {e}",
             }
         }
+
+
+def profile_code_performance_tool(file_path: str, function_name: str = None) -> dict:
+    """
+    Profiles the performance of a specific function or the entire file.
+    
+    This tool uses cProfile to measure the execution time and resource usage
+    of Python code. It can profile either a specific function or the entire file.
+    
+    Args:
+        file_path (str): Path to the Python file to profile.
+        function_name (str, optional): Name of the specific function to profile.
+            If None, profiles the entire file.
+            
+    Returns:
+        dict: Profiling results including execution time, function calls, and
+            performance bottlenecks.
+    """
+    try:
+        profiling_results = codebase_manager.profile_code_performance(file_path, function_name)
+        return profiling_results
+    except FileNotFoundError as e:
+        return {
+            "error": {
+                "code": "FILE_NOT_FOUND",
+                "message": str(e)
+            }
+        }
+    except ValueError as e:
+        return {
+            "error": {
+                "code": "FUNCTION_NOT_FOUND",
+                "message": str(e)
+            }
+        }
+    except Exception as e:
+        return {
+            "error": {
+                "code": "PROFILING_ERROR",
+                "message": f"An unexpected error occurred during performance profiling: {str(e)}"
+            }
+        }
