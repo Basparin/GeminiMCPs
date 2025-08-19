@@ -454,14 +454,27 @@ def get_configuration_tool() -> dict:
 
 
 def analyze_codebase_improvements_tool(codebase_path: str) -> dict:
-    """Analyzes the codebase for potential improvements and suggestions."""
+    """
+    Analyzes the codebase for potential improvements and suggestions.
+    
+    This tool provides a comprehensive analysis of the codebase to identify
+    areas for improvement, including TODO/FIXME comments, undocumented functions,
+    large files, and other code quality metrics.
+    
+    Args:
+        codebase_path (str): Path to the indexed codebase.
+        
+    Returns:
+        dict: Analysis results with suggestions for improvement.
+    """
     try:
         # Import codebase manager
         from codesage_mcp.codebase_manager import codebase_manager
-        from pathlib import Path
+        import os
+        import fnmatch
         
         # Check if codebase is indexed
-        abs_codebase_path = str(Path(codebase_path).resolve())
+        abs_codebase_path = str(os.path.abspath(codebase_path))
         if abs_codebase_path not in codebase_manager.indexed_codebases:
             return {
                 "error": {
@@ -490,10 +503,14 @@ def analyze_codebase_improvements_tool(codebase_path: str) -> dict:
         
         # Analyze each file
         for relative_file_path in indexed_files:
-            file_path = Path(codebase_path) / relative_file_path
+            # Skip archived files
+            if "archive/" in relative_file_path:
+                continue
+                
+            file_path = os.path.join(codebase_path, relative_file_path)
             
             # Only analyze Python files for detailed metrics
-            if file_path.suffix == ".py":
+            if file_path.endswith(".py"):
                 analysis["python_files"] += 1
                 
                 try:
@@ -508,19 +525,85 @@ def analyze_codebase_improvements_tool(codebase_path: str) -> dict:
                             "lines": line_count
                         })
                     
-                    # Search for TODO and FIXME comments
-                    todo_count = sum(1 for line in lines if "TODO" in line)
-                    fixme_count = sum(1 for line in lines if "FIXME" in line)
+                    # Search for TODO and FIXME comments (more precise)
+                    # Only count actual TODO/FIXME comments, not mentions in strings or comments
+                    todo_count = 0
+                    fixme_count = 0
+                    in_multiline_comment = False
+                    multiline_comment_delimiter = None
+                    
+                    for line_num, line in enumerate(lines, 1):
+                        stripped_line = line.strip()
+                        
+                        # Handle multiline comments
+                        if in_multiline_comment:
+                            if multiline_comment_delimiter in line:
+                                in_multiline_comment = False
+                            continue
+                        
+                        # Check for multiline comment start
+                        if '"""' in line:
+                            in_multiline_comment = True
+                            multiline_comment_delimiter = '"""'
+                            # Check if it's also closed on the same line
+                            if line.count('"""') >= 2:
+                                in_multiline_comment = False
+                            continue
+                        elif "'''" in line:
+                            in_multiline_comment = True
+                            multiline_comment_delimiter = "'''"
+                            # Check if it's also closed on the same line
+                            if line.count("'''") >= 2:
+                                in_multiline_comment = False
+                            continue
+                        
+                        # Check for single-line comments that start with # TODO or # FIXME
+                        if stripped_line.startswith("# TODO"):
+                            todo_count += 1
+                        elif stripped_line.startswith("# FIXME"):
+                            fixme_count += 1
+                        
+                        # Also check for TODO/FIXME in regular comments (not at the start)
+                        # but only if it's clearly a comment marker
+                        comment_parts = line.split("#", 1)
+                        if len(comment_parts) > 1:
+                            comment_content = comment_parts[1].strip()
+                            if comment_content.startswith("TODO"):
+                                # Make sure it's not part of a string or variable name
+                                if len(comment_content) > 4 and (len(comment_content) == 4 or not comment_content[4].isalnum()):
+                                    todo_count += 1
+                            elif comment_content.startswith("FIXME"):
+                                # Make sure it's not part of a string or variable name
+                                if len(comment_content) > 5 and (len(comment_content) == 5 or not comment_content[5].isalnum()):
+                                    fixme_count += 1
+                    
                     analysis["todo_comments"] += todo_count
                     analysis["fixme_comments"] += fixme_count
                     
-                    # For Python files, check for undocumented functions
-                    # This is a simplified check - in a real implementation, we'd use AST
-                    func_lines = [i for i, line in enumerate(lines) if line.strip().startswith("def ")]
-                    docstring_lines = [i for i, line in enumerate(lines) if '"""' in line or "'''" in line]
-                    
-                    # Very rough estimate - in a real implementation, we'd do a proper AST analysis
-                    analysis["undocumented_functions"] += max(0, len(func_lines) - len(docstring_lines) // 2)
+                    # For Python files, check for undocumented functions using AST
+                    try:
+                        with open(file_path, "r", encoding="utf-8") as f:
+                            tree = ast.parse(f.read())
+                        
+                        # Count functions with and without docstrings
+                        function_count = 0
+                        documented_function_count = 0
+                        
+                        for node in ast.walk(tree):
+                            if isinstance(node, ast.FunctionDef):
+                                function_count += 1
+                                # Check if the function has a docstring
+                                if (node.body and 
+                                    isinstance(node.body[0], ast.Expr) and 
+                                    isinstance(node.body[0].value, ast.Constant) and 
+                                    isinstance(node.body[0].value.value, str)):
+                                    documented_function_count += 1
+                        
+                        # Add undocumented functions to the count
+                        analysis["undocumented_functions"] += (function_count - documented_function_count)
+                    except SyntaxError:
+                        # Skip files with syntax errors
+                        pass
                     
                 except Exception:
                     # Skip files that can't be read

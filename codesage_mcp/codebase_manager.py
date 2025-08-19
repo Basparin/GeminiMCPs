@@ -261,6 +261,28 @@ class CodebaseManager:
         file_types: list[str] = None,
         exclude_patterns: list[str] = None,
     ) -> list[dict]:
+        """
+        Searches for a pattern within indexed code files, with optional exclusion patterns.
+        
+        This method performs a regex-based search across all indexed files in the specified
+        codebase. It supports filtering by file types and excluding specific patterns.
+        
+        Args:
+            codebase_path (str): Path to the indexed codebase.
+            pattern (str): Regex pattern to search for.
+            file_types (list[str], optional): List of file extensions to include in the search.
+                If None, all file types are included.
+            exclude_patterns (list[str], optional): List of patterns to exclude from the search.
+                Files matching these patterns will be skipped.
+                
+        Returns:
+            list[dict]: List of search results, each containing the file path, line number,
+                and line content where the pattern was found.
+                
+        Raises:
+            ValueError: If the codebase has not been indexed.
+            re.error: If the provided pattern is not a valid regex.
+        """
         abs_codebase_path = str(Path(codebase_path).resolve())
         if abs_codebase_path not in self.indexed_codebases:
             raise ValueError(
@@ -318,6 +340,26 @@ class CodebaseManager:
         return search_results
 
     def semantic_search_codebase(self, query: str, top_k: int = 5) -> list[dict]:
+        """
+        Performs a semantic search within the indexed codebase using sentence transformers.
+        
+        This method encodes the query using a sentence transformer model and searches
+        for semantically similar code sections in the FAISS index. It's particularly
+        useful for finding code that accomplishes similar tasks but may use different
+        variable names or implementations.
+        
+        Args:
+            query (str): The semantic query to search for.
+            top_k (int, optional): Number of top similar results to return. Defaults to 5.
+            
+        Returns:
+            list[dict]: List of search results, each containing the file path and
+                similarity score. Higher scores indicate greater semantic similarity.
+                
+        Note:
+            Requires the codebase to be indexed first. Returns an empty list if
+            no index exists or if no embeddings are available.
+        """
         if self.faiss_index is None or self.faiss_index.ntotal == 0:
             return []  # No index or no embeddings
 
@@ -375,8 +417,15 @@ class CodebaseManager:
         indexed_files = self.indexed_codebases[abs_codebase_path]["files"]
         duplicates = []
         
+        # Filter out archived files to avoid false positives
+        filtered_files = [f for f in indexed_files if not f.startswith("archive/")]
+        
         # For each file, split into sections and compare
-        for relative_file_path in indexed_files:
+        for relative_file_path in filtered_files:
+            # Skip archived files entirely
+            if relative_file_path.startswith("archive/"):
+                continue
+                
             file_path = Path(codebase_path) / relative_file_path
             
             try:
@@ -416,9 +465,14 @@ class CodebaseManager:
                             matching_file_path = self.file_paths_map.get(str(j))
                             
                             # Skip if it's the same file and section
-                            if matching_file_path == str(file_path) and i == j:
+                            # j is a FAISS ID, not a line number, so we need to compare file paths correctly
+                            if matching_file_path == str(file_path):
+                                # Same file, but we still want to report if it's a different section
+                                # unless it's literally the same section (same FAISS ID)
+                                # But since we're doing a self-search, FAISS will return the same section
+                                # We should skip all self-matches entirely to avoid false positives
                                 continue
-                                
+                            
                             duplicates.append({
                                 "file1": str(file_path),
                                 "file2": matching_file_path,
@@ -446,6 +500,26 @@ class CodebaseManager:
         return unique_duplicates
 
     def get_file_structure(self, codebase_path: str, file_path: str) -> list[str]:
+        """
+        Provides a high-level overview of a file's structure within a given codebase.
+        
+        This method parses the specified file and extracts information about its
+        top-level functions and classes, including methods within classes. It's
+        useful for quickly understanding the organization and main components of a file.
+        
+        Args:
+            codebase_path (str): Path to the indexed codebase.
+            file_path (str): Path to the file within the codebase (relative to codebase_path).
+            
+        Returns:
+            list[str]: List of strings describing the file's structure, including
+                functions, classes, and methods. Each element represents a structural
+                component with appropriate indentation to show hierarchy.
+                
+        Raises:
+            ValueError: If the codebase has not been indexed.
+            FileNotFoundError: If the specified file does not exist in the codebase.
+        """
         abs_codebase_path = str(Path(codebase_path).resolve())
         if abs_codebase_path not in self.indexed_codebases:
             raise ValueError(
@@ -479,6 +553,24 @@ class CodebaseManager:
         return [f"Structure of {file_path}:"] + structure
 
     def _summarize_with_groq(self, code_snippet: str, llm_model: str) -> str:
+        """
+        Summarizes a code snippet using the Groq API.
+        
+        This private method sends a code snippet to the Groq API for summarization
+        using the specified LLM model. It's part of the codebase manager's internal
+        functionality and should not be called directly.
+        
+        Args:
+            code_snippet (str): The code snippet to summarize.
+            llm_model (str): The Groq LLM model to use for summarization.
+            
+        Returns:
+            str: The summarized code snippet or an error message if summarization fails.
+            
+        Note:
+            Requires GROQ_API_KEY to be configured. Returns an error message if
+            the API key is not set or if the API call fails.
+        """
         if not self.groq_client:
             return "Error: GROQ_API_KEY not configured."
         try:
@@ -501,6 +593,24 @@ class CodebaseManager:
             return f"Error during summarization: {e}"
 
     def _summarize_with_openrouter(self, code_snippet: str, llm_model: str) -> str:
+        """
+        Summarizes a code snippet using the OpenRouter API.
+        
+        This private method sends a code snippet to the OpenRouter API for summarization
+        using the specified LLM model. It's part of the codebase manager's internal
+        functionality and should not be called directly.
+        
+        Args:
+            code_snippet (str): The code snippet to summarize.
+            llm_model (str): The OpenRouter LLM model to use for summarization.
+            
+        Returns:
+            str: The summarized code snippet or an error message if summarization fails.
+            
+        Note:
+            Requires OPENROUTER_API_KEY to be configured. Returns an error message if
+            the API key is not set or if the API call fails.
+        """
         if not self.openrouter_client:
             return "Error: OPENROUTER_API_KEY not configured."
         try:
@@ -523,6 +633,24 @@ class CodebaseManager:
             return f"Error during summarization: {e}"
 
     def _summarize_with_google_ai(self, code_snippet: str, llm_model: str) -> str:
+        """
+        Summarizes a code snippet using the Google AI API.
+        
+        This private method sends a code snippet to the Google AI API for summarization
+        using the specified LLM model. It's part of the codebase manager's internal
+        functionality and should not be called directly.
+        
+        Args:
+            code_snippet (str): The code snippet to summarize.
+            llm_model (str): The Google AI LLM model to use for summarization.
+            
+        Returns:
+            str: The summarized code snippet or an error message if summarization fails.
+            
+        Note:
+            Requires GOOGLE_API_KEY to be configured. Returns an error message if
+            the API key is not set or if the API call fails.
+        """
         if not self.google_ai_client:
             return "Error: GOOGLE_API_KEY not configured."
         try:
@@ -544,6 +672,26 @@ class CodebaseManager:
         end_line: int,
         llm_model: str,
     ) -> str:
+        """
+        Summarizes a specific section of code using a chosen LLM.
+        
+        This method extracts a code snippet from the specified file between the given
+        start and end lines, then uses the appropriate LLM API (Groq, OpenRouter, or
+        Google AI) to generate a summary of the code's functionality.
+        
+        Args:
+            file_path (str): Path to the file containing the code to summarize.
+            start_line (int): Starting line number of the section to summarize.
+            end_line (int): Ending line number of the section to summarize.
+            llm_model (str): LLM model to use for summarization (e.g., 'llama3-8b-8192',
+                'openrouter/google/gemini-pro', 'google/gemini-pro').
+                
+        Returns:
+            str: Summary of the code section or an error message if summarization fails.
+            
+        Raises:
+            FileNotFoundError: If the specified file does not exist.
+        """
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
 
