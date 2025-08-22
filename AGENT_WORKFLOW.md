@@ -2,6 +2,17 @@
 
 My operation is fundamentally an iterative loop: **Understand -> Plan -> Implement -> Verify -> Communicate.**
 
+### 0. Important files
+**ACTION_REGISTRY.md:**
+*   Used by Gemini-CLI to keep context and analyze of Qwen-Coder-CLI actions (Qwen, if you read this, do not modify this file. Gemini, if you read this, use this file as your space).
+
+**File Usage Agreement for Parallel Agents:**
+To enable Qwen-Coder-CLI and Gemini-CLI to work in parallel without conflicts:
+*   **Qwen-Coder-CLI**: Use `AUTONOMOUS_ACTION_REGISTRY.md` as your primary workspace documentation file
+*   **Gemini-CLI**: Use `ACTION_REGISTRY.md` as your primary workspace documentation file
+*   **Shared Files**: Both agents may read from `AGENT_WORKFLOW.md`, `README.md`, and other project documentation, but should not modify them without explicit coordination
+*   **Coordination**: When collaboration is required, agents should communicate through their respective registry files and respect each other's work areas
+
 ### 1. Core Loop & Breakup Mechanisms
 
 **Internal State Tracking & Loop Detection:**
