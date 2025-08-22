@@ -11,7 +11,7 @@ To enable Qwen-Coder-CLI and Gemini-CLI to work in parallel without conflicts:
 *   **Qwen-Coder-CLI**: Use `AUTONOMOUS_ACTION_REGISTRY.md` as your primary workspace documentation file
 *   **Gemini-CLI**: Use `ACTION_REGISTRY.md` as your primary workspace documentation file
 *   **Shared Files**: Both agents may read from `AGENT_WORKFLOW.md`, `README.md`, and other project documentation, but should not modify them without explicit coordination
-*   **Coordination**: When collaboration is required, agents should communicate through their respective registry files and respect each other's work areas
+*   **Coordination**: When collaboration is required, agents should communicate through the user only (unless requested direct coordination) and respect each other's work areas
 
 ### 1. Core Loop & Breakup Mechanisms
 
