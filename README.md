@@ -27,7 +27,7 @@ We've also added a new `get_configuration` tool that allows you to check the cur
     ```
 
 2.  **Install dependencies into the virtual environment:**
-    *Note: This project uses a virtual environment to manage dependencies. Make sure you have one set up.* 
+    *Note: This project uses a virtual environment to manage dependencies. Make sure you have one set up.*
     ```bash
     # First, ensure you have a virtual environment (e.g., named 'venv')
     # python3 -m venv venv
@@ -99,4 +99,4 @@ Add the following entry to the `mcpServers` array in your `settings.json`:
 }
 ```
 
-After adding this configuration, restart your Gemini CLI session for the changes to take effect. You should then be able to discover and use the tools exposed by the CodeSage MCP server.
+After adding this configuration, restart your Gemini CLI session for the changes to take effect. You should then be able to discover and use the tools exposed by the CodeSage MCP server.# Test commit for pre-commit hook verification
