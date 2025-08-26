@@ -44,6 +44,7 @@ from codesage_mcp.tools import (
     resolve_todo_fixme_tool,  # Import the new TODO/FIXME resolution tool
     parse_llm_response_tool,  # Import the new LLM response parsing tool
     generate_llm_api_wrapper_tool,  # Import the new LLM API wrapper generation tool
+    generate_boilerplate_tool,  # Import the new boilerplate generation tool
 )
 
 # Configure logging
@@ -348,6 +349,26 @@ def get_all_tools_definitions_as_object():
             },
             "type": "function",
         },
+        "generate_boilerplate": {
+            "name": "generate_boilerplate",
+            "description": (
+                "Generates standardized boilerplate code for new modules, tools, or tests. "
+                "Supports file headers, module templates, tool functions, test scaffolding, "
+                "classes, and functions."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "boilerplate_type": {"type": "string"},
+                    "file_path": {"type": "string"},
+                    "module_name": {"type": "string"},
+                    "function_name": {"type": "string"},
+                    "class_name": {"type": "string"},
+                },
+                "required": ["boilerplate_type"],
+            },
+            "type": "function",
+        },
         "parse_llm_response": {
             "name": "parse_llm_response",
             "description": (
@@ -404,6 +425,7 @@ TOOL_FUNCTIONS = {
     "resolve_todo_fixme": resolve_todo_fixme_tool,  # Register the new TODO/FIXME resolution tool
     "parse_llm_response": parse_llm_response_tool,  # Register the new LLM response parsing tool
     "generate_llm_api_wrapper": generate_llm_api_wrapper_tool,  # Register the new LLM API wrapper generation tool
+    "generate_boilerplate": generate_boilerplate_tool,  # Register the new boilerplate generation tool
 }
 
 

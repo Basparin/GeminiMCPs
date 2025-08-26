@@ -169,6 +169,7 @@ def generate_tools_reference():
             "resolve_todo_fixme",
             "parse_llm_response",
             "generate_llm_api_wrapper",
+            "generate_boilerplate",
         ],
         "Configuration Tools": ["get_configuration", "configure_api_key"],
     }
@@ -212,6 +213,15 @@ def generate_tools_reference():
     "codebase_path": "/path/to/your/codebase",
     "min_similarity": 0.85,
     "min_lines": 15
+  }
+}
+```""",
+        "generate_boilerplate": """```json
+{
+  "name": "generate_boilerplate",
+  "arguments": {
+    "boilerplate_type": "tool",
+    "function_name": "my_new_tool"
   }
 }
 ```""",

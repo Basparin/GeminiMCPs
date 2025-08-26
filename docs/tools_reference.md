@@ -213,6 +213,32 @@ Counts lines of code (LOC) in the indexed codebase, providing a summary by file 
     dict: Summary of LOC by file type and total LOC, or an error message.
 
 
+### generate_boilerplate
+Generates standardized boilerplate code for new modules, tools, or tests. Supports file headers, module templates, tool functions, test scaffolding, classes, and functions.
+
+**Parameters:**
+- `boilerplate_type` (str, required): 'file_header': Standard file header with docstring 'module': Basic Python module template 'tool': CodeSage MCP tool function template 'test': pytest test file template 'class': Standard Python class template 'function': Standard function with docstring template
+- `file_path` (str, optional): If None, the generated code is returned as a string.
+- `module_name` (str, optional)
+- `function_name` (str, optional): The name of the function to analyze.
+- `class_name` (str, optional)
+
+**Example Usage:**
+```json
+{
+  "name": "generate_boilerplate",
+  "arguments": {
+    "boilerplate_type": "tool",
+    "function_name": "my_new_tool"
+  }
+}
+```
+
+**Returns:**
+    dict: A dictionary containing the generated boilerplate code (as a string) or a success message
+          if saved to file, or an error message if generation fails.
+
+
 ### generate_llm_api_wrapper
 Generates Python wrapper code for interacting with various LLM APIs.
 
@@ -224,7 +250,7 @@ Generates Python wrapper code for interacting with various LLM APIs.
 
 **Returns:**
     dict: A dictionary containing the generated wrapper code (as a string) or a success message
-          if saved to a file, or an error message if generation fails.
+          if saved to file, or an error message if generation fails.
 
 
 ### generate_unit_tests

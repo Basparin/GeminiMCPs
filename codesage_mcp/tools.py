@@ -996,7 +996,7 @@ def generate_llm_api_wrapper_tool(
 
     Returns:
         dict: A dictionary containing the generated wrapper code (as a string) or a success message
-              if saved to a file, or an error message if generation fails.
+              if saved to file, or an error message if generation fails.
     """
     try:
         generated_code = codebase_manager.llm_analysis_manager.generate_llm_api_wrapper(
@@ -1016,5 +1016,216 @@ def generate_llm_api_wrapper_tool(
             "error": {
                 "code": "WRAPPER_GENERATION_ERROR",
                 "message": f"An unexpected error occurred during wrapper generation: {str(e)}",
+            }
+        }
+
+
+def generate_boilerplate_tool(
+    boilerplate_type: str,
+    file_path: str = None,
+    module_name: str = None,
+    function_name: str = None,
+    class_name: str = None,
+) -> dict:
+    """
+    Generates standardized boilerplate code for new modules, tools, or tests.
+
+    This tool automates the creation of common code structures, ensuring consistency
+    with project conventions. It can generate file headers, docstrings, module templates,
+    test scaffolding, and other common code patterns.
+
+    Args:
+        boilerplate_type (str): Type of boilerplate to generate. Supported types:
+            - 'file_header': Standard file header with docstring
+            - 'module': Basic Python module template
+            - 'tool': CodeSage MCP tool function template
+            - 'test': pytest test file template
+            - 'class': Standard Python class template
+            - 'function': Standard function with docstring template
+        file_path (str, optional): Path where the boilerplate should be saved.
+            If None, the generated code is returned as a string.
+        module_name (str, optional): Name of the module (used for module templates).
+        function_name (str, optional): Name of the function (used for tool/function templates).
+        class_name (str, optional): Name of the class (used for class templates).
+
+    Returns:
+        dict: A dictionary containing the generated boilerplate code (as a string) or a success message
+              if saved to file, or an error message if generation fails.
+    """
+    try:
+        import textwrap
+        import os
+
+        # Generate appropriate boilerplate based on type
+        if boilerplate_type == "file_header":
+            boilerplate = textwrap.dedent('''\
+                """
+                [Brief description of the module]
+
+                This module provides [description of what the module does].
+
+                [Additional information about the module's purpose and functionality]
+                """
+
+                # TODO: Add module-level imports here
+            ''').strip()
+
+        elif boilerplate_type == "module":
+            module_name = module_name or "new_module"
+            # Format the module name for the title (replace underscores with spaces and capitalize)
+            formatted_module_name = module_name.replace("_", " ").title()
+            boilerplate = textwrap.dedent(f'''                """
+                {formatted_module_name} Module for CodeSage MCP Server.
+
+                This module [description of what the module does].
+                """
+
+                import logging
+
+                logger = logging.getLogger(__name__)
+
+                # TODO: Add module implementation here
+            ''').strip()
+
+        elif boilerplate_type == "tool":
+            function_name = function_name or "new_tool"
+            boilerplate_template = '''\
+def FUNCTION_NAME_PLACEHOLDER(param1: str = None) -> dict:
+    """
+    [Brief description of what the tool does]
+
+    [More detailed description of the tool's functionality, inputs, and outputs]
+
+    Args:
+        param1 (str, optional): [Description of the parameter]. Defaults to None.
+
+    Returns:
+        dict: [Description of what the function returns].
+
+    Raises:
+        [Exception]: [Description of when this exception might be raised].
+    """
+    try:
+        # TODO: Implement tool logic here
+        result = {"message": "Tool executed successfully"}
+        return result
+    except Exception as e:
+        # Log the error (assuming logger is available from the module)
+        # logger.error(f"Error in FUNCTION_NAME_PLACEHOLDER: {e}")
+        return {
+            "error": {
+                "code": "TOOL_ERROR",
+                "message": f"An error occurred in FUNCTION_NAME_PLACEHOLDER: {e}"
+            }
+        }
+'''
+            # Replace the placeholder with the actual function name
+            boilerplate = boilerplate_template.replace(
+                "FUNCTION_NAME_PLACEHOLDER", function_name
+            )
+            # Clean up the string by removing extra indentation
+            boilerplate = textwrap.dedent(boilerplate).strip()
+
+        elif boilerplate_type == "test":
+            module_name = module_name or "new_module"
+            boilerplate = textwrap.dedent(f'''\
+                import pytest
+                import tempfile
+                import os
+                from codesage_mcp.tools import {module_name}_tool
+
+
+                def test_{module_name}():
+                    """Test the {module_name} functionality."""
+                    # TODO: Add test implementation
+                    # Example test structure:
+                    # result = {module_name}_tool(param1="test_value")
+                    # assert "message" in result
+                    # assert result["message"] == "Expected message"
+                    pass
+
+
+                # Additional test functions can be added here
+            ''').strip()
+
+        elif boilerplate_type == "class":
+            class_name = class_name or "NewClass"
+            boilerplate = textwrap.dedent(f'''\
+                class {class_name}:
+                    """
+                    {class_name} for CodeSage MCP Server.
+
+                    This class [description of what the class does].
+
+                    Attributes:
+                        [attribute_name] ([type]): [Description of the attribute]
+                    """
+
+                    def __init__(self, param1: str = None):
+                        """
+                        Initializes the {class_name}.
+
+                        Args:
+                            param1 (str, optional): [Description of the parameter]. Defaults to None.
+                        """
+                        self.param1 = param1
+
+                    def example_method(self) -> str:
+                        """
+                        [Brief description of what the method does].
+
+                        Returns:
+                            str: [Description of what the method returns].
+                        """
+                        # TODO: Implement method logic
+                        return "Example result"
+            ''').strip()
+
+        elif boilerplate_type == "function":
+            function_name = function_name or "new_function"
+            boilerplate = textwrap.dedent(f'''\
+                def {function_name}(param1: str = None) -> str:
+                    """
+                    [Brief description of what the function does].
+
+                    [More detailed description of the function's functionality, inputs, and outputs]
+
+                    Args:
+                        param1 (str, optional): [Description of the parameter]. Defaults to None.
+
+                    Returns:
+                        str: [Description of what the function returns].
+
+                    Raises:
+                        [Exception]: [Description of when this exception might be raised].
+                    """
+                    # TODO: Implement function logic
+                    return "Example result"
+            ''').strip()
+
+        else:
+            return {
+                "error": {
+                    "code": "INVALID_INPUT",
+                    "message": f"Unsupported boilerplate_type: {boilerplate_type}. Supported types: file_header, module, tool, test, class, function",
+                }
+            }
+
+        # Save to file if path is provided
+        if file_path:
+            # Create directories if they don't exist
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(boilerplate)
+            return {"message": f"Boilerplate saved to {file_path}"}
+        else:
+            return {"boilerplate": boilerplate}
+
+    except Exception as e:
+        return {
+            "error": {
+                "code": "BOILERPLATE_GENERATION_ERROR",
+                "message": f"An unexpected error occurred during boilerplate generation: {str(e)}",
             }
         }
