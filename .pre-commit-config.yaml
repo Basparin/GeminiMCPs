@@ -1,0 +1,59 @@
+repos:
+  # Verificar que no haya archivos grandes sin querer ser commiteados
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ['--maxkb=500'] # Ajustar el límite según sea necesario
+
+  # Verificar que los archivos tengan fin de línea consistente
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  # Verificar que no haya secretos (API keys, etc.) en el código
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-private-key
+
+  # Ejecutar ruff para linting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.3
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # Ejecutar mypy para verificación de tipos (opcional, si se usa anotación de tipos)
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.14.0
+  #   hooks:
+  #     - id: mypy
+  #       additional_dependencies: [types-requests, types-PyYAML] # Agregar según sea necesario
+
+  # Generar documentación automáticamente
+  - repo: local
+    hooks:
+      - id: generate-tools-reference
+        name: generate tools reference
+        entry: venv/bin/python scripts/generate_tools_reference.py
+        language: system
+        types: [python]
+        pass_filenames: false
+        # Solo ejecutar si se modifican las herramientas o main.py
+        files: ^(codesage_mcp/tools\.py|codesage_mcp/main\.py|scripts/generate_tools_reference\.py)$
+
+  # Ejecutar las pruebas del proyecto
+  - repo: local
+    hooks:
+      - id: run-tests
+        name: run pytest
+        entry: venv/bin/python -m pytest tests/ --tb=short
+        language: system
+        types: [python]
+        pass_filenames: false
+        # Solo ejecutar pruebas en commits que afecten el código
+        # files: ^codesage_mcp/.*\.py$|^tests/.*\.py$

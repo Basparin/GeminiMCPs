@@ -1,6 +1,37 @@
+[project]
+name = "codesage-mcp"
+version = "0.1.0"
+description = "CodeSage Model Context Protocol (MCP) Server"
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "python-dotenv",
+    "groq",
+    "openai",
+    "google-generativeai",
+    "sentence-transformers",
+    "faiss-cpu",
+    "python-multipart", # For file uploads in FastAPI
+    "radon", # For cyclomatic complexity analysis
+    "stdlib-list", # For standard library module detection
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["codesage_mcp*"]
+namespaces = false
+
 [tool.ruff]
 line-length = 88
 
 [tool.ruff.lint]
 # Enable the default set of rules.
 select = ["E", "F"]
+ignore = ["E501"]

@@ -1,34 +1,200 @@
+"""Codebase Manager Module.
+
+This module provides the CodebaseManager class, which acts as a central
+coordinator for managing codebases, indexing, searching, and interacting with
+LLM analysis tools. It delegates specific responsibilities to specialized
+modules like indexing, searching, and llm_analysis.
+
+The CodebaseManager is responsible for:
+- Coordinating the initialization and interaction between different subsystems.
+- Providing a high-level interface for codebase operations.
+- Maintaining compatibility with legacy code.
+
+Classes:
+    CodebaseManager: The main class for managing codebases and delegating tasks.
+"""
+
 import os
-import re
-import json
-import fnmatch
-from pathlib import Path
 from groq import Groq
 from openai import OpenAI
 import google.generativeai as genai
 import ast
+from collections import defaultdict  # New import
+
+# Importaciones para modelos y búsqueda
 from sentence_transformers import SentenceTransformer
-import faiss
-import numpy as np
+
 from .config import GROQ_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY
+
+# Importar los nuevos módulos
+from .indexing import IndexingManager
+from .searching import SearchingManager
+from .llm_analysis import LLMAnalysisManager
+
+
+def _is_module_installed(module_name: str) -> bool:
+    """Checks if a third-party module is installed."""
+    try:
+        import importlib.util
+
+        return importlib.util.find_spec(module_name) is not None
+    except Exception:
+        return False
+
+
+def _get_stdlib_modules() -> set:
+    """Get a list of standard library modules.
+
+    Returns:
+        set: A set of standard library module names.
+    """
+    # Get a list of standard library modules
+    try:
+        from stdlib_list import stdlib_list
+
+        # Get stdlib modules for the current Python version
+        import sys
+
+        stdlib_modules = set(
+            stdlib_list(f"{sys.version_info.major}.{sys.version_info.minor}")
+        )
+    except Exception:
+        # Fallback if stdlib_list is not available or fails
+        stdlib_modules = set()
+        # Add some common stdlib modules for fallback
+        stdlib_modules.update(
+            [
+                "os",
+                "sys",
+                "json",
+                "ast",
+                "collections",
+                "itertools",
+                "functools",
+                "re",
+                "io",
+                "pathlib",
+                "datetime",
+                "math",
+                "random",
+                "urllib",
+                "http",
+                "sqlite3",
+                "threading",
+                "asyncio",
+            ]
+        )
+
+    return stdlib_modules
+
+
+def _get_module_type(
+    module_name: str, current_codebase_path: str, stdlib_modules: set
+) -> str:
+    """Determines if a module is internal, standard library, or third-party."""
+    if (
+        os.path.exists(os.path.join(current_codebase_path, module_name))
+        or os.path.exists(os.path.join(current_codebase_path, module_name + ".py"))
+        or os.path.exists(
+            os.path.join(current_codebase_path, module_name, "__init__.py")
+        )
+    ):
+        return "internal"
+    elif module_name in stdlib_modules:
+        return "stdlib"
+    else:
+        return "third_party"
+
+
+def _process_import_node(
+    node: ast.AST,
+    current_codebase_path: str,
+    stdlib_modules: set,
+    internal_dependencies: defaultdict,
+    stdlib_dependencies: defaultdict,
+    third_party_dependencies: defaultdict,
+    all_stdlib_modules: set,
+    all_third_party_modules: set,
+    installed_third_party_modules: set,
+    not_installed_third_party_modules: set,
+    relative_file_path: str,
+):
+    """Processes an AST import node and updates dependency sets."""
+    if isinstance(node, ast.Import):
+        for alias in node.names:
+            module_name = alias.name.split(".")[0]
+            module_type = _get_module_type(
+                module_name, current_codebase_path, stdlib_modules
+            )
+            if module_type == "internal":
+                internal_dependencies[relative_file_path].add(module_name)
+            elif module_type == "stdlib":
+                stdlib_dependencies[relative_file_path].add(module_name)
+                all_stdlib_modules.add(module_name)
+            else:  # third_party
+                third_party_dependencies[relative_file_path].add(module_name)
+                all_third_party_modules.add(module_name)
+                if _is_module_installed(module_name):
+                    installed_third_party_modules.add(module_name)
+                else:
+                    not_installed_third_party_modules.add(module_name)
+
+    elif isinstance(node, ast.ImportFrom):
+        module_name = node.module.split(".")[0] if node.module else ""
+        if module_name:
+            module_type = _get_module_type(
+                module_name, current_codebase_path, stdlib_modules
+            )
+            if module_type == "internal":
+                internal_dependencies[relative_file_path].add(module_name)
+            elif module_type == "stdlib":
+                stdlib_dependencies[relative_file_path].add(module_name)
+                all_stdlib_modules.add(module_name)
+            else:  # third_party
+                third_party_dependencies[relative_file_path].add(module_name)
+                all_third_party_modules.add(module_name)
+                if _is_module_installed(module_name):
+                    installed_third_party_modules.add(module_name)
+                else:
+                    not_installed_third_party_modules.add(module_name)
 
 
 class CodebaseManager:
+    """Central coordinator for managing codebases and delegating tasks to
+    specialized modules.
+
+        This class acts as a thin layer that coordinates interactions between different
+        subsystems of the CodeSage MCP Server. It holds references to specialized managers
+        (IndexingManager, SearchingManager, LLMAnalysisManager) and delegates specific
+        responsibilities to them.
+
+        Attributes:
+            indexing_manager (IndexingManager): Manages codebase indexing.
+            searching_manager (SearchingManager): Manages codebase searching.
+            llm_analysis_manager (LLMAnalysisManager): Manages LLM-based code analysis.
+            sentence_transformer_model (SentenceTransformer): Model for semantic operations.
+            groq_client (Groq): Client for Groq API.
+            openrouter_client (OpenAI): Client for OpenRouter API.
+            google_ai_client (google.generativeai.GenerativeModel): Client for Google
+    AI API.
+    """
+
     def __init__(self):
+        """Initializes the CodebaseManager with default settings and clients.
+
+        Sets up the indexing manager, sentence transformer model,
+        and API clients for Groq, OpenRouter, and Google AI.
         """
-        Initializes the CodebaseManager with default settings and clients.
-        
-        Sets up the index directory, file paths, sentence transformer model,
-        FAISS index, and API clients for Groq, OpenRouter, and Google AI.
-        """
-        self.index_dir = Path(".codesage")
-        self.index_file = self.index_dir / "codebase_index.json"
-        self.faiss_index_file = self.index_dir / "codebase_index.faiss"
-        self.indexed_codebases = {}
-        self.file_paths_map = {}
+        # Inicializar el gestor de indexación
+        self.indexing_manager = IndexingManager()
+        # Inicializar el gestor de búsqueda
+        self.searching_manager = SearchingManager(self.indexing_manager)
+
+        # Acceder a los atributos relevantes a través del indexing_manager
+        # para compatibilidad con el código existente que los usa directamente.
+        # Se usan propiedades para mantener la sincronización.
+
         self.sentence_transformer_model = SentenceTransformer("all-MiniLM-L6-v2")
-        self.faiss_index = None
-        self._initialize_index()
         self.groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
         self.openrouter_client = (
             OpenAI(
@@ -40,1448 +206,265 @@ class CodebaseManager:
         )
         if GOOGLE_API_KEY:
             genai.configure(api_key=GOOGLE_API_KEY)
-            self.google_ai_client = genai
+            self.google_ai_client = genai.GenerativeModel("gemini-2.0-flash")
         else:
             self.google_ai_client = None
 
-    def _initialize_index(self):
-        """Initializes the index by creating the directory and loading existing data."""
-        self.index_dir.mkdir(exist_ok=True)
-        if self.index_file.exists():
-            try:
-                with open(self.index_file, "r") as f:
-                    loaded_data = json.load(f)
-                    self.indexed_codebases = loaded_data.get("indexed_codebases", {})
-                    self.file_paths_map = loaded_data.get("file_paths_map", {})
-            except (json.JSONDecodeError, IOError) as e:
-                print(
-                    f"Warning: Could not load codebase index. "
-                    f"A new one will be created. Error: {e}"
-                )
-                self.indexed_codebases = {}
-                self.file_paths_map = {}
+        # Inicializar el gestor de análisis con LLM
+        self.llm_analysis_manager = LLMAnalysisManager(
+            self.groq_client, self.openrouter_client, self.google_ai_client
+        )
 
-        if self.faiss_index_file.exists():
-            try:
-                self.faiss_index = faiss.read_index(str(self.faiss_index_file))
-            except Exception as e:
-                print(f"Warning: Could not load FAISS index. Error: {e}")
-                self.faiss_index = None
+    # --- Properties to maintain compatibility with legacy code ---
+    # These properties delegate to the indexing_manager to ensure
+    # that legacy code accessing them directly continues to work.
+    # They also ensure synchronization between the CodebaseManager's
+    # view and the IndexingManager's state.
+    @property
+    def indexed_codebases(self):
+        """Legacy property for accessing indexed codebases."""
+        return self.indexing_manager.indexed_codebases
 
-        # If no FAISS index loaded, create a new one
-        if self.faiss_index is None:
-            embedding_size = (
-                self.sentence_transformer_model.get_sentence_embedding_dimension()
-            )
-            self.faiss_index = faiss.IndexFlatL2(embedding_size)
+    @indexed_codebases.setter
+    def indexed_codebases(self, value):
+        """Legacy setter for indexed codebases."""
+        self.indexing_manager.indexed_codebases = value
 
-    def _save_index(self):
-        """Saves the current index to the file."""
-        data_to_save = {
-            "indexed_codebases": self.indexed_codebases,
-            "file_paths_map": self.file_paths_map,
-        }
-        with open(self.index_file, "w") as f:
-            json.dump(data_to_save, f, indent=4)
+    @property
+    def file_paths_map(self):
+        """Legacy property for accessing file paths map."""
+        return self.indexing_manager.file_paths_map
 
-        if self.faiss_index:
-            faiss.write_index(self.faiss_index, str(self.faiss_index_file))
+    @file_paths_map.setter
+    def file_paths_map(self, value):
+        """Legacy setter for file paths map."""
+        self.indexing_manager.file_paths_map = value
 
-    def _get_gitignore_patterns(self, path: Path) -> list[str]:
-        """Finds and parses the .gitignore file in the given path."""
-        gitignore_file = path / ".gitignore"
-        patterns = []
-        if gitignore_file.exists():
-            with open(gitignore_file, "r") as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith("#"):
-                        patterns.append(line)
-        return patterns
+    @property
+    def faiss_index(self):
+        """Legacy property for accessing FAISS index."""
+        return self.indexing_manager.faiss_index
 
-    def _is_ignored(
-        self,
-        file_path: Path,
-        gitignore_patterns: list[str],
-        root_path: Path,
-    ) -> bool:
-        """Checks if a file or directory should be ignored based on
-        .gitignore patterns."""
-        relative_path = file_path.relative_to(root_path)
+    @faiss_index.setter
+    def faiss_index(self, value):
+        """Legacy setter for FAISS index."""
+        self.indexing_manager.faiss_index = value
 
-        # Convert Path objects to strings for fnmatch
-        relative_path_str = str(relative_path)
-        file_name_str = file_path.name
-
-        print(f"\n--- Checking {file_path} (relative: {relative_path_str}) ---")
-        for pattern in gitignore_patterns:
-            print(f"  Pattern: {pattern}")
-            # Handle patterns ending with a slash (directories)
-            if pattern.endswith("/"):
-                # Check if the relative path starts with the directory pattern
-                if relative_path_str.startswith(pattern):
-                    print(f"    Match (startswith dir): {pattern} -> True")
-                    return True
-                # Check if any part of the relative path matches the directory name
-                # e.g., "venv/" should ignore "foo/venv/bar"
-                pattern_dir_name = pattern.rstrip("/")
-                if pattern_dir_name in relative_path.parts:
-                    print(f"    Match (part of path dir): {pattern} -> True")
-                    return True
-
-            # Handle general glob patterns
-            # Check against the full relative path
-            if fnmatch.fnmatch(relative_path_str, pattern):
-                print(f"    Match (fnmatch full path): {pattern} -> True")
-                return True
-
-            # Check against the file/directory name only
-            if fnmatch.fnmatch(file_name_str, pattern):
-                print(f"    Match (fnmatch file name): {pattern} -> True")
-                return True
-
-            # Handle patterns like "foo" which should ignore "foo/bar" and "foo"
-            # This is implicitly handled by checking against relative_path_str
-            # but let's be explicit for clarity if the pattern is a directory name
-            if not pattern.endswith("/") and "/" not in pattern:  # Simple name pattern
-                if pattern in relative_path.parts:
-                    print(f"    Match (simple name in parts): {pattern} -> True")
-                    return True
-
-        print(f"--- No match for {file_path} -> False ---")
-        return False
+    # --- Delegated Methods ---
+    # These methods now correctly delegate all their responsibilities
+    # to the corresponding specialized managers.
+    # This keeps the CodebaseManager as a thin coordinator.
 
     def read_code_file(self, file_path: str) -> str:
-        """
-        Reads and returns the content of a specified code file.
-        
+        """Reads and returns the content of a specified code file.
+
+        This method is a simple wrapper around standard file I/O.
+
         Args:
             file_path (str): Path to the file to read.
-            
+
         Returns:
             str: Content of the file.
-            
+
         Raises:
             FileNotFoundError: If the file does not exist.
         """
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
-        with open(file_path, "r") as f:
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             return f.read()
 
     def index_codebase(self, path: str) -> list[str]:
-        """
-        Indexes a given codebase path for analysis, respecting .gitignore rules.
-        
-        Recursively scans the directory, processes files for embedding, and 
-        creates a persistent index of all relevant files.
-        
+        """Indexes a given codebase path for analysis, respecting .gitignore rules.
+
+        This method delegates the actual indexing logic to the IndexingManager.
+
         Args:
             path (str): Path to the codebase directory to index.
-            
+
         Returns:
             list[str]: List of indexed file paths relative to the codebase root.
-            
-        Raises:
-            ValueError: If the path is not a directory.
         """
-        root_path = Path(path)
-        if not root_path.is_dir():
-            raise ValueError(f"Path is not a directory: {path}")
-
-        gitignore_patterns = self._get_gitignore_patterns(root_path)
-        # Explicitly add .git/ and venv/ to ignore patterns
-        gitignore_patterns.append(".git/")
-        gitignore_patterns.append("venv/")
-        gitignore_patterns.append(self.index_dir.name + "/")
-        gitignore_patterns.append(".gitignore")
-
-        indexed_files = []
-        new_embeddings = []
-        new_file_paths = []
-        current_faiss_id = self.faiss_index.ntotal if self.faiss_index else 0
-
-        for root, dirs, files in os.walk(path, topdown=True):
-            current_path = Path(root)
-
-            # Debugging: Print directories being considered
-            print(f"DEBUG: Current directory: {current_path}")
-            print(f"DEBUG: Dirs before filtering: {dirs}")
-
-            # Filter directories in-place to prevent os.walk from
-            # descending into ignored ones
-            dirs[:] = [
-                d
-                for d in dirs
-                if not self._is_ignored(current_path / d, gitignore_patterns, root_path)
-            ]
-            # Debugging: Print directories after filtering
-            print(f"DEBUG: Dirs after filtering: {dirs}")
-
-            for file in files:
-                file_path = current_path / file
-                # Debugging: Print files being considered
-                # print(f"DEBUG: Checking file: {file_path}")
-                if not self._is_ignored(file_path, gitignore_patterns, root_path):
-                    try:
-                        content = self.read_code_file(str(file_path))
-                        embedding = self.sentence_transformer_model.encode(content)
-                        new_embeddings.append(embedding)
-                        new_file_paths.append(str(file_path.resolve()))
-                        indexed_files.append(str(file_path.relative_to(root_path)))
-                    except Exception as e:
-                        print(
-                            f"Warning: Could not process file {file_path} "
-                            f"for embedding: {e}"
-                        )
-                        continue
-
-        if new_embeddings:
-            # Add new embeddings to FAISS index
-            self.faiss_index.add(np.array(new_embeddings).astype("float32"))
-            # Update file_paths_map
-            for i, fp in enumerate(new_file_paths):
-                self.file_paths_map[str(current_faiss_id + i)] = fp
-
-        abs_path_key = str(root_path.resolve())
-        self.indexed_codebases[abs_path_key] = {
-            "status": "indexed",
-            "files": indexed_files,
-        }
-        self._save_index()
-
-        print(f"Indexed {len(indexed_files)} files in codebase at: {path}")
-        print(f"DEBUG: Indexed files: {indexed_files}")  # Added logging
+        # Delegar la indexación al nuevo IndexingManager
+        indexed_files = self.indexing_manager.index_codebase(
+            path, self.sentence_transformer_model
+        )
+        # Actualizar las referencias locales para compatibilidad con el código existente
+        self.indexed_codebases = self.indexing_manager.indexed_codebases
+        self.file_paths_map = self.indexing_manager.file_paths_map
         return indexed_files
 
-    def search_codebase(
-        self,
-        codebase_path: str,
-        pattern: str,
-        file_types: list[str] = None,
-        exclude_patterns: list[str] = None,
-    ) -> list[dict]:
-        """
-        Searches for a pattern within indexed code files, with optional exclusion patterns.
-        
-        This method performs a regex-based search across all indexed files in the specified
-        codebase. It supports filtering by file types and excluding specific patterns.
-        
-        Args:
-            codebase_path (str): Path to the indexed codebase.
-            pattern (str): Regex pattern to search for.
-            file_types (list[str], optional): List of file extensions to include in the search.
-                If None, all file types are included.
-            exclude_patterns (list[str], optional): List of patterns to exclude from the search.
-                Files matching these patterns will be skipped.
-                
-        Returns:
-            list[dict]: List of search results, each containing the file path, line number,
-                and line content where the pattern was found.
-                
-        Raises:
-            ValueError: If the codebase has not been indexed.
-            re.error: If the provided pattern is not a valid regex.
-        """
-        abs_codebase_path = str(Path(codebase_path).resolve())
-        if abs_codebase_path not in self.indexed_codebases:
-            raise ValueError(
-                f"Codebase at {codebase_path} has not been indexed. "
-                f"Please index it first."
-            )
-
-        indexed_files = self.indexed_codebases[abs_codebase_path]["files"]
-        search_results = []
-
-        try:
-            re.compile(pattern)
-        except re.error as e:
-            raise ValueError(f"Invalid regex pattern: {pattern}. Error: {e}")
-
-        for relative_file_path in indexed_files:
-            file_path = Path(codebase_path) / relative_file_path
-
-            # Apply file_types filter
-            if file_types and file_path.suffix.lstrip(".") not in file_types:
-                continue
-
-            # Apply exclude_patterns filter
-            if exclude_patterns:
-                should_exclude = False
-                for exclude_pattern in exclude_patterns:
-                    # Check against the full relative path
-                    if fnmatch.fnmatch(str(relative_file_path), exclude_pattern):
-                        should_exclude = True
-                        break
-                    # Check against the file name only
-                    if fnmatch.fnmatch(file_path.name, exclude_pattern):
-                        should_exclude = True
-                        break
-                if should_exclude:
-                    continue
-
-            try:
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                    for line_num, line_content in enumerate(f, 1):
-                        if re.search(pattern, line_content):
-                            search_results.append(
-                                {
-                                    "file_path": str(file_path),
-                                    "line_number": line_num,
-                                    "line_content": line_content.strip(),
-                                }
-                            )
-            except FileNotFoundError:
-                print(f"Warning: File not found during search: {file_path}. Skipping.")
-                continue
-            except Exception as e:
-                print(f"Error processing file {file_path}: {e}. Skipping.")
-                continue
-        return search_results
-
-    def semantic_search_codebase(self, query: str, top_k: int = 5) -> list[dict]:
-        """
-        Performs a semantic search within the indexed codebase using sentence transformers.
-        
-        This method encodes the query using a sentence transformer model and searches
-        for semantically similar code sections in the FAISS index. It's particularly
-        useful for finding code that accomplishes similar tasks but may use different
-        variable names or implementations.
-        
-        Args:
-            query (str): The semantic query to search for.
-            top_k (int, optional): Number of top similar results to return. Defaults to 5.
-            
-        Returns:
-            list[dict]: List of search results, each containing the file path and
-                similarity score. Higher scores indicate greater semantic similarity.
-                
-        Note:
-            Requires the codebase to be indexed first. Returns an empty list if
-            no index exists or if no embeddings are available.
-        """
-        if self.faiss_index is None or self.faiss_index.ntotal == 0:
-            return []  # No index or no embeddings
-
-        query_embedding = self.sentence_transformer_model.encode(query)
-        # Reshape for FAISS: FAISS expects a 2D array, even for a single query
-        query_embedding = np.array([query_embedding]).astype("float32")
-
-        # Perform search
-        distances, indices = self.faiss_index.search(query_embedding, top_k)
-
-        search_results = []
-        for i, dist in zip(indices[0], distances[0]):
-            if i == -1:  # -1 indicates no result found
-                continue
-            file_path = self.file_paths_map.get(str(i))
-            if file_path:
-                search_results.append(
-                    {
-                        "file_path": file_path,
-                        "score": float(dist),  # Convert numpy float to Python float
-                    }
-                )
-        return search_results
-
-    def find_duplicate_code(
-        self, 
-        codebase_path: str, 
-        min_similarity: float = 0.8, 
-        min_lines: int = 10
-    ) -> list[dict]:
-        """
-        Finds duplicate code sections within the indexed codebase.
-        
-        Args:
-            codebase_path (str): Path to the indexed codebase.
-            min_similarity (float): Minimum similarity score to consider 
-                snippets as duplicates.
-            min_lines (int): Minimum number of lines a code section must have.
-            
-        Returns:
-            list[dict]: List of duplicate code pairs with file paths, line 
-                numbers, and similarity scores.
-        """
-        abs_codebase_path = str(Path(codebase_path).resolve())
-        if abs_codebase_path not in self.indexed_codebases:
-            raise ValueError(
-                f"Codebase at {codebase_path} has not been indexed. "
-                f"Please index it first."
-            )
-
-        if self.faiss_index is None or self.faiss_index.ntotal == 0:
-            return []  # No index or no embeddings
-
-        # Get all indexed file paths
-        indexed_files = self.indexed_codebases[abs_codebase_path]["files"]
-        duplicates = []
-        
-        # Filter out archived files to avoid false positives
-        filtered_files = [f for f in indexed_files if not f.startswith("archive/")]
-        
-        # For each file, split into sections and compare
-        for relative_file_path in filtered_files:
-            # Skip archived files entirely
-            if relative_file_path.startswith("archive/"):
-                continue
-                
-            file_path = Path(codebase_path) / relative_file_path
-            
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                
-                # Split file into sections of at least min_lines
-                for i in range(0, len(lines), min_lines):
-                    section_lines = lines[i:i + min_lines]
-                    if len(section_lines) < min_lines:
-                        continue  # Skip sections shorter than min_lines
-                    
-                    section_content = "".join(section_lines)
-                    
-                    # Encode the section
-                    section_embedding = self.sentence_transformer_model.encode(
-                        section_content
-                    )
-                    section_embedding = np.array([section_embedding]).astype("float32")
-                    
-                    # Search for similar sections in the entire codebase
-                    distances, indices = self.faiss_index.search(
-                        section_embedding, 10
-                    )  # Search for top 10
-                    
-                    # Check results
-                    for j, dist in zip(indices[0], distances[0]):
-                        if j == -1:  # -1 indicates no result found
-                            continue
-                        
-                        # Calculate similarity score (convert distance to similarity)
-                        # Assuming L2 distance, convert to similarity
-                        similarity = 1 - (dist / 2)  
-                        
-                        if similarity >= min_similarity:
-                            # Get the file path of the matching section
-                            matching_file_path = self.file_paths_map.get(str(j))
-                            
-                            # Skip if it's the same file and section
-                            # j is a FAISS ID, not a line number, so we need to compare file paths correctly
-                            if matching_file_path == str(file_path):
-                                # Same file, but we still want to report if it's a different section
-                                # unless it's literally the same section (same FAISS ID)
-                                # But since we're doing a self-search, FAISS will return the same section
-                                # We should skip all self-matches entirely to avoid false positives
-                                continue
-                            
-                            duplicates.append({
-                                "file1": str(file_path),
-                                "file2": matching_file_path,
-                                "start_line1": int(i + 1),  # Convert to Python int
-                                "end_line1": int(i + min_lines),  # Convert to Python int
-                                "start_line2": int(j + 1),  # Convert to Python int, this is approximate
-                                "end_line2": int(j + min_lines),  # Convert to Python int, this is approximate
-                                "similarity": float(similarity)  # Convert to Python float
-                            })
-                            
-            except Exception as e:
-                print(f"Error processing file {file_path}: {e}")
-                continue
-                
-        # Remove duplicates from the results list (since we're comparing 
-        # bidirectionally)
-        seen_pairs = set()
-        unique_duplicates = []
-        for dup in duplicates:
-            pair_key = tuple(sorted([dup["file1"], dup["file2"]]))
-            if pair_key not in seen_pairs:
-                seen_pairs.add(pair_key)
-                unique_duplicates.append(dup)
-                
-        return unique_duplicates
-
     def get_file_structure(self, codebase_path: str, file_path: str) -> list[str]:
-        """
-        Provides a high-level overview of a file's structure within a given codebase.
-        
-        This method parses the specified file and extracts information about its
-        top-level functions and classes, including methods within classes. It's
-        useful for quickly understanding the organization and main components of a file.
-        
+        """Provides a high-level overview of a file's structure within a given codebase.
+
+        This method uses the AST (Abstract Syntax Tree) module to parse the file and
+        extract key structural elements like classes, functions, and methods. For
+        non-Python files or Python files without identifiable structure, it returns
+        the file path as a fallback.
+
         Args:
             codebase_path (str): Path to the indexed codebase.
-            file_path (str): Path to the file within the codebase (relative to codebase_path).
-            
+            file_path (str): Relative path to the file within the codebase.
+
         Returns:
-            list[str]: List of strings describing the file's structure, including
-                functions, classes, and methods. Each element represents a structural
-                component with appropriate indentation to show hierarchy.
-                
-        Raises:
-            ValueError: If the codebase has not been indexed.
-            FileNotFoundError: If the specified file does not exist in the codebase.
+            list[str]: List of structural elements (classes, functions, methods)
+                       in a hierarchical format, e.g., ['ClassName',
+                       'ClassName.method_name', 'function_name'].
+                       If the file is not a Python file or has no structure, returns
+                       [file_path].
         """
-        abs_codebase_path = str(Path(codebase_path).resolve())
-        if abs_codebase_path not in self.indexed_codebases:
-            raise ValueError(
-                f"Codebase at {codebase_path} has not been indexed. "
-                f"Please index it first."
-            )
+        abs_file_path = os.path.join(codebase_path, file_path)
+        if not os.path.exists(abs_file_path):
+            raise FileNotFoundError(f"File not found: {abs_file_path}")
 
-        full_file_path = (
-            Path(codebase_path) / file_path
-        )  # file_path is now relative to codebase_path
-        if not full_file_path.exists():
-            raise FileNotFoundError(f"File not found in codebase: {file_path}")
+        # If it's not a Python file, return the file path as structure
+        if not file_path.endswith(".py"):
+            return [file_path]
 
-        structure = []
         try:
-            with open(full_file_path, "r", encoding="utf-8") as f:
+            with open(abs_file_path, "r", encoding="utf-8") as f:
                 content = f.read()
-            tree = ast.parse(content)
 
-            for node in tree.body:
-                if isinstance(node, ast.FunctionDef):
-                    structure.append(f"  Function: {node.name}")
-                elif isinstance(node, ast.ClassDef):
-                    structure.append(f"  Class: {node.name}")
+            tree = ast.parse(content)
+            structure = []
+
+            # Traverse the AST to find classes and functions
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    structure.append(node.name)
+                    # Find methods within the class
                     for item in node.body:
                         if isinstance(item, ast.FunctionDef):
-                            structure.append(f"    Method: {item.name}")
-        except Exception as e:
-            return [f"Error parsing file structure: {e}"]
+                            structure.append(f"{node.name}.{item.name}")
+                elif isinstance(node, ast.FunctionDef) and not any(
+                    isinstance(parent, ast.ClassDef)
+                    for parent in ast.walk(tree)
+                    if node in parent.body
+                ):
+                    # Add top-level functions (not methods)
+                    structure.append(node.name)
 
-        return [f"Structure of {file_path}:"] + structure
+            # If no structure was found, return the file path as a fallback
+            if not structure:
+                return [file_path]
 
-    def _summarize_with_groq(self, code_snippet: str, llm_model: str) -> str:
-        """
-        Summarizes a code snippet using the Groq API.
-        
-        This private method sends a code snippet to the Groq API for summarization
-        using the specified LLM model. It's part of the codebase manager's internal
-        functionality and should not be called directly.
-        
+            return sorted(structure)
+
+        except SyntaxError:
+            # If the file is not valid Python, return the filename as part of
+            # the structure
+            # to indicate that it was attempted to be analyzed.
+            return [file_path]
+
+    def semantic_search_codebase(self, query: str, top_k: int = 5) -> list[dict]:
+        """Performs a semantic search within the indexed codebase to find code snippets
+        semantically similar to the given query.
+
+        This method delegates the actual search logic to the SearchingManager.
+
         Args:
-            code_snippet (str): The code snippet to summarize.
-            llm_model (str): The Groq LLM model to use for summarization.
-            
+            query (str): The semantic query to search for.
+            top_k (int, optional): Number of results to return. Defaults to 5.
+
         Returns:
-            str: The summarized code snippet or an error message if summarization fails.
-            
-        Note:
-            Requires GROQ_API_KEY to be configured. Returns an error message if
-            the API key is not set or if the API call fails.
+            list[dict]: List of semantically similar code snippets.
         """
-        if not self.groq_client:
-            return "Error: GROQ_API_KEY not configured."
-        try:
-            chat_completion = self.groq_client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a helpful assistant that summarizes code.",
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Please summarize the following code snippet:\n\n"
-                        f"```\n{code_snippet}```",
-                    },
-                ],
-                model=llm_model,
+        return self.searching_manager.semantic_search_codebase(
+            query, self.sentence_transformer_model, top_k
+        )
+
+    def get_dependencies_overview(self, codebase_path: str) -> dict:
+        """Analyzes Python files in the indexed codebase and extracts import statements,
+        providing a high-level overview of internal and external dependencies.
+
+        Args:
+            codebase_path (str): Path to the indexed codebase.
+
+        Returns:
+            dict: Dependency overview with statistics and lists of internal, stdlib, and
+                third-party dependencies, or an error message.
+        """
+        abs_codebase_path = os.path.abspath(codebase_path)
+        if abs_codebase_path not in self.indexed_codebases:
+            raise ValueError(
+                f"Codebase at {abs_codebase_path} has not been indexed. "
+                "Please index it first."
             )
-            return chat_completion.choices[0].message.content
-        except Exception as e:
-            return f"Error during summarization: {e}"
 
-    def _summarize_with_openrouter(self, code_snippet: str, llm_model: str) -> str:
-        """
-        Summarizes a code snippet using the OpenRouter API.
-        
-        This private method sends a code snippet to the OpenRouter API for summarization
-        using the specified LLM model. It's part of the codebase manager's internal
-        functionality and should not be called directly.
-        
-        Args:
-            code_snippet (str): The code snippet to summarize.
-            llm_model (str): The OpenRouter LLM model to use for summarization.
-            
-        Returns:
-            str: The summarized code snippet or an error message if summarization fails.
-            
-        Note:
-            Requires OPENROUTER_API_KEY to be configured. Returns an error message if
-            the API key is not set or if the API call fails.
-        """
-        if not self.openrouter_client:
-            return "Error: OPENROUTER_API_KEY not configured."
-        try:
-            chat_completion = self.openrouter_client.chat.completions.create(
-                model=llm_model.replace("openrouter/", "", 1),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a helpful assistant that summarizes code.",
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Please summarize the following code snippet:\n\n"
-                        f"```\n{code_snippet}```",
-                    },
-                ],
-            )
-            return chat_completion.choices[0].message.content
-        except Exception as e:
-            return f"Error during summarization: {e}"
+        indexed_files = self.indexed_codebases[abs_codebase_path]["files"]
 
-    def _summarize_with_google_ai(self, code_snippet: str, llm_model: str) -> str:
-        """
-        Summarizes a code snippet using the Google AI API.
-        
-        This private method sends a code snippet to the Google AI API for summarization
-        using the specified LLM model. It's part of the codebase manager's internal
-        functionality and should not be called directly.
-        
-        Args:
-            code_snippet (str): The code snippet to summarize.
-            llm_model (str): The Google AI LLM model to use for summarization.
-            
-        Returns:
-            str: The summarized code snippet or an error message if summarization fails.
-            
-        Note:
-            Requires GOOGLE_API_KEY to be configured. Returns an error message if
-            the API key is not set or if the API call fails.
-        """
-        if not self.google_ai_client:
-            return "Error: GOOGLE_API_KEY not configured."
-        try:
-            model = self.google_ai_client.GenerativeModel(
-                llm_model.replace("google/", "", 1)
-            )
-            response = model.generate_content(
-                "Please summarize the following code snippet:\n\n"
-                f"```\n{code_snippet}```"
-            )
-            return response.text
-        except Exception as e:
-            return f"Error during summarization: {e}"
+        internal_dependencies = defaultdict(set)
+        stdlib_dependencies = defaultdict(set)
+        third_party_dependencies = defaultdict(set)
+        all_stdlib_modules = set()
+        all_third_party_modules = set()
+        installed_third_party_modules = set()
+        not_installed_third_party_modules = set()
 
-    def summarize_code_section(
-        self,
-        file_path: str,
-        start_line: int,
-        end_line: int,
-        llm_model: str,
-    ) -> str:
-        """
-        Summarizes a specific section of code using a chosen LLM.
-        
-        This method extracts a code snippet from the specified file between the given
-        start and end lines, then uses the appropriate LLM API (Groq, OpenRouter, or
-        Google AI) to generate a summary of the code's functionality.
-        
-        Args:
-            file_path (str): Path to the file containing the code to summarize.
-            start_line (int): Starting line number of the section to summarize.
-            end_line (int): Ending line number of the section to summarize.
-            llm_model (str): LLM model to use for summarization (e.g., 'llama3-8b-8192',
-                'openrouter/google/gemini-pro', 'google/gemini-pro').
-                
-        Returns:
-            str: Summary of the code section or an error message if summarization fails.
-            
-        Raises:
-            FileNotFoundError: If the specified file does not exist.
-        """
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
+        stdlib_modules = _get_stdlib_modules()
 
-        lines = []
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            for i, line in enumerate(f, 1):
-                if start_line <= i <= end_line:
-                    lines.append(line)
+        for relative_file_path in indexed_files:
+            if not relative_file_path.endswith(".py"):
+                continue
 
-        if not lines:
-            return "No code found in the specified line range."
-
-        code_snippet = "".join(lines)
-
-        if llm_model.startswith("openrouter/"):
-            return self._summarize_with_openrouter(code_snippet, llm_model)
-        elif llm_model.startswith("llama3") or llm_model.startswith("mixtral"):
-            return self._summarize_with_groq(code_snippet, llm_model)
-        elif llm_model.startswith("google/"):
-            return self._summarize_with_google_ai(code_snippet, llm_model)
-        else:
-            return f"LLM model '{llm_model}' not supported yet."
-
-    def profile_code_performance(self, file_path: str, function_name: str = None) -> dict:
-        """
-        Profiles the performance of a specific function or the entire file.
-        
-        This method uses cProfile to measure the execution time and resource usage
-        of Python code. It can profile either a specific function or the entire file.
-        
-        Args:
-            file_path (str): Path to the Python file to profile.
-            function_name (str, optional): Name of the specific function to profile.
-                If None, profiles the entire file.
-                
-        Returns:
-            dict: Profiling results including execution time, function calls, and
-                performance bottlenecks.
-                
-        Raises:
-            FileNotFoundError: If the specified file does not exist.
-            ValueError: If the specified function is not found in the file.
-        """
-        import cProfile
-        import pstats
-        import io
-        import tempfile
-        import os
-        
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
-        
-        try:
-            # Read the file content
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            # Create a temporary file for profiling
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as temp_file:
-                temp_file.write(content)
-                temp_file_path = temp_file.name
-            
+            file_path = os.path.join(abs_codebase_path, relative_file_path)
             try:
-                # Create a profiler instance
-                profiler = cProfile.Profile()
-                
-                if function_name:
-                    # Profile a specific function
-                    # First, we need to import the function
-                    import importlib.util
-                    spec = importlib.util.spec_from_file_location("temp_module", temp_file_path)
-                    temp_module = importlib.util.module_from_spec(spec)
-                    
-                    # We'll execute the file and then try to find the function
-                    profiler.enable()
-                    spec.loader.exec_module(temp_module)
-                    profiler.disable()
-                    
-                    # Check if the function exists
-                    if hasattr(temp_module, function_name):
-                        func = getattr(temp_module, function_name)
-                        # Profile the function call
-                        profiler.enable()
-                        func()
-                        profiler.disable()
-                    else:
-                        raise ValueError(f"Function '{function_name}' not found in {file_path}")
-                else:
-                    # Profile the entire file
-                    profiler.enable()
-                    exec(content)
-                    profiler.disable()
-                
-                # Create a stats object to analyze the profiling data
-                stats_stream = io.StringIO()
-                stats = pstats.Stats(profiler, stream=stats_stream)
-                stats.sort_stats('cumulative')
-                stats.print_stats(20)  # Print top 20 functions
-                
-                # Get the stats as a string
-                stats_str = stats_stream.getvalue()
-                
-                # Parse the stats to extract key metrics
-                lines = stats_str.split('\n')
-                parsed_stats = []
-                header_found = False
-                
-                for line in lines:
-                    if line.strip().startswith('ncalls'):
-                        header_found = True
-                        continue
-                    if header_found and line.strip():
-                        # Parse each line of stats
-                        parts = line.split()
-                        if len(parts) >= 6:
-                            try:
-                                ncalls = parts[0]
-                                tottime = float(parts[1])
-                                percall_tot = float(parts[2])
-                                cumtime = float(parts[3])
-                                percall_cum = float(parts[4])
-                                filename_lineno = ' '.join(parts[5:])
-                                
-                                parsed_stats.append({
-                                    'ncalls': ncalls,
-                                    'tottime': tottime,
-                                    'percall_tot': percall_tot,
-                                    'cumtime': cumtime,
-                                    'percall_cum': percall_cum,
-                                    'filename_lineno': filename_lineno
-                                })
-                            except (ValueError, IndexError):
-                                # Skip lines that can't be parsed
-                                continue
-                
-                return {
-                    "message": f"Performance profiling completed for {file_path}" + 
-                              (f" function '{function_name}'" if function_name else ""),
-                    "total_functions_profiled": len(parsed_stats),
-                    "top_bottlenecks": parsed_stats[:10],  # Top 10 bottlenecks
-                    "raw_stats": stats_str
-                }
-            
-            finally:
-                # Clean up the temporary file
-                if os.path.exists(temp_file_path):
-                    os.unlink(temp_file_path)
-        
-        except Exception as e:
-            return {
-                "error": {
-                    "code": "PROFILING_ERROR",
-                    "message": f"An error occurred during performance profiling: {str(e)}"
-                }
-            }
-    
-    def suggest_code_improvements(self, file_path: str, start_line: int = None, end_line: int = None) -> dict:
-        """
-        Analyzes a code section and suggests improvements by consulting external LLMs.
-        
-        This method extracts a code snippet from the specified file and sends it to
-        external LLMs for analysis. It identifies potential code quality issues and
-        provides suggestions for improvements, following the "Flag and Suggest"
-        philosophy.
-        
-        Args:
-            file_path (str): Path to the file to analyze.
-            start_line (int, optional): Starting line number of the section to analyze.
-                If None, analyzes from the beginning of the file.
-            end_line (int, optional): Ending line number of the section to analyze.
-                If None, analyzes to the end of the file.
-                
-        Returns:
-            dict: Analysis results with suggestions for improvements, or an error message.
-            
-        Raises:
-            FileNotFoundError: If the specified file does not exist.
-        """
-        import textwrap
-        
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
+                with open(file_path, "r", encoding="utf-8") as f:
+                    tree = ast.parse(f.read())
 
-        try:
-            # Read the file content
-            with open(file_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-            
-            # Determine the range of lines to analyze
-            if start_line is None:
-                start_line = 1
-            if end_line is None:
-                end_line = len(lines)
-                
-            # Validate line numbers
-            if start_line < 1:
-                start_line = 1
-            if end_line > len(lines):
-                end_line = len(lines)
-            if start_line > end_line:
-                return {
-                    "error": {
-                        "code": "INVALID_INPUT",
-                        "message": "Start line must be less than or equal to end line."
-                    }
-                }
-            
-            # Extract the code snippet
-            code_snippet = "".join(lines[start_line-1:end_line])
-            
-            # Prepare the prompt for LLM analysis
-            prompt = textwrap.dedent(f"""
-                Please analyze the following Python code snippet and suggest improvements.
-                Focus on:
-                1. Code readability and maintainability
-                2. Performance optimizations
-                3. Python best practices
-                4. Potential bugs or issues
-                
-                For each suggestion, provide:
-                - A clear description of the issue
-                - An explanation of why it's a problem
-                - A specific recommendation for improvement
-                - An example of the improved code if applicable
-                
-                Code snippet:
-                ```python
-                {code_snippet}
-                ```
-                
-                Please format your response as a clear, structured list of suggestions.
-            """).strip()
-            
-            # Try to get suggestions from different LLM providers
-            suggestions = []
-            
-            # Try Groq first
-            if self.groq_client:
-                try:
-                    chat_completion = self.groq_client.chat.completions.create(
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": "You are a helpful assistant that suggests code improvements."
-                            },
-                            {
-                                "role": "user",
-                                "content": prompt
-                            }
-                        ],
-                        model="llama3-8b-8192",
-                        temperature=0.1,
-                        max_tokens=2048
+                for node in ast.walk(tree):
+                    _process_import_node(
+                        node,
+                        abs_codebase_path,
+                        stdlib_modules,
+                        internal_dependencies,
+                        stdlib_dependencies,
+                        third_party_dependencies,
+                        all_stdlib_modules,
+                        all_third_party_modules,
+                        installed_third_party_modules,
+                        not_installed_third_party_modules,
+                        relative_file_path,
                     )
-                    groq_suggestion = chat_completion.choices[0].message.content
-                    suggestions.append({
-                        "provider": "Groq (Llama3)",
-                        "suggestions": groq_suggestion
-                    })
-                except Exception as e:
-                    suggestions.append({
-                        "provider": "Groq (Llama3)",
-                        "error": f"Failed to get suggestions from Groq: {str(e)}"
-                    })
-            
-            # Try OpenRouter
-            if self.openrouter_client:
-                try:
-                    chat_completion = self.openrouter_client.chat.completions.create(
-                        model="openrouter/google/gemini-pro",
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": "You are a helpful assistant that suggests code improvements."
-                            },
-                            {
-                                "role": "user",
-                                "content": prompt
-                            }
-                        ],
-                        temperature=0.1,
-                        max_tokens=2048
-                    )
-                    openrouter_suggestion = chat_completion.choices[0].message.content
-                    suggestions.append({
-                        "provider": "OpenRouter (Gemini)",
-                        "suggestions": openrouter_suggestion
-                    })
-                except Exception as e:
-                    suggestions.append({
-                        "provider": "OpenRouter (Gemini)",
-                        "error": f"Failed to get suggestions from OpenRouter: {str(e)}"
-                    })
-            
-            # Try Google AI
-            if self.google_ai_client:
-                try:
-                    model = self.google_ai_client.GenerativeModel("gemini-pro")
-                    response = model.generate_content(
-                        prompt,
-                        generation_config=self.google_ai_client.types.GenerationConfig(
-                            temperature=0.1,
-                            max_output_tokens=2048
-                        )
-                    )
-                    google_suggestion = response.text
-                    suggestions.append({
-                        "provider": "Google AI (Gemini)",
-                        "suggestions": google_suggestion
-                    })
-                except Exception as e:
-                    suggestions.append({
-                        "provider": "Google AI (Gemini)",
-                        "error": f"Failed to get suggestions from Google AI: {str(e)}"
-                    })
-            
-            # If no LLM providers are configured, provide a basic static analysis
-            if not suggestions:
-                suggestions.append({
-                    "provider": "Static Analysis",
-                    "suggestions": "No LLM providers configured. Please configure API keys for Groq, OpenRouter, or Google AI to get detailed suggestions."
-                })
-            
-            return {
-                "message": f"Code improvements analysis completed for {file_path}" + 
-                          (f" (lines {start_line}-{end_line})" if start_line != 1 or end_line != len(lines) else ""),
-                "file_path": file_path,
-                "start_line": start_line,
-                "end_line": end_line,
-                "suggestions": suggestions
-            }
-            
-        except Exception as e:
-            return {
-                "error": {
-                    "code": "ANALYSIS_ERROR",
-                    "message": f"An error occurred during code analysis: {str(e)}"
-                }
-            }
-    
-    def generate_unit_tests(self, file_path: str, function_name: str = None) -> dict:
-        """
-        Generates unit tests for functions in a Python file.
-        
-        This method analyzes function signatures and return types to generate
-        appropriate test cases with edge cases. The generated tests can be
-        manually reviewed and added to the test suite.
-        
-        Args:
-            file_path (str): Path to the Python file to analyze.
-            function_name (str, optional): Name of a specific function to generate tests for.
-                If None, generates tests for all functions in the file.
-                
-        Returns:
-            dict: Generated test code and metadata, or an error message.
-            
-        Raises:
-            FileNotFoundError: If the specified file does not exist.
-        """
-        import textwrap
-        import inspect
-        
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
 
-        try:
-            # Read the file content
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            # Parse the file to find functions
-            tree = ast.parse(content)
-            
-            # Find all functions or the specific function
-            functions_to_test = []
-            for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef):
-                    if function_name is None or node.name == function_name:
-                        functions_to_test.append(node)
-            
-            if not functions_to_test:
-                if function_name:
-                    return {
-                        "error": {
-                            "code": "FUNCTION_NOT_FOUND",
-                            "message": f"Function '{function_name}' not found in {file_path}"
-                        }
-                    }
-                else:
-                    return {
-                        "error": {
-                            "code": "NO_FUNCTIONS_FOUND",
-                            "message": f"No functions found in {file_path}"
-                        }
-                    }
-            
-            # Generate tests for each function
-            generated_tests = []
-            
-            for func_node in functions_to_test:
-                # Extract function name and arguments
-                func_name = func_node.name
-                args = [arg.arg for arg in func_node.args.args]
-                
-                # Try to infer return type from annotation
-                return_type = None
-                if func_node.returns:
-                    return_type = ast.unparse(func_node.returns)
-                
-                # Try to extract docstring
-                docstring = ast.get_docstring(func_node)
-                
-                # Generate a basic test template
-                test_template = textwrap.dedent(f'''
-                    def test_{func_name}():
-                        """Test the {func_name} function."""
-                        # TODO: Add actual test implementation
-                        # Function signature: {func_name}({', '.join(args)})
-                        # Return type: {return_type or 'Unknown'}
-                        # Docstring: {docstring or 'None'}
-                        
-                        # Test with typical inputs
-                        # result = {func_name}(...)
-                        # assert result == expected_value
-                        
-                        # Test edge cases
-                        # ...
-                        
-                        # Test error conditions
-                        # ...
-                        pass
-                ''').strip()
-                
-                generated_tests.append({
-                    "function_name": func_name,
-                    "test_code": test_template,
-                    "arguments": args,
-                    "return_type": return_type,
-                    "docstring": docstring
-                })
-            
-            # Try to get suggestions from LLM providers if available
-            llm_suggestions = []
-            
-            # Prepare code snippet for LLM analysis
-            if functions_to_test:
-                # Get the full function definitions
-                function_definitions = []
-                for func_node in functions_to_test:
-                    # Extract the function source code
-                    func_start = func_node.lineno - 1
-                    func_end = func_node.end_lineno
-                    func_lines = content.splitlines()[func_start:func_end]
-                    function_definitions.append('\n'.join(func_lines))
-                
-                code_snippet = '\n\n'.join(function_definitions)
-                
-                # Prepare the prompt for LLM test generation
-                prompt = textwrap.dedent(f"""
-                    Please generate comprehensive unit tests for the following Python function(s).
-                    Focus on:
-                    1. Testing typical use cases
-                    2. Testing edge cases and boundary conditions
-                    3. Testing error conditions and exceptions
-                    4. Following pytest conventions
-                    5. Including descriptive test names and docstrings
-                    
-                    Functions to test:
-                    ```python
-                    {code_snippet}
-                    ```
-                    
-                    Please provide the test code in a format ready to be added to a pytest test file.
-                """).strip()
-                
-                # Try Groq first
-                if self.groq_client:
-                    try:
-                        chat_completion = self.groq_client.chat.completions.create(
-                            messages=[
-                                {
-                                    "role": "system",
-                                    "content": "You are a helpful assistant that generates unit tests for Python code."
-                                },
-                                {
-                                    "role": "user",
-                                    "content": prompt
-                                }
-                            ],
-                            model="llama3-8b-8192",
-                            temperature=0.1,
-                            max_tokens=2048
-                        )
-                        groq_suggestion = chat_completion.choices[0].message.content
-                        llm_suggestions.append({
-                            "provider": "Groq (Llama3)",
-                            "suggestions": groq_suggestion
-                        })
-                    except Exception as e:
-                        llm_suggestions.append({
-                            "provider": "Groq (Llama3)",
-                            "error": f"Failed to get suggestions from Groq: {str(e)}"
-                        })
-                
-                # Try OpenRouter
-                if self.openrouter_client:
-                    try:
-                        chat_completion = self.openrouter_client.chat.completions.create(
-                            model="openrouter/google/gemini-pro",
-                            messages=[
-                                {
-                                    "role": "system",
-                                    "content": "You are a helpful assistant that generates unit tests for Python code."
-                                },
-                                {
-                                    "role": "user",
-                                    "content": prompt
-                                }
-                            ],
-                            temperature=0.1,
-                            max_tokens=2048
-                        )
-                        openrouter_suggestion = chat_completion.choices[0].message.content
-                        llm_suggestions.append({
-                            "provider": "OpenRouter (Gemini)",
-                            "suggestions": openrouter_suggestion
-                        })
-                    except Exception as e:
-                        llm_suggestions.append({
-                            "provider": "OpenRouter (Gemini)",
-                            "error": f"Failed to get suggestions from OpenRouter: {str(e)}"
-                        })
-                
-                # Try Google AI
-                if self.google_ai_client:
-                    try:
-                        model = self.google_ai_client.GenerativeModel("gemini-pro")
-                        response = model.generate_content(
-                            prompt,
-                            generation_config=self.google_ai_client.types.GenerationConfig(
-                                temperature=0.1,
-                                max_output_tokens=2048
-                            )
-                        )
-                        google_suggestion = response.text
-                        llm_suggestions.append({
-                            "provider": "Google AI (Gemini)",
-                            "suggestions": google_suggestion
-                        })
-                    except Exception as e:
-                        llm_suggestions.append({
-                            "provider": "Google AI (Gemini)",
-                            "error": f"Failed to get suggestions from Google AI: {str(e)}"
-                        })
-            
-            return {
-                "message": f"Unit test generation completed for {file_path}" + 
-                          (f" function '{function_name}'" if function_name else ""),
-                "file_path": file_path,
-                "function_name": function_name,
-                "generated_tests": generated_tests,
-                "llm_suggestions": llm_suggestions
-            }
-            
-        except Exception as e:
-            return {
-                "error": {
-                    "code": "TEST_GENERATION_ERROR",
-                    "message": f"An error occurred during test generation: {str(e)}"
-                }
-            }
-    
-    def auto_document_tool(self, tool_name: str = None) -> dict:
-        """
-        Automatically generates documentation for tools that lack detailed documentation.
-        
-        This method analyzes tool functions in the codebase, extracts their signatures
-        and docstrings, and uses LLMs to generate human-readable documentation in
-        the existing format. It can document a specific tool or all tools that lack
-        detailed documentation.
-        
-        Args:
-            tool_name (str, optional): Name of a specific tool to document.
-                If None, documents all tools that lack detailed documentation.
-                
-        Returns:
-            dict: Generated documentation and metadata, or an error message.
-        """
-        import textwrap
-        import inspect
-        from codesage_mcp.main import TOOL_FUNCTIONS
-        
-        try:
-            # Get the list of all registered tools
-            registered_tools = list(TOOL_FUNCTIONS.keys())
-            
-            # If a specific tool is requested, check if it exists
-            if tool_name and tool_name not in registered_tools:
-                return {
-                    "error": {
-                        "code": "TOOL_NOT_FOUND",
-                        "message": f"Tool '{tool_name}' not found in registered tools"
-                    }
-                }
-            
-            # Determine which tools to document
-            tools_to_document = [tool_name] if tool_name else registered_tools
-            
-            # For each tool, generate documentation
-            generated_docs = []
-            
-            for tool in tools_to_document:
-                # Get the tool function
-                tool_function = TOOL_FUNCTIONS.get(tool)
-                if not tool_function:
-                    continue
-                
-                # Extract function signature and docstring
-                sig = inspect.signature(tool_function)
-                docstring = inspect.getdoc(tool_function) or "No docstring available"
-                
-                # Prepare code snippet for LLM analysis
-                # We'll need to find the actual function definition in the source files
-                function_info = self._extract_function_info(tool, tool_function)
-                
-                # Generate documentation using LLMs
-                llm_suggestions = []
-                
-                # Prepare the prompt for LLM documentation generation
-                prompt = textwrap.dedent(f"""
-                    Please generate comprehensive documentation for the following Python tool function.
-                    The documentation should follow this format:
-                    
-                    ### {{tool_name}}
-                    {{Brief description of what the tool does}}
-                    
-                    **Parameters:**
-                    {{List each parameter with its type and description}}
-                    {{For optional parameters, indicate the default value}}
-                    
-                    **Returns:**
-                    {{Description of what the function returns}}
-                    
-                    Example usage:
-                    ```json
-                    {{
-                      "name": "{{tool_name}}",
-                      "arguments": {{
-                        {{example arguments}}
-                      }}
-                    }}
-                    ```
-                    
-                    Function to document:
-                    Name: {tool}
-                    Signature: {sig}
-                    Docstring: {docstring}
-                    Function implementation: {function_info.get('source', 'Source not available')}
-                    
-                    Please provide the documentation in the exact format specified above.
-                """).strip()
-                
-                # Try Groq first
-                if self.groq_client:
-                    try:
-                        chat_completion = self.groq_client.chat.completions.create(
-                            messages=[
-                                {
-                                    "role": "system",
-                                    "content": "You are a helpful assistant that generates documentation for Python tools in a specific format."
-                                },
-                                {
-                                    "role": "user",
-                                    "content": prompt
-                                }
-                            ],
-                            model="llama3-8b-8192",
-                            temperature=0.1,
-                            max_tokens=2048
-                        )
-                        groq_suggestion = chat_completion.choices[0].message.content
-                        llm_suggestions.append({
-                            "provider": "Groq (Llama3)",
-                            "suggestions": groq_suggestion
-                        })
-                    except Exception as e:
-                        llm_suggestions.append({
-                            "provider": "Groq (Llama3)",
-                            "error": f"Failed to get suggestions from Groq: {str(e)}"
-                        })
-                
-                # Try OpenRouter
-                if self.openrouter_client:
-                    try:
-                        chat_completion = self.openrouter_client.chat.completions.create(
-                            model="openrouter/google/gemini-pro",
-                            messages=[
-                                {
-                                    "role": "system",
-                                    "content": "You are a helpful assistant that generates documentation for Python tools in a specific format."
-                                },
-                                {
-                                    "role": "user",
-                                    "content": prompt
-                                }
-                            ],
-                            temperature=0.1,
-                            max_tokens=2048
-                        )
-                        openrouter_suggestion = chat_completion.choices[0].message.content
-                        llm_suggestions.append({
-                            "provider": "OpenRouter (Gemini)",
-                            "suggestions": openrouter_suggestion
-                        })
-                    except Exception as e:
-                        llm_suggestions.append({
-                            "provider": "OpenRouter (Gemini)",
-                            "error": f"Failed to get suggestions from OpenRouter: {str(e)}"
-                        })
-                
-                # Try Google AI
-                if self.google_ai_client:
-                    try:
-                        model = self.google_ai_client.GenerativeModel("gemini-pro")
-                        response = model.generate_content(
-                            prompt,
-                            generation_config=self.google_ai_client.types.GenerationConfig(
-                                temperature=0.1,
-                                max_output_tokens=2048
-                            )
-                        )
-                        google_suggestion = response.text
-                        llm_suggestions.append({
-                            "provider": "Google AI (Gemini)",
-                            "suggestions": google_suggestion
-                        })
-                    except Exception as e:
-                        llm_suggestions.append({
-                            "provider": "Google AI (Gemini)",
-                            "error": f"Failed to get suggestions from Google AI: {str(e)}"
-                        })
-                
-                generated_docs.append({
-                    "tool_name": tool,
-                    "signature": str(sig),
-                    "docstring": docstring,
-                    "function_info": function_info,
-                    "llm_suggestions": llm_suggestions
-                })
-            
-            return {
-                "message": f"Auto documentation generation completed" + 
-                          (f" for tool '{tool_name}'" if tool_name else " for all tools"),
-                "tools_documented": len(generated_docs),
-                "generated_docs": generated_docs
-            }
-            
-        except Exception as e:
-            return {
-                "error": {
-                    "code": "DOCUMENTATION_ERROR",
-                    "message": f"An error occurred during documentation generation: {str(e)}"
-                }
-            }
-    
-    def _extract_function_info(self, tool_name: str, tool_function) -> dict:
-        """
-        Extract information about a tool function.
-        
-        Args:
-            tool_name (str): Name of the tool.
-            tool_function: The tool function object.
-            
-        Returns:
-            dict: Information about the function.
-        """
-        try:
-            # Try to get the source code
-            source = inspect.getsource(tool_function)
-            filename = inspect.getfile(tool_function)
-            lineno = inspect.getsourcelines(tool_function)[1]
-            
-            return {
-                "source": source,
-                "filename": filename,
-                "line_number": lineno
-            }
-        except Exception as e:
-            return {
-                "error": f"Failed to extract function info: {str(e)}"
-            }
+            except Exception:
+                pass
 
+        return {
+            "message": "Dependency overview generated.",
+            "total_python_files_analyzed": (
+                len(internal_dependencies)
+                + len(stdlib_dependencies)
+                + len(third_party_dependencies)
+            ),
+            "total_internal_dependencies": sum(
+                len(deps) for deps in internal_dependencies.values()
+            ),
+            "total_stdlib_dependencies": sum(
+                len(deps) for deps in stdlib_dependencies.values()
+            ),
+            "total_third_party_dependencies": sum(
+                len(deps) for deps in third_party_dependencies.values()
+            ),
+            "unique_stdlib_modules": sorted(list(all_stdlib_modules)),
+            "unique_third_party_modules": sorted(list(all_third_party_modules)),
+            "installed_third_party_modules": sorted(
+                list(installed_third_party_modules)
+            ),
+            "not_installed_third_party_modules": sorted(
+                list(not_installed_third_party_modules)
+            ),
+            "internal_dependencies_by_file": {
+                k: sorted(list(v)) for k, v in internal_dependencies.items()
+            },
+            "stdlib_dependencies_by_file": {
+                k: sorted(list(v)) for k, v in stdlib_dependencies.items()
+            },
+            "third_party_dependencies_by_file": {
+                k: sorted(list(v)) for k, v in third_party_dependencies.items()
+            },
+        }
+
+
+# Create a global instance of the CodebaseManager
 codebase_manager = CodebaseManager()

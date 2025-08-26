@@ -9,3 +9,4 @@ virtualenv
 # CodeSage MCP Server index
 .codesage/
 venv/
+audit_results/

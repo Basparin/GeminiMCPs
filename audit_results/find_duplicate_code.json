@@ -1,0 +1,221 @@
+{
+  "message": "Found 24 duplicate code sections.",
+  "duplicates": [
+    {
+      "file1": "AUTONOMOUS_ACTION_REGISTRY.md",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/AUTONOMOUS_ACTION_REGISTRY.md",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 338,
+      "end_line2": 347,
+      "similarity": 0.8742492198944092
+    },
+    {
+      "file1": "AUTONOMOUS_ACTION_REGISTRY.md",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/ENHANCED_ACTION_REGISTRY.md",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 348,
+      "end_line2": 357,
+      "similarity": 0.8208653330802917
+    },
+    {
+      "file1": "requirements.txt",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/requirements.txt",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 13,
+      "end_line2": 22,
+      "similarity": 1.0
+    },
+    {
+      "file1": "AGENT_WORKFLOW.md",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/AGENT_WORKFLOW.md",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 387,
+      "end_line2": 396,
+      "similarity": 0.9308177828788757
+    },
+    {
+      "file1": "AGENT_WORKFLOW.md",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/AGENT_WORKFLOW_ENHANCED.md",
+      "start_line1": 21,
+      "end_line1": 30,
+      "start_line2": 57,
+      "end_line2": 66,
+      "similarity": 0.8109537363052368
+    },
+    {
+      "file1": ".pre-commit-config.yaml",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/.pre-commit-config.yaml",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 531,
+      "end_line2": 540,
+      "similarity": 0.8981841802597046
+    },
+    {
+      "file1": "ACTION_REGISTRY.md",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/ACTION_REGISTRY.md",
+      "start_line1": 11,
+      "end_line1": 20,
+      "start_line2": 341,
+      "end_line2": 350,
+      "similarity": 0.8488373756408691
+    },
+    {
+      "file1": "GEMINI.md",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/GEMINI.md",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 15,
+      "end_line2": 24,
+      "similarity": 0.9193174839019775
+    },
+    {
+      "file1": "GEMINI.md",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/gemini.md",
+      "start_line1": 71,
+      "end_line1": 80,
+      "start_line2": 20,
+      "end_line2": 29,
+      "similarity": 0.8599221706390381
+    },
+    {
+      "file1": "README.md",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/README.md",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 16,
+      "end_line2": 25,
+      "similarity": 0.9518451690673828
+    },
+    {
+      "file1": "docker-compose.yml",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/docker-compose.yml",
+      "start_line1": 11,
+      "end_line1": 20,
+      "start_line2": 18,
+      "end_line2": 27,
+      "similarity": 0.9404312968254089
+    },
+    {
+      "file1": "Dockerfile",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/Dockerfile",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 21,
+      "end_line2": 30,
+      "similarity": 0.8794560432434082
+    },
+    {
+      "file1": "tests/test_suggest_code_improvements.py",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/tests/test_suggest_code_improvements.py",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 490,
+      "end_line2": 499,
+      "similarity": 0.8731913566589355
+    },
+    {
+      "file1": "tests/test_main_suggest_code_improvements.py",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/tests/test_main_suggest_code_improvements.py",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 353,
+      "end_line2": 362,
+      "similarity": 0.8189882040023804
+    },
+    {
+      "file1": "tests/test_main.py.backup",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/tests/test_main.py",
+      "start_line1": 11,
+      "end_line1": 20,
+      "start_line2": 23,
+      "end_line2": 32,
+      "similarity": 0.8327220678329468
+    },
+    {
+      "file1": "tests/test_codebase_manager.py",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/tests/test_codebase_manager.py",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 24,
+      "end_line2": 33,
+      "similarity": 0.862145185470581
+    },
+    {
+      "file1": "tests/test_generate_unit_tests.py",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/tests/test_generate_unit_tests.py",
+      "start_line1": 11,
+      "end_line1": 20,
+      "start_line2": 400,
+      "end_line2": 409,
+      "similarity": 0.8152278661727905
+    },
+    {
+      "file1": "scripts/generate_tools_reference.py",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/scripts/generate_tools_reference.py",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 546,
+      "end_line2": 555,
+      "similarity": 0.8891198635101318
+    },
+    {
+      "file1": "codesage_mcp/codebase_manager.py",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/codesage_mcp/codebase_manager.py",
+      "start_line1": 11,
+      "end_line1": 20,
+      "start_line2": 496,
+      "end_line2": 505,
+      "similarity": 0.8017078638076782
+    },
+    {
+      "file1": "codesage_mcp/main.py",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/codesage_mcp/main.py",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 68,
+      "end_line2": 77,
+      "similarity": 0.8620783090591431
+    },
+    {
+      "file1": "codesage_mcp/indexing.py",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/codesage_mcp/indexing.py",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 500,
+      "end_line2": 509,
+      "similarity": 0.8305585384368896
+    },
+    {
+      "file1": "codesage_mcp/README.md",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/codesage_mcp/README.md",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 29,
+      "end_line2": 38,
+      "similarity": 0.9325263500213623
+    },
+    {
+      "file1": "codesage_mcp/searching.py",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/codesage_mcp/searching.py",
+      "start_line1": 11,
+      "end_line1": 20,
+      "start_line2": 503,
+      "end_line2": 512,
+      "similarity": 0.8096786737442017
+    },
+    {
+      "file1": "docs/tools_reference.md",
+      "file2": "/home/basparin/Escritorio/GeminiMCPs/docs/tools_reference.md",
+      "start_line1": 1,
+      "end_line1": 10,
+      "start_line2": 557,
+      "end_line2": 566,
+      "similarity": 0.8560813665390015
+    }
+  ]
+}

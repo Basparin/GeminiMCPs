@@ -1,0 +1,16 @@
+{
+  "message": "Lines of code count completed.",
+  "total_loc": 13809,
+  "loc_by_file_type": {
+    ".md": 936,
+    ".txt": 6169,
+    ".yaml": 59,
+    ".toml": 6,
+    ".yml": 20,
+    ".py": 5887,
+    "no_extension": 18,
+    ".backup": 571,
+    ".TAG": 1,
+    ".original": 142
+  }
+}

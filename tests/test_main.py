@@ -15,9 +15,10 @@ def temp_dir(tmp_path):
     yield d
     shutil.rmtree(d)
 
+
 @pytest.fixture
 def temp_code_file_for_docs(tmp_path):
-    """Creates a temporary Python file with documented and undocumented functions 
+    """Creates a temporary Python file with documented and undocumented functions
     for testing."""
     code_file = tmp_path / "test_module.py"
     code_content = '''
@@ -25,10 +26,10 @@ def temp_code_file_for_docs(tmp_path):
 
 def documented_function(arg1: str) -> str:
     """This function is documented.
-    
+
     Args:
         arg1: A string argument.
-        
+
     Returns:
         A string return value.
     """
@@ -40,11 +41,11 @@ def undocumented_function(x, y):
 
 class DocumentedClass:
     """This class is documented."""
-    
+
     def documented_method(self):
         """This method is documented."""
         pass
-    
+
     def undocumented_method(self):
         # This method lacks a docstring.
         pass
@@ -68,12 +69,7 @@ def test_root_endpoint():
 
 def test_mcp_initialize():
     response = client.post(
-        "/mcp", 
-        json={
-            "jsonrpc": "2.0", 
-            "method": "initialize", 
-            "id": "1"
-        }
+        "/mcp", json={"jsonrpc": "2.0", "method": "initialize", "id": "1"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -84,12 +80,7 @@ def test_mcp_initialize():
 
 def test_mcp_tools_list():
     response = client.post(
-        "/mcp", 
-        json={
-            "jsonrpc": "2.0", 
-            "method": "tools/list", 
-            "id": "2"
-        }
+        "/mcp", json={"jsonrpc": "2.0", "method": "tools/list", "id": "2"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -102,7 +93,7 @@ def test_mcp_tools_list():
 def test_mcp_tool_call_success(temp_dir):
     # Use a real tool that doesn't have complex dependencies
     # get_file_structure requires the codebase to be indexed first.
-    
+
     # Step 1: Index the codebase
     index_response = client.post(
         "/mcp",
@@ -165,7 +156,7 @@ def test_mcp_tool_call_not_found():
 def test_mcp_tool_call_list_undocumented_functions(temp_code_file_for_docs):
     """Test calling the list_undocumented_functions tool via the MCP endpoint."""
     file_path = str(temp_code_file_for_docs)
-    
+
     response = client.post(
         "/mcp",
         json={
@@ -182,49 +173,52 @@ def test_mcp_tool_call_list_undocumented_functions(temp_code_file_for_docs):
     data = response.json()
     assert data["jsonrpc"] == "2.0"
     assert data["id"] == "list_undoc_test_1"
-    
+
     result = data["result"]
     assert "message" in result
     assert "undocumented_functions" in result
     assert result["message"].startswith("Found")
-    
+
     # Verify the list of undocumented functions
     undocumented_funcs = result["undocumented_functions"]
     func_names = {func["name"] for func in undocumented_funcs}
-    
+
     expected_undocumented = {
-        "undocumented_function", 
-        "another_undocumented_function", 
-        "undocumented_method"
+        "undocumented_function",
+        "another_undocumented_function",
+        "undocumented_method",
     }
-    assert func_names == expected_undocumented, (
-        f"Expected {expected_undocumented}, but got {func_names}"
-    )
-    
+    assert (
+        func_names == expected_undocumented
+    ), f"Expected {expected_undocumented}, but got {func_names}"
+
     # Verify line numbers are present (basic check)
     for func in undocumented_funcs:
         assert "line_number" in func and isinstance(func["line_number"], int)
+
 
 # ... (other imports are already at the top) ...
 
 # --- New Tests for Semantic Search Tool Function ---
 
-@patch('codesage_mcp.tools.codebase_manager')
+
+@patch("codesage_mcp.tools.codebase_manager")
 def test_semantic_search_codebase_tool_success(mock_codebase_manager):
     """Test the semantic_search_codebase_tool function for a successful search."""
     # Arrange: Mock the manager's method to return a specific result
     mock_results = [
         {"file_path": "/path/to/file1.py", "score": 0.1},
-        {"file_path": "/path/to/file2.py", "score": 0.2}
+        {"file_path": "/path/to/file2.py", "score": 0.2},
     ]
-    mock_codebase_manager.semantic_search_codebase.return_value = mock_results
+    mock_codebase_manager.searching_manager.semantic_search_codebase.return_value = (
+        mock_results
+    )
 
     # Act: Call the tool function
     from codesage_mcp.tools import semantic_search_codebase_tool
+
     result = semantic_search_codebase_tool(
-        codebase_path="/test/codebase",
-        query="test query",
-        top_k=2
+        codebase_path="/test/codebase", query="test query", top_k=2
     )
 
     # Assert: Check the structure and content of the result
@@ -234,25 +228,25 @@ def test_semantic_search_codebase_tool_success(mock_codebase_manager):
     assert result["results"] == mock_results
 
     # Verify the mock was called correctly
-    mock_codebase_manager.semantic_search_codebase.assert_called_once_with(
-        "test query", 2
+    mock_codebase_manager.searching_manager.semantic_search_codebase.assert_called_once_with(
+        "test query", mock_codebase_manager.sentence_transformer_model, 2
     )
 
-@patch('codesage_mcp.tools.codebase_manager')
+
+@patch("codesage_mcp.tools.codebase_manager")
 def test_semantic_search_codebase_tool_error(mock_codebase_manager):
-    """Test the semantic_search_codebase_tool function when the manager 
+    """Test the semantic_search_codebase_tool function when the manager
     raises an error."""
     # Arrange: Mock the manager's method to raise an exception
-    mock_codebase_manager.semantic_search_codebase.side_effect = (
+    mock_codebase_manager.searching_manager.semantic_search_codebase.side_effect = (
         Exception("Test error from FAISS")
     )
 
     # Act: Call the tool function
     from codesage_mcp.tools import semantic_search_codebase_tool
+
     result = semantic_search_codebase_tool(
-        codebase_path="/test/codebase",
-        query="test query",
-        top_k=2
+        codebase_path="/test/codebase", query="test query", top_k=2
     )
 
     # Assert: Check the structure and content of the error result
@@ -261,16 +255,16 @@ def test_semantic_search_codebase_tool_error(mock_codebase_manager):
     assert "Test error from FAISS" in result["error"]["message"]
 
     # Verify the mock was called
-    mock_codebase_manager.semantic_search_codebase.assert_called_once_with(
-        "test query", 2
+    mock_codebase_manager.searching_manager.semantic_search_codebase.assert_called_once_with(
+        "test query", mock_codebase_manager.sentence_transformer_model, 2
     )
+
 
 # --- New Tests for Semantic Search Tool Function ---
 
 
-
-
 # --- New Integration Tests for Find Duplicate Code MCP Endpoint ---
+
 
 def test_mcp_tool_call_find_duplicate_code_success(temp_dir):
     """Test calling the find_duplicate_code tool via the MCP endpoint successfully."""
@@ -293,9 +287,9 @@ def test_mcp_tool_call_find_duplicate_code_success(temp_dir):
     assert "indexed successfully" in index_result["message"]
 
     # Step 2: Perform duplicate code detection
-    # Note: In a real test, we'd mock sentence-transformers and faiss 
+    # Note: In a real test, we'd mock sentence-transformers and faiss
     # for predictability.
-    # Here, we test the endpoint mechanics and assume the underlying logic 
+    # Here, we test the endpoint mechanics and assume the underlying logic
     # is tested in unit tests.
     duplicate_response = client.post(
         "/mcp",
@@ -317,7 +311,7 @@ def test_mcp_tool_call_find_duplicate_code_success(temp_dir):
     duplicate_data = duplicate_response.json()
     assert duplicate_data["jsonrpc"] == "2.0"
     assert duplicate_data["id"] == "find_duplicate_code_test_1"
-    
+
     result = duplicate_data["result"]
     assert "message" in result
     assert "duplicate code sections" in result["message"]
@@ -327,6 +321,7 @@ def test_mcp_tool_call_find_duplicate_code_success(temp_dir):
 
 
 # --- New Integration Tests for Get Configuration MCP Endpoint ---
+
 
 def test_mcp_tool_call_get_configuration_success():
     """Test calling the get_configuration tool via the MCP endpoint successfully."""
@@ -346,18 +341,18 @@ def test_mcp_tool_call_get_configuration_success():
     data = response.json()
     assert data["jsonrpc"] == "2.0"
     assert data["id"] == "get_configuration_test_1"
-    
+
     result = data["result"]
     assert "message" in result
     assert "configuration" in result
     assert result["message"] == "Current configuration retrieved successfully."
-    
+
     # Check the configuration structure
     config = result["configuration"]
     assert "groq_api_key" in config
     assert "openrouter_api_key" in config
     assert "google_api_key" in config
-    
+
     # Check that the API keys are masked
     # The default config has specific fake keys, so we can check the masked values
     assert config["groq_api_key"] == "gsk_...2riH"
@@ -367,8 +362,9 @@ def test_mcp_tool_call_get_configuration_success():
 
 # --- New Integration Tests for Analyze Codebase Improvements MCP Endpoint ---
 
+
 def test_mcp_tool_call_analyze_codebase_improvements_success(temp_dir):
-    """Test calling the analyze_codebase_improvements tool via the MCP 
+    """Test calling the analyze_codebase_improvements tool via the MCP
     endpoint successfully."""
     # Step 1: Index the temporary codebase
     index_response = client.post(
@@ -389,9 +385,9 @@ def test_mcp_tool_call_analyze_codebase_improvements_success(temp_dir):
     assert "indexed successfully" in index_result["message"]
 
     # Step 2: Perform codebase analysis
-    # Note: In a real test, we'd mock sentence-transformers and faiss 
+    # Note: In a real test, we'd mock sentence-transformers and faiss
     # for predictability.
-    # Here, we test the endpoint mechanics and assume the underlying logic 
+    # Here, we test the endpoint mechanics and assume the underlying logic
     # is tested in unit tests.
     analysis_response = client.post(
         "/mcp",
@@ -411,12 +407,12 @@ def test_mcp_tool_call_analyze_codebase_improvements_success(temp_dir):
     analysis_data = analysis_response.json()
     assert analysis_data["jsonrpc"] == "2.0"
     assert analysis_data["id"] == "analyze_codebase_improvements_test_1"
-    
+
     result = analysis_data["result"]
     assert "message" in result
     assert "analysis" in result
     assert result["message"] == "Codebase analysis completed successfully."
-    
+
     # Check the analysis structure
     analysis = result["analysis"]
     assert "total_files" in analysis
@@ -427,7 +423,7 @@ def test_mcp_tool_call_analyze_codebase_improvements_success(temp_dir):
     assert "potential_duplicates" in analysis
     assert "large_files" in analysis
     assert "suggestions" in analysis
-    
+
     # We can't assert specific values without mocking, but we can check the structure
     assert isinstance(analysis["total_files"], int)
     assert isinstance(analysis["python_files"], int)
@@ -441,10 +437,11 @@ def test_mcp_tool_call_analyze_codebase_improvements_success(temp_dir):
 
 # --- New Integration Tests for Profile Code Performance MCP Endpoint ---
 
+
 def test_mcp_tool_call_profile_code_performance_success(temp_dir):
-    """Test calling the profile_code_performance tool via the MCP endpoint 
+    """Test calling the profile_code_performance tool via the MCP endpoint
     successfully."""
-    
+
     # Create a simple test Python file in the temp directory
     test_file_path = temp_dir / "test_module.py"
     with open(test_file_path, "w") as f:
@@ -459,7 +456,7 @@ if __name__ == "__main__":
     result = another_function()
     print(result)
 """)
-    
+
     # Test profiling the entire file
     profile_response = client.post(
         "/mcp",
@@ -479,19 +476,19 @@ if __name__ == "__main__":
     profile_data = profile_response.json()
     assert profile_data["jsonrpc"] == "2.0"
     assert profile_data["id"] == "profile_code_performance_test_1"
-    
+
     result = profile_data["result"]
     assert "message" in result
     assert "total_functions_profiled" in result
     assert "top_bottlenecks" in result
     assert "raw_stats" in result
     assert f"Performance profiling completed for {test_file_path}" in result["message"]
-    
+
     # Check the structure of the results
     assert isinstance(result["total_functions_profiled"], int)
     assert isinstance(result["top_bottlenecks"], list)
     assert isinstance(result["raw_stats"], str)
-    
+
     # Test profiling a specific function
     profile_response = client.post(
         "/mcp",
@@ -512,7 +509,7 @@ if __name__ == "__main__":
     profile_data = profile_response.json()
     assert profile_data["jsonrpc"] == "2.0"
     assert profile_data["id"] == "profile_code_performance_test_2"
-    
+
     result = profile_data["result"]
     assert "message" in result
     assert "total_functions_profiled" in result
@@ -526,7 +523,7 @@ if __name__ == "__main__":
 
 
 def test_mcp_tool_call_profile_code_performance_error():
-    """Test calling the profile_code_performance tool via the MCP endpoint 
+    """Test calling the profile_code_performance tool via the MCP endpoint
     with an error."""
     # Test with a non-existent file
     profile_response = client.post(
@@ -547,7 +544,7 @@ def test_mcp_tool_call_profile_code_performance_error():
     profile_data = profile_response.json()
     assert profile_data["jsonrpc"] == "2.0"
     assert profile_data["id"] == "profile_code_performance_test_3"
-    
+
     # Check that we get an error in the result field
     assert "result" in profile_data
     result = profile_data["result"]
@@ -556,4 +553,3 @@ def test_mcp_tool_call_profile_code_performance_error():
     assert error is not None
     assert "code" in error
     assert error["code"] == "FILE_NOT_FOUND"
-

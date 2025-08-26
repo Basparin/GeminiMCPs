@@ -29,18 +29,24 @@ def temp_codebase(tmp_path):
 
 
 def test_initialization_and_persistence(temp_codebase):
-    """Test that the CodebaseManager initializes, creates index, and persists it."""
-    manager = CodebaseManager()
-    manager.index_dir = temp_codebase / ".codesage"
-    manager.index_file = manager.index_dir / "codebase_index.json"
-    manager.indexed_codebases = {}
-    manager._initialize_index()
+    """Test that the IndexingManager initializes, creates index, and persists it."""
+    # Instead of using CodebaseManager, we will test IndexingManager directly
+    from codesage_mcp.indexing import IndexingManager
+    from sentence_transformers import SentenceTransformer
 
-    manager.index_codebase(str(temp_codebase))
+    indexing_manager = IndexingManager()
+    indexing_manager.index_dir = temp_codebase / ".codesage"
+    indexing_manager.index_file = indexing_manager.index_dir / "codebase_index.json"
+    indexing_manager.indexed_codebases = {}
+    indexing_manager._initialize_index()
 
-    assert manager.index_file.exists()
+    # For index_codebase, we need a sentence_transformer_model
+    sentence_transformer_model = SentenceTransformer("all-MiniLM-L6-v2")
+    indexing_manager.index_codebase(str(temp_codebase), sentence_transformer_model)
 
-    with open(manager.index_file, "r") as f:
+    assert indexing_manager.index_file.exists()
+
+    with open(indexing_manager.index_file, "r") as f:
         index_data = json.load(f)
 
     abs_path_key = str(temp_codebase.resolve())
@@ -48,24 +54,37 @@ def test_initialization_and_persistence(temp_codebase):
     assert abs_path_key in index_data["indexed_codebases"]
     assert "file1.py" in index_data["indexed_codebases"][abs_path_key]["files"]
 
-    new_manager = CodebaseManager()
-    new_manager.index_dir = temp_codebase / ".codesage"
-    new_manager.index_file = new_manager.index_dir / "codebase_index.json"
-    new_manager.indexed_codebases = {}
-    new_manager._initialize_index()
+    # Instead of using CodebaseManager, we will test IndexingManager directly
+    from codesage_mcp.indexing import IndexingManager
 
-    assert new_manager.indexed_codebases == index_data["indexed_codebases"]
+    new_indexing_manager = IndexingManager()
+    new_indexing_manager.index_dir = temp_codebase / ".codesage"
+    new_indexing_manager.index_file = (
+        new_indexing_manager.index_dir / "codebase_index.json"
+    )
+    new_indexing_manager.indexed_codebases = {}
+    new_indexing_manager._initialize_index()
+
+    assert new_indexing_manager.indexed_codebases == index_data["indexed_codebases"]
 
 
 def test_indexing_and_gitignore(temp_codebase):
     """Test that the indexing process correctly handles .gitignore files."""
-    manager = CodebaseManager()
-    manager.index_dir = temp_codebase / ".codesage"
-    manager.index_file = manager.index_dir / "codebase_index.json"
-    manager.indexed_codebases = {}
-    manager._initialize_index()
+    # Instead of using CodebaseManager, we will test IndexingManager directly
+    from codesage_mcp.indexing import IndexingManager
+    from sentence_transformers import SentenceTransformer
 
-    indexed_files = manager.index_codebase(str(temp_codebase))
+    indexing_manager = IndexingManager()
+    indexing_manager.index_dir = temp_codebase / ".codesage"
+    indexing_manager.index_file = indexing_manager.index_dir / "codebase_index.json"
+    indexing_manager.indexed_codebases = {}
+    indexing_manager._initialize_index()
+
+    # For index_codebase, we need a sentence_transformer_model
+    sentence_transformer_model = SentenceTransformer("all-MiniLM-L6-v2")
+    indexed_files = indexing_manager.index_codebase(
+        str(temp_codebase), sentence_transformer_model
+    )
 
     assert "file1.py" in indexed_files
     assert "file2.txt" not in indexed_files
@@ -76,15 +95,29 @@ def test_indexing_and_gitignore(temp_codebase):
 
 def test_search_codebase(temp_codebase):
     """Test the search functionality."""
-    manager = CodebaseManager()
-    manager.index_dir = temp_codebase / ".codesage"
-    manager.index_file = manager.index_dir / "codebase_index.json"
-    manager.indexed_codebases = {}
-    manager._initialize_index()
+    # Instead of using CodebaseManager, we will test SearchingManager directly
+    from codesage_mcp.searching import SearchingManager
+    from codesage_mcp.indexing import IndexingManager
 
-    manager.index_codebase(str(temp_codebase))
+    # Create instances of the managers
+    indexing_manager = IndexingManager()
+    searching_manager = SearchingManager(indexing_manager)
 
-    search_results = manager.search_codebase(str(temp_codebase), "hello world")
+    # Configure the indexing manager
+    indexing_manager.index_dir = temp_codebase / ".codesage"
+    indexing_manager.index_file = indexing_manager.index_dir / "codebase_index.json"
+    indexing_manager._initialize_index()
+
+    # Index the codebase using the indexing manager
+    from sentence_transformers import SentenceTransformer
+
+    sentence_transformer_model = SentenceTransformer("all-MiniLM-L6-v2")
+    indexing_manager.index_codebase(str(temp_codebase), sentence_transformer_model)
+
+    # Perform the search using the searching manager
+    search_results = searching_manager.search_codebase(
+        str(temp_codebase), "hello world"
+    )
 
     assert len(search_results) == 1
     assert search_results[0]["file_path"] == str(temp_codebase / "file1.py")
@@ -104,6 +137,9 @@ def test_read_code_file(temp_codebase):
 @patch("codesage_mcp.codebase_manager.Groq")
 def test_summarize_code_section_with_groq(mock_groq, temp_codebase):
     """Test the summarization feature with a mocked Groq API call."""
+    # Instead of using CodebaseManager, we will test LLMAnalysisManager directly
+    from codesage_mcp.llm_analysis import LLMAnalysisManager
+
     mock_groq_client = MagicMock()
     mock_groq.return_value = mock_groq_client
     mock_completion = MagicMock()
@@ -111,10 +147,12 @@ def test_summarize_code_section_with_groq(mock_groq, temp_codebase):
     mock_completion.choices[0].message.content = "This is a mock summary."
     mock_groq_client.chat.completions.create.return_value = mock_completion
 
-    manager = CodebaseManager()
-    manager.groq_client = mock_groq_client
+    # Create an instance of LLMAnalysisManager with the mocked client
+    llm_analysis_manager = LLMAnalysisManager(
+        groq_client=mock_groq_client, openrouter_client=None, google_ai_client=None
+    )
 
-    summary = manager.summarize_code_section(
+    summary = llm_analysis_manager.summarize_code_section(
         file_path=str(temp_codebase / "file1.py"),
         start_line=1,
         end_line=4,
@@ -130,6 +168,9 @@ def test_summarize_code_section_with_groq(mock_groq, temp_codebase):
 @patch("codesage_mcp.codebase_manager.OpenAI")
 def test_summarize_code_section_with_openrouter(mock_openai, temp_codebase):
     """Test the summarization feature with a mocked OpenRouter API call."""
+    # Instead of using CodebaseManager, we will test LLMAnalysisManager directly
+    from codesage_mcp.llm_analysis import LLMAnalysisManager
+
     mock_openai_client = MagicMock()
     mock_openai.return_value = mock_openai_client
     mock_completion = MagicMock()
@@ -137,10 +178,12 @@ def test_summarize_code_section_with_openrouter(mock_openai, temp_codebase):
     mock_completion.choices[0].message.content = "This is a mock OpenRouter summary."
     mock_openai_client.chat.completions.create.return_value = mock_completion
 
-    manager = CodebaseManager()
-    manager.openrouter_client = mock_openai_client
+    # Create an instance of LLMAnalysisManager with the mocked client
+    llm_analysis_manager = LLMAnalysisManager(
+        groq_client=None, openrouter_client=mock_openai_client, google_ai_client=None
+    )
 
-    summary = manager.summarize_code_section(
+    summary = llm_analysis_manager.summarize_code_section(
         file_path=str(temp_codebase / "file1.py"),
         start_line=1,
         end_line=4,
@@ -156,16 +199,21 @@ def test_summarize_code_section_with_openrouter(mock_openai, temp_codebase):
 @patch("codesage_mcp.codebase_manager.genai")
 def test_summarize_code_section_with_google_ai(mock_genai, temp_codebase):
     """Test the summarization feature with a mocked Google AI API call."""
+    # Instead of using CodebaseManager, we will test LLMAnalysisManager directly
+    from codesage_mcp.llm_analysis import LLMAnalysisManager
+
     mock_model = MagicMock()
     mock_genai.GenerativeModel.return_value = mock_model
     mock_response = MagicMock()
     mock_response.text = "This is a mock Google AI summary."
     mock_model.generate_content.return_value = mock_response
 
-    manager = CodebaseManager()
-    manager.google_ai_client = mock_genai
+    # Create an instance of LLMAnalysisManager with the mocked client
+    llm_analysis_manager = LLMAnalysisManager(
+        groq_client=None, openrouter_client=None, google_ai_client=mock_genai
+    )
 
-    summary = manager.summarize_code_section(
+    summary = llm_analysis_manager.summarize_code_section(
         file_path=str(temp_codebase / "file1.py"),
         start_line=1,
         end_line=4,
@@ -177,23 +225,38 @@ def test_summarize_code_section_with_google_ai(mock_genai, temp_codebase):
     mock_model.generate_content.assert_called_once()
     call_args = mock_model.generate_content.call_args
     assert "Please summarize the following code snippet:" in call_args.args[0]
+
+
 # --- New Tests for Semantic Search ---
+
 
 def test_semantic_search_empty_index():
     """Test semantic search when the FAISS index is empty or None."""
-    manager = CodebaseManager()
-    # Directly set the faiss_index to None to simulate an un-indexed state
-    manager.faiss_index = None
+    # Instead of using CodebaseManager, we will test SearchingManager directly
+    from codesage_mcp.searching import SearchingManager
+    from codesage_mcp.indexing import IndexingManager
 
-    results = manager.semantic_search_codebase("test query")
+    # Create instances of the managers
+    indexing_manager = IndexingManager()
+    searching_manager = SearchingManager(indexing_manager)
+
+    # Directly set the indexing manager's faiss_index to None to simulate an un-indexed state
+    indexing_manager.faiss_index = None
+
+    results = searching_manager.semantic_search_codebase(
+        "test query", sentence_transformer_model=None
+    )
     assert results == []
 
     # Test with an index that has 0 total vectors
     mock_faiss_index = MagicMock()
     mock_faiss_index.ntotal = 0
-    manager.faiss_index = mock_faiss_index
+    # Mock the indexing manager's faiss_index attribute
+    indexing_manager.faiss_index = mock_faiss_index
 
-    results = manager.semantic_search_codebase("test query")
+    results = searching_manager.semantic_search_codebase(
+        "test query", sentence_transformer_model=None
+    )
     assert results == []
     # Ensure no search was attempted on an empty index
     mock_faiss_index.search.assert_not_called()
@@ -201,72 +264,83 @@ def test_semantic_search_empty_index():
 
 def test_semantic_search_with_results(temp_codebase):
     """Test semantic search returning results from a real, indexed codebase."""
-    manager = CodebaseManager()
-    manager.index_dir = temp_codebase / ".codesage"
-    manager.index_file = manager.index_dir / "codebase_index.json"
-    manager.faiss_index_file = manager.index_dir / "codebase_index.faiss"
-    manager.indexed_codebases = {}
-    manager._initialize_index()
+    # Instead of using CodebaseManager, we will test SearchingManager directly
+    from codesage_mcp.searching import SearchingManager
+    from codesage_mcp.indexing import IndexingManager
+    from sentence_transformers import SentenceTransformer
+
+    # Create instances of the managers
+    indexing_manager = IndexingManager()
+    searching_manager = SearchingManager(indexing_manager)
+
+    indexing_manager.index_dir = temp_codebase / ".codesage"
+    indexing_manager.index_file = indexing_manager.index_dir / "codebase_index.json"
+    indexing_manager.faiss_index_file = (
+        indexing_manager.index_dir / "codebase_index.faiss"
+    )
+    indexing_manager._initialize_index()
 
     # Index the test codebase
-    manager.index_codebase(str(temp_codebase))
+    sentence_transformer_model = SentenceTransformer("all-MiniLM-L6-v2")
+    indexing_manager.index_codebase(str(temp_codebase), sentence_transformer_model)
 
     # We need to mock the sentence transformer's encode method to return predictable
     # embeddings for our test query.
     # Let's assume file1.py gets ID "0" and has a certain embedding.
     # Let's make the query embedding very similar to file1.py's mock embedding.
-    
+
     # Store original method to restore later
-    original_encode = manager.sentence_transformer_model.encode
-    
+    original_encode = sentence_transformer_model.encode
+
     # Mock embeddings. FAISS works with L2 distance. Smaller distance = more similar.
     # We'll make the query very close to file1.py's embedding and far from a dummy one.
     mock_file1_embedding = [1.0, 0.0, 0.0]
-    mock_query_embedding = [0.9, 0.0, 0.0] # Very similar to file1
-    mock_dummy_embedding = [0.0, 1.0, 0.0] # Different
+    mock_query_embedding = [0.9, 0.0, 0.0]  # Very similar to file1
+    mock_dummy_embedding = [0.0, 1.0, 0.0]  # Different
 
     def mock_encode(text):
-        if "hello world" in text: # This is in file1.py
-             return mock_file1_embedding
-        elif text == "dummy content": # This is for the dummy file
-             return mock_dummy_embedding
-        elif text == "find hello world": # This is our query
-             return mock_query_embedding
+        if "hello world" in text:  # This is in file1.py
+            return mock_file1_embedding
+        elif text == "dummy content":  # This is for the dummy file
+            return mock_dummy_embedding
+        elif text == "find hello world":  # This is our query
+            return mock_query_embedding
         else:
-             # Fallback, shouldn't happen in this specific test
-             return original_encode(text)
+            # Fallback, shouldn't happen in this specific test
+            return original_encode(text)
 
     # Patch the encode method
-    manager.sentence_transformer_model.encode = mock_encode
+    sentence_transformer_model.encode = mock_encode
 
     # Now, mock the FAISS search.
     # We'll pretend FAISS searched and found file1.py's ID (which should be "0")
     # as the most similar.
-    mock_faiss_index = manager.faiss_index
+    mock_faiss_index = indexing_manager.faiss_index
     mock_faiss_index.search = MagicMock()
     # Return distance 0.1 (very close) and index 0
-    mock_faiss_index.search.return_value = ( [[0.1]], [[0]] )
+    mock_faiss_index.search.return_value = ([[0.1]], [[0]])
 
     # Also mock the file_paths_map to map ID "0" to our file1.py
     abs_file1_path = str((temp_codebase / "file1.py").resolve())
-    manager.file_paths_map = {"0": abs_file1_path}
+    indexing_manager.file_paths_map = {"0": abs_file1_path}
 
     # --- Perform the search ---
-    results = manager.semantic_search_codebase("find hello world", top_k=1)
+    results = searching_manager.semantic_search_codebase(
+        "find hello world", sentence_transformer_model, top_k=1
+    )
 
     # --- Assertions ---
     assert len(results) == 1
     assert results[0]["file_path"] == abs_file1_path
-    assert results[0]["score"] == 0.1 # Check the mocked distance/score
+    assert results[0]["score"] == 0.1  # Check the mocked distance/score
 
     # Verify the mocks were called as expected
     mock_faiss_index.search.assert_called_once()
     call_args = mock_faiss_index.search.call_args
-    assert call_args[0][1] == 1 # call_args[0][1] should be top_k
+    assert call_args[0][1] == 1  # call_args[0][1] should be top_k
 
     # Restore original method
-    manager.sentence_transformer_model.encode = original_encode
-
+    sentence_transformer_model.encode = original_encode
 
 
 def test_semantic_search_top_k():
@@ -274,23 +348,26 @@ def test_semantic_search_top_k():
     manager = CodebaseManager()
     # Do NOT index a real codebase. We are mocking everything.
 
-    # Mock FAISS index to be not None and have vectors
+    # Mock the indexing manager's faiss_index attribute
     mock_faiss_index = MagicMock()
-    mock_faiss_index.ntotal = 2 # Pretend we have 2 vectors indexed
-    manager.faiss_index = mock_faiss_index
+    mock_faiss_index.ntotal = 2  # Pretend we have 2 vectors indexed
+    manager.indexing_manager.faiss_index = mock_faiss_index
 
     # Custom mock side effect for search to respect top_k
     def mock_search_side_effect(query_vector, k):
         # Simulate FAISS returning two results if k >= 2, otherwise one.
         if k >= 2:
             return ([[0.1, 0.2]], [[0, 1]])
-        else: # k == 1
+        else:  # k == 1
             return ([[0.1]], [[0]])
-            
+
     mock_faiss_index.search = MagicMock(side_effect=mock_search_side_effect)
 
-    # Mock file_paths_map
-    manager.file_paths_map = {"0": "/path/to/file1.py", "1": "/path/to/file2.py"}
+    # Mock the indexing manager's file_paths_map attribute
+    manager.indexing_manager.file_paths_map = {
+        "0": "/path/to/file1.py",
+        "1": "/path/to/file2.py",
+    }
 
     # --- Perform the search with top_k=1 ---
     results_k1 = manager.semantic_search_codebase("test query", top_k=1)
@@ -314,20 +391,34 @@ def test_semantic_search_top_k():
 # --- New Tests for Find Duplicate Code ---
 def test_find_duplicate_code_empty_index():
     """Test find_duplicate_code when the FAISS index is empty or None."""
-    manager = CodebaseManager()
+    # Instead of using CodebaseManager, we will test SearchingManager directly
+    from codesage_mcp.searching import SearchingManager
+    from codesage_mcp.indexing import IndexingManager
+
+    # Create instances of the managers
+    indexing_manager = IndexingManager()
+    searching_manager = SearchingManager(indexing_manager)
+
     # Test with an unindexed codebase - should raise ValueError
-    manager.indexed_codebases = {}
-    with pytest.raises(ValueError, match="Codebase at /test/codebase has not been indexed"):
-        manager.find_duplicate_code("/test/codebase")
+    indexing_manager.indexed_codebases = {}
+    with pytest.raises(
+        ValueError, match="Codebase at /test/codebase has not been indexed"
+    ):
+        searching_manager.find_duplicate_code(
+            "/test/codebase", sentence_transformer_model=None
+        )
 
     # Test with an index that has 0 total vectors
     mock_faiss_index = MagicMock()
     mock_faiss_index.ntotal = 0
-    manager.faiss_index = mock_faiss_index
+    # Mock the indexing manager's faiss_index attribute
+    indexing_manager.faiss_index = mock_faiss_index
     # Mock indexed_codebases to simulate an indexed codebase
-    manager.indexed_codebases = {"/test/codebase": {"files": []}}
+    indexing_manager.indexed_codebases = {"/test/codebase": {"files": []}}
 
-    results = manager.find_duplicate_code("/test/codebase")
+    results = searching_manager.find_duplicate_code(
+        "/test/codebase", sentence_transformer_model=None
+    )
     assert results == []
     # Ensure no search was attempted on an empty index
     mock_faiss_index.search.assert_not_called()
@@ -335,94 +426,117 @@ def test_find_duplicate_code_empty_index():
 
 def test_find_duplicate_code_with_results(temp_codebase):
     """Test find_duplicate_code returning results from a real, indexed codebase."""
-    manager = CodebaseManager()
-    manager.index_dir = temp_codebase / ".codesage"
-    manager.index_file = manager.index_dir / "codebase_index.json"
-    manager.faiss_index_file = manager.index_dir / "codebase_index.faiss"
-    manager.indexed_codebases = {}
-    manager._initialize_index()
+    # Instead of using CodebaseManager, we will test SearchingManager directly
+    from codesage_mcp.searching import SearchingManager
+    from codesage_mcp.indexing import IndexingManager
+    from sentence_transformers import SentenceTransformer
+
+    # Create instances of the managers
+    indexing_manager = IndexingManager()
+    searching_manager = SearchingManager(indexing_manager)
+
+    indexing_manager.index_dir = temp_codebase / ".codesage"
+    indexing_manager.index_file = indexing_manager.index_dir / "codebase_index.json"
+    indexing_manager.faiss_index_file = (
+        indexing_manager.index_dir / "codebase_index.faiss"
+    )
+    indexing_manager._initialize_index()
 
     # Index the test codebase
-    manager.index_codebase(str(temp_codebase))
+    sentence_transformer_model = SentenceTransformer("all-MiniLM-L6-v2")
+    indexing_manager.index_codebase(str(temp_codebase), sentence_transformer_model)
 
     # We need to mock the sentence transformer's encode method to return predictable
     # embeddings for our test sections.
     # Let's assume file1.py gets ID "0" and has a certain embedding.
     # Let's make a duplicate section embedding very similar to file1.py's mock embedding.
-    
+
     # Store original method to restore later
-    original_encode = manager.sentence_transformer_model.encode
-    
+    original_encode = sentence_transformer_model.encode
+
     # Mock embeddings. FAISS works with L2 distance. Smaller distance = more similar.
     # We'll make the duplicate section very close to file1.py's embedding.
     mock_file1_embedding = [1.0, 0.0, 0.0]
-    mock_duplicate_embedding = [0.9, 0.0, 0.0] # Very similar to file1
-    mock_dummy_embedding = [0.0, 1.0, 0.0] # Different
+    mock_duplicate_embedding = [0.9, 0.0, 0.0]  # Very similar to file1
+    mock_dummy_embedding = [0.0, 1.0, 0.0]  # Different
 
     def mock_encode(text):
-        if "hello world" in text: # This is in file1.py
-             return mock_file1_embedding
-        elif text == "dummy content": # This is for the dummy file
-             return mock_dummy_embedding
-        elif "duplicate section" in text: # This is our duplicate section
-             return mock_duplicate_embedding
+        if "hello world" in text:  # This is in file1.py
+            return mock_file1_embedding
+        elif text == "dummy content":  # This is for the dummy file
+            return mock_dummy_embedding
+        elif "duplicate section" in text:  # This is our duplicate section
+            return mock_duplicate_embedding
         else:
-             # Fallback, shouldn't happen in this specific test
-             return original_encode(text)
+            # Fallback, shouldn't happen in this specific test
+            return original_encode(text)
 
     # Patch the encode method
-    manager.sentence_transformer_model.encode = mock_encode
+    sentence_transformer_model.encode = mock_encode
 
     # Now, mock the FAISS search.
     # We'll pretend FAISS searched and found file1.py's ID (which should be "0")
     # as the most similar.
-    mock_faiss_index = manager.faiss_index
+    mock_faiss_index = indexing_manager.faiss_index
     mock_faiss_index.search = MagicMock()
     # Return distance 0.1 (very close) and index 0
-    mock_faiss_index.search.return_value = ( [[0.1]], [[0]] )
+    mock_faiss_index.search.return_value = ([[0.1]], [[0]])
 
     # Also mock the file_paths_map to map ID "0" to our file1.py
     abs_file1_path = str((temp_codebase / "file1.py").resolve())
-    manager.file_paths_map = {"0": abs_file1_path}
+    indexing_manager.file_paths_map = {"0": abs_file1_path}
     # Also add the codebase path to indexed_codebases
-    manager.indexed_codebases = {str(temp_codebase.resolve()): {"files": ["file1.py"]}}
+    indexing_manager.indexed_codebases = {
+        str(temp_codebase.resolve()): {"files": ["file1.py"]}
+    }
 
     # --- Perform the duplicate code search ---
     # For this test, we'll mock the file content to have a section that matches our mock
     # This is a bit of a simplification, but it tests the core logic
-    with patch("builtins.open", mock_open(read_data="import os\n\n# A test comment\nprint(\"hello world\")\n# duplicate section\n")):
-        results = manager.find_duplicate_code(str(temp_codebase), min_similarity=0.8, min_lines=3)
+    with patch(
+        "builtins.open",
+        mock_open(
+            read_data='import os\n\n# A test comment\nprint("hello world")\n# duplicate section\n'
+        ),
+    ):
+        results = searching_manager.find_duplicate_code(
+            str(temp_codebase),
+            sentence_transformer_model,
+            min_similarity=0.8,
+            min_lines=3,
+        )
 
     # --- Assertions ---
     # Note: The actual implementation might not find duplicates in this mock setup,
     # but we're testing the structure and error handling.
     # A more comprehensive test would require a more complex mock setup.
     assert isinstance(results, list)
-    
+
     # Restore original method
-    manager.sentence_transformer_model.encode = original_encode
+    sentence_transformer_model.encode = original_encode
 
 
 # --- New Tests for Get Configuration Tool ---
 
+
 def test_get_configuration_tool():
     """Test the get_configuration_tool function."""
     from codesage_mcp.tools import get_configuration_tool
-    
+
     # Test with the default configuration (which has fake API keys)
     result = get_configuration_tool()
-    
+
     # Check the structure of the result
     assert "message" in result
     assert "configuration" in result
     assert result["message"] == "Current configuration retrieved successfully."
-    
+
     # Check the configuration structure
     config = result["configuration"]
     assert "groq_api_key" in config
     assert "openrouter_api_key" in config
     assert "google_api_key" in config
-    
+
     # Check that the API keys are masked
     # The default config has specific fake keys, so we can check the masked values
     assert config["groq_api_key"] == "gsk_...2riH"
@@ -432,22 +546,23 @@ def test_get_configuration_tool():
 
 # --- New Tests for Analyze Codebase Improvements Tool ---
 
+
 def test_analyze_codebase_improvements_tool(temp_codebase):
     """Test the analyze_codebase_improvements_tool function."""
     from codesage_mcp.tools import analyze_codebase_improvements_tool
     from codesage_mcp.codebase_manager import codebase_manager
-    
+
     # First, index the codebase
     codebase_manager.index_codebase(str(temp_codebase))
-    
+
     # Test the analysis tool
     result = analyze_codebase_improvements_tool(str(temp_codebase))
-    
+
     # Check the structure of the result
     assert "message" in result
     assert "analysis" in result
     assert result["message"] == "Codebase analysis completed successfully."
-    
+
     # Check the analysis structure
     analysis = result["analysis"]
     assert "total_files" in analysis
@@ -458,7 +573,7 @@ def test_analyze_codebase_improvements_tool(temp_codebase):
     assert "potential_duplicates" in analysis
     assert "large_files" in analysis
     assert "suggestions" in analysis
-    
+
     # With our test codebase, we should have at least one Python file
     assert analysis["python_files"] >= 1
 
@@ -466,10 +581,10 @@ def test_analyze_codebase_improvements_tool(temp_codebase):
 def test_analyze_codebase_improvements_tool_not_indexed():
     """Test the analyze_codebase_improvements_tool function with an unindexed codebase."""
     from codesage_mcp.tools import analyze_codebase_improvements_tool
-    
+
     # Test with an unindexed codebase
     result = analyze_codebase_improvements_tool("/test/nonexistent/codebase")
-    
+
     # Check that we get an error
     assert "error" in result
     assert result["error"]["code"] == "NOT_INDEXED"
@@ -477,14 +592,15 @@ def test_analyze_codebase_improvements_tool_not_indexed():
 
 # --- New Tests for Profile Code Performance Tool ---
 
+
 def test_profile_code_performance_tool():
     """Test the profile_code_performance_tool function."""
     from codesage_mcp.tools import profile_code_performance_tool
     import tempfile
     import os
-    
+
     # Create a simple test Python file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
         f.write("""
 def simple_function():
     return 1 + 1
@@ -497,33 +613,38 @@ if __name__ == "__main__":
     print(result)
 """)
         temp_file_path = f.name
-    
+
     try:
         # Test profiling the entire file
         result = profile_code_performance_tool(temp_file_path)
-        
+
         # Check the structure of the result
         assert "message" in result
         assert "total_functions_profiled" in result
         assert "top_bottlenecks" in result
         assert "raw_stats" in result
-        assert result["message"] == f"Performance profiling completed for {temp_file_path}"
-        
+        assert (
+            result["message"] == f"Performance profiling completed for {temp_file_path}"
+        )
+
         # Check that we got some profiling data
         assert isinstance(result["total_functions_profiled"], int)
         assert isinstance(result["top_bottlenecks"], list)
         assert isinstance(result["raw_stats"], str)
-        
+
         # Test profiling a specific function
         result = profile_code_performance_tool(temp_file_path, "simple_function")
-        
+
         # Check the structure of the result
         assert "message" in result
         assert "total_functions_profiled" in result
         assert "top_bottlenecks" in result
         assert "raw_stats" in result
-        assert result["message"] == f"Performance profiling completed for {temp_file_path} function 'simple_function'"
-        
+        assert (
+            result["message"]
+            == f"Performance profiling completed for {temp_file_path} function 'simple_function'"
+        )
+
     finally:
         # Clean up the temporary file
         os.unlink(temp_file_path)
@@ -532,10 +653,10 @@ if __name__ == "__main__":
 def test_profile_code_performance_tool_not_found():
     """Test the profile_code_performance_tool function with a non-existent file."""
     from codesage_mcp.tools import profile_code_performance_tool
-    
+
     # Test with a non-existent file
     result = profile_code_performance_tool("/test/nonexistent/file.py")
-    
+
     # Check that we get an error
     assert "error" in result
     assert result["error"]["code"] == "FILE_NOT_FOUND"
@@ -546,23 +667,23 @@ def test_profile_code_performance_tool_invalid_function():
     from codesage_mcp.tools import profile_code_performance_tool
     import tempfile
     import os
-    
+
     # Create a simple test Python file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
         f.write("""
 def simple_function():
     return 1 + 1
 """)
         temp_file_path = f.name
-    
+
     try:
         # Test profiling a non-existent function
         result = profile_code_performance_tool(temp_file_path, "non_existent_function")
-        
+
         # Check that we get an error
         assert "error" in result
         assert result["error"]["code"] == "PROFILING_ERROR"
-        
+
     finally:
         # Clean up the temporary file
         os.unlink(temp_file_path)

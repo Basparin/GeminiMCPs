@@ -1,9 +1,9 @@
 import requests
 import json
-import time
 
 # Server URL
 url = "http://127.0.0.1:8000/mcp"
+
 
 def main():
     # Step 1: Index the codebase
@@ -13,11 +13,9 @@ def main():
         "method": "tools/call",
         "params": {
             "name": "index_codebase",
-            "arguments": {
-                "path": "/home/basparin/Escritorio/GeminiMCPs"
-            }
+            "arguments": {"path": "/home/basparin/Escritorio/GeminiMCPs"},
         },
-        "id": "1"
+        "id": "1",
     }
 
     response = requests.post(url, json=index_payload)
@@ -30,11 +28,9 @@ def main():
         "method": "tools/call",
         "params": {
             "name": "analyze_codebase_improvements",
-            "arguments": {
-                "codebase_path": "/home/basparin/Escritorio/GeminiMCPs"
-            }
+            "arguments": {"codebase_path": "/home/basparin/Escritorio/GeminiMCPs"},
         },
-        "id": "2"
+        "id": "2",
     }
 
     response = requests.post(url, json=analyze_payload)
@@ -46,11 +42,8 @@ def main():
     config_payload = {
         "jsonrpc": "2.0",
         "method": "tools/call",
-        "params": {
-            "name": "get_configuration",
-            "arguments": {}
-        },
-        "id": "3"
+        "params": {"name": "get_configuration", "arguments": {}},
+        "id": "3",
     }
 
     response = requests.post(url, json=config_payload)
@@ -65,10 +58,12 @@ def main():
         "params": {
             "name": "list_undocumented_functions",
             "arguments": {
-                "file_path": "/home/basparin/Escritorio/GeminiMCPs/codesage_mcp/codebase_manager.py"
-            }
+                "file_path": (
+                    "/home/basparin/Escritorio/GeminiMCPs/codesage_mcp/codebase_manager.py"
+                )
+            },
         },
-        "id": "4"
+        "id": "4",
     }
 
     response = requests.post(url, json=undocumented_payload)
@@ -85,10 +80,10 @@ def main():
             "arguments": {
                 "codebase_path": "/home/basparin/Escritorio/GeminiMCPs",
                 "min_similarity": 0.9,  # Increased similarity threshold
-                "min_lines": 20  # Increased line count threshold
-            }
+                "min_lines": 20,  # Increased line count threshold
+            },
         },
-        "id": "5"
+        "id": "5",
     }
 
     try:
@@ -97,29 +92,35 @@ def main():
             duplicate_result = response.json()
             print("Duplicate code response:", json.dumps(duplicate_result, indent=2))
         else:
-            print(f"Duplicate code search failed with status code: {response.status_code}")
+            print(
+                f"Duplicate code search failed with status code: "
+                f"{response.status_code}"
+            )
             print("Response text:", response.text)
     except requests.exceptions.Timeout:
         print("Duplicate code search timed out after 30 seconds")
     except Exception as e:
         print(f"Error during duplicate code search: {e}")
-        if 'response' in locals():
+        if "response" in locals():
             print("Response text:", response.text)
 
     # Summary of findings
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
     print("SUMMARY OF FINDINGS")
-    print("="*50)
-    
+    print("=" * 50)
+
     if "result" in analysis_result and "analysis" in analysis_result["result"]:
         analysis = analysis_result["result"]["analysis"]
         print(f"Total files indexed: {analysis.get('total_files', 'N/A')}")
         print(f"Python files: {analysis.get('python_files', 'N/A')}")
         print(f"TODO comments: {analysis.get('todo_comments', 'N/A')}")
         print(f"FIXME comments: {analysis.get('fixme_comments', 'N/A')}")
-        print(f"Undocumented functions (estimated): {analysis.get('undocumented_functions', 'N/A')}")
+        print(
+            f"Undocumented functions (estimated): "
+            f"{analysis.get('undocumented_functions', 'N/A')}"
+        )
         print(f"Large files (>500 lines): {len(analysis.get('large_files', []))}")
-        
+
         if "suggestions" in analysis:
             print("\nSuggestions:")
             for suggestion in analysis["suggestions"]:
@@ -127,10 +128,17 @@ def main():
 
     if "result" in undocumented_result:
         undocumented = undocumented_result["result"]
-        print(f"\nDetailed undocumented functions in codebase_manager.py: {undocumented.get('message', 'N/A')}")
+        print(
+            f"\nDetailed undocumented functions in codebase_manager.py: "
+            f"{undocumented.get('message', 'N/A')}"
+        )
         if "undocumented_functions" in undocumented:
             for func in undocumented["undocumented_functions"]:
-                print(f"  - {func.get('name', 'Unknown')} (line {func.get('line_number', 'Unknown')})")
+                print(
+                    f"  - {func.get('name', 'Unknown')} "
+                    f"(line {func.get('line_number', 'Unknown')})"
+                )
+
 
 if __name__ == "__main__":
     main()

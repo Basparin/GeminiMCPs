@@ -1,8 +1,46 @@
+"""Tools Module for CodeSage MCP Server.
+
+This module defines the available tools for the CodeSage MCP Server. Each tool is a function
+that takes specific arguments and returns a dictionary with the results or an error message.
+
+The tools are designed to be called via JSON-RPC requests from the Gemini CLI. They provide
+a wide range of functionalities, including:
+
+- Codebase Indexing
+- File Reading
+- Code Search
+- File Structure Overview
+- LLM-Powered Code Summarization
+- Duplicate Code Detection
+- Dependency Analysis
+- Code Quality Analysis
+- Performance Profiling
+- Code Improvement Suggestions
+- Unit Test Generation
+- Auto Documentation
+- Configuration Management
+
+Each tool function follows a consistent pattern:
+- It takes specific arguments as input.
+- It performs the required action.
+- It returns a dictionary with a 'message' key and other relevant data, or an 'error' key if something goes wrong.
+
+Example:
+    ```python
+    result = read_code_file_tool(file_path="path/to/file.py")
+    if "error" in result:
+        print(f"Error: {result['error']['message']}")
+    else:
+        print(result["content"])
+    ```
+"""
+
 import ast
 import os
 from collections import defaultdict
 from fastapi import HTTPException  # New import
 from codesage_mcp.codebase_manager import codebase_manager
+from codesage_mcp.utils import _count_todo_fixme_comments  # Import the function
 
 
 def read_code_file_tool(file_path: str) -> dict:
@@ -17,10 +55,21 @@ def search_codebase_tool(
     file_types: list[str] = None,
     exclude_patterns: list[str] = None,
 ) -> dict:
-    """Searches for a pattern within indexed code files, with optional
-    exclusion patterns."""
+    """Searches for a pattern within indexed code files, with optional exclusion patterns.
+
+    Args:
+        codebase_path (str): Path to the indexed codebase.
+        pattern (str): Regex pattern to search for.
+        file_types (list[str], optional): List of file extensions to include in the search.
+            If None, all file types are included.
+        exclude_patterns (list[str], optional): List of patterns to exclude from the search.
+            Files matching these patterns will be skipped.
+
+    Returns:
+        dict: Search results with matches and metadata, or an error message.
+    """
     try:
-        search_results = codebase_manager.search_codebase(
+        search_results = codebase_manager.searching_manager.search_codebase(
             codebase_path, pattern, file_types, exclude_patterns
         )
         return {
@@ -42,9 +91,20 @@ def semantic_search_codebase_tool(
     codebase_path: str, query: str, top_k: int = 5
 ) -> dict:
     """Performs a semantic search within the indexed codebase to find code snippets
-    semantically similar to the given query."""
+    semantically similar to the given query.
+
+    Args:
+        codebase_path (str): Path to the indexed codebase.
+        query (str): Semantic query to search for.
+        top_k (int, optional): Number of results to return. Defaults to 5.
+
+    Returns:
+        dict: Semantically similar code snippets with scores and metadata, or an error message.
+    """
     try:
-        search_results = codebase_manager.semantic_search_codebase(query, top_k)
+        search_results = codebase_manager.searching_manager.semantic_search_codebase(
+            query, codebase_manager.sentence_transformer_model, top_k
+        )
         if search_results:
             return {
                 "message": (
@@ -76,8 +136,11 @@ def find_duplicate_code_tool(
 ) -> dict:
     """Finds duplicate code sections within the indexed codebase."""
     try:
-        duplicates = codebase_manager.find_duplicate_code(
-            codebase_path, min_similarity, min_lines
+        duplicates = codebase_manager.searching_manager.find_duplicate_code(
+            codebase_path,
+            codebase_manager.sentence_transformer_model,
+            min_similarity,
+            min_lines,
         )
         return {
             "message": f"Found {len(duplicates)} duplicate code sections.",
@@ -103,6 +166,7 @@ def summarize_code_section_tool(
     llm_model: str = None,
     function_name: str = None,
     class_name: str = None,
+    llm_analysis_manager=None,
 ) -> dict:
     """Summarizes a specific section of code using a chosen LLM."""
     try:
@@ -148,7 +212,19 @@ def summarize_code_section_tool(
             start_line = 1
             end_line = len(content.splitlines())
 
-        summary = codebase_manager.summarize_code_section(
+        if llm_analysis_manager is None:
+            # Create a new instance of LLMAnalysisManager if none is provided
+            from codesage_mcp.llm_analysis import LLMAnalysisManager
+            from codesage_mcp.codebase_manager import codebase_manager
+
+            llm_analysis_manager = LLMAnalysisManager(
+                groq_client=codebase_manager.groq_client,
+                openrouter_client=codebase_manager.openrouter_client,
+                google_ai_client=codebase_manager.google_ai_client,
+            )
+
+        # Use the provided or newly created llm_analysis_manager
+        summary = llm_analysis_manager.summarize_code_section(
             file_path, start_line, end_line, llm_model
         )
         return {"message": "Code section summarized successfully.", "summary": summary}
@@ -186,7 +262,14 @@ def index_codebase_tool(path: str) -> dict:
 
 def list_undocumented_functions_tool(file_path: str) -> dict:
     """Identifies and lists Python functions in a specified file that are missing
-    docstrings."""
+    docstrings.
+
+    Args:
+        file_path (str): Path to the Python file to analyze.
+
+    Returns:
+        dict: List of undocumented functions with their line numbers, or an error message.
+    """
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -229,7 +312,11 @@ def list_undocumented_functions_tool(file_path: str) -> dict:
 
 def count_lines_of_code_tool() -> dict:
     """Counts lines of code (LOC) in the indexed codebase, providing a summary by
-    file type."""
+    file type.
+
+    Returns:
+        dict: Summary of LOC by file type and total LOC, or an error message.
+    """
     loc_by_file_type = defaultdict(int)
     total_loc = 0
 
@@ -325,106 +412,35 @@ def configure_api_key_tool(llm_provider: str, api_key: str) -> dict:
     }
 
 
-def get_dependencies_overview_tool() -> dict:
+def get_dependencies_overview_tool(codebase_path: str) -> dict:
     """Analyzes Python files in the indexed codebase and extracts import statements,
-    providing a high-level overview of internal and external dependencies."""
-    current_codebase_path = os.path.abspath("/home/basparin/Escritorio/GeminiMCPs")
-    if current_codebase_path not in codebase_manager.indexed_codebases:
+    providing a high-level overview of internal and external dependencies.
+
+    Args:
+        codebase_path (str): Path to the indexed codebase.
+
+    Returns:
+        dict: Dependency overview with statistics and lists of internal, stdlib, and
+            third-party dependencies, or an error message.
+    """
+    try:
+        return codebase_manager.get_dependencies_overview(codebase_path)
+    except ValueError as e:
+        return {"error": {"code": "NOT_INDEXED", "message": str(e)}}
+    except Exception as e:
         return {
             "error": {
-                "code": "NOT_INDEXED",
-                "message": (
-                    f"Codebase at {current_codebase_path} has not been indexed. "
-                    "Please index it first."
-                ),
+                "code": "DEPENDENCY_ANALYSIS_ERROR",
+                "message": f"An unexpected error occurred during dependency analysis: {e}",
             }
         }
-
-    indexed_files = codebase_manager.indexed_codebases[current_codebase_path]["files"]
-
-    internal_dependencies = defaultdict(set)
-    external_dependencies = defaultdict(set)
-    all_external_modules = set()
-
-    for relative_file_path in indexed_files:
-        if not relative_file_path.endswith(".py"):
-            continue
-
-        file_path = os.path.join(current_codebase_path, relative_file_path)
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                tree = ast.parse(f.read())
-
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        module_name = alias.name.split(".")[0]
-                        if (
-                            os.path.exists(
-                                os.path.join(current_codebase_path, module_name)
-                            )
-                            or os.path.exists(
-                                os.path.join(current_codebase_path, module_name + ".py")
-                            )
-                            or os.path.exists(
-                                os.path.join(
-                                    current_codebase_path, module_name, "__init__.py"
-                                )
-                            )
-                        ):
-                            internal_dependencies[relative_file_path].add(module_name)
-                        else:
-                            external_dependencies[relative_file_path].add(module_name)
-                            all_external_modules.add(module_name)
-                elif isinstance(node, ast.ImportFrom):
-                    module_name = node.module.split(".")[0] if node.module else ""
-                    if module_name:
-                        if (
-                            os.path.exists(
-                                os.path.join(current_codebase_path, module_name)
-                            )
-                            or os.path.exists(
-                                os.path.join(current_codebase_path, module_name + ".py")
-                            )
-                            or os.path.exists(
-                                os.path.join(
-                                    current_codebase_path, module_name, "__init__.py"
-                                )
-                            )
-                        ):
-                            internal_dependencies[relative_file_path].add(module_name)
-                        else:
-                            external_dependencies[relative_file_path].add(module_name)
-                            all_external_modules.add(module_name)
-
-        except Exception:  # Ignore files that cannot be parsed or read
-            pass
-
-    return {
-        "message": "Dependency overview generated.",
-        "total_python_files_analyzed": len(internal_dependencies)
-        + len(external_dependencies),  # This is not accurate, need to fix
-        "total_internal_dependencies": sum(
-            len(deps) for deps in internal_dependencies.values()
-        ),
-        "total_external_dependencies": sum(
-            len(deps) for deps in external_dependencies.values()
-        ),
-        "unique_external_modules": sorted(list(all_external_modules)),
-        "internal_dependencies_by_file": {
-            k: sorted(list(v)) for k, v in internal_dependencies.items()
-        },
-        "external_dependencies_by_file": {
-            k: sorted(list(v)) for k, v in external_dependencies.items()
-        },
-    }
 
 
 def get_configuration_tool() -> dict:
     """Returns the current configuration, with API keys masked for security."""
     try:
         from codesage_mcp.config import GROQ_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY
-        
+
         def mask_api_key(key: str) -> str:
             """Mask an API key, showing only the first and last few characters."""
             if not key:
@@ -432,38 +448,179 @@ def get_configuration_tool() -> dict:
             if len(key) <= 8:
                 return "*" * len(key)
             return f"{key[:4]}...{key[-4:]}"
-        
+
         return {
             "message": "Current configuration retrieved successfully.",
             "configuration": {
                 "groq_api_key": mask_api_key(GROQ_API_KEY),
                 "openrouter_api_key": mask_api_key(OPENROUTER_API_KEY),
-                "google_api_key": mask_api_key(GOOGLE_API_KEY)
-            }
+                "google_api_key": mask_api_key(GOOGLE_API_KEY),
+            },
         }
     except Exception as e:
         return {
             "error": {
                 "code": "CONFIGURATION_ERROR",
                 "message": (
-                    "An unexpected error occurred while retrieving configuration: "
-                    f"{e}"
+                    f"An unexpected error occurred while retrieving configuration: {e}"
                 ),
             }
         }
 
 
+def _count_large_files(file_path: str, lines: list[str]) -> dict:
+    """Count large files (> 500 lines).
+
+    Args:
+        file_path (str): Path to the file.
+        lines (list[str]): Lines of the file.
+
+    Returns:
+        dict: Dictionary with file path and line count if the file is large, None otherwise.
+    """
+    line_count = len(lines)
+    if line_count > 500:
+        return {"file": str(file_path), "lines": line_count}
+    return None
+
+
+def _analyze_cyclomatic_complexity(file_path: str) -> list[dict]:
+    """Analyze cyclomatic complexity of functions in a Python file using radon.
+
+    Args:
+        file_path (str): Path to the Python file to analyze.
+
+    Returns:
+        list[dict]: List of functions with high cyclomatic complexity (>10).
+    """
+    try:
+        from radon.complexity import cc_visit
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            complexity_results = cc_visit(f.read())
+
+        # Count functions with high complexity (e.g., > 10)
+        high_complexity_functions = [
+            result for result in complexity_results if result.complexity > 10
+        ]
+
+        # Format the results
+        formatted_results = []
+        for result in high_complexity_functions:
+            formatted_results.append(
+                {
+                    "file": str(file_path),
+                    "function": result.name,
+                    "complexity": result.complexity,
+                }
+            )
+
+        return formatted_results
+
+    except Exception:
+        # If radon analysis fails, skip it for this file
+        return []
+
+
+def _count_undocumented_functions(file_path: str) -> int:
+    """Count undocumented functions in a Python file using AST.
+
+    Args:
+        file_path (str): Path to the Python file to analyze.
+
+    Returns:
+        int: Number of undocumented functions.
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            tree = ast.parse(f.read())
+
+        # Count functions with and without docstrings
+        function_count = 0
+        documented_function_count = 0
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                function_count += 1
+                # Check if the function has a docstring
+                if (
+                    node.body
+                    and isinstance(node.body[0], ast.Expr)
+                    and isinstance(node.body[0].value, ast.Constant)
+                    and isinstance(node.body[0].value.value, str)
+                ):
+                    documented_function_count += 1
+
+        # Return undocumented functions count
+        return function_count - documented_function_count
+
+    except SyntaxError:
+        # Skip files with syntax errors
+        return 0
+    except Exception:
+        # Skip files that can't be read or parsed
+        return 0
+
+
+def _generate_suggestions_based_on_analysis(analysis: dict) -> list[str]:
+    """Generate suggestions based on the analysis results.
+
+    Args:
+        analysis (dict): Analysis results dictionary.
+
+    Returns:
+        list[str]: List of suggestions.
+    """
+    suggestions = []
+
+    if analysis["todo_comments"] > 0:
+        suggestions.append(
+            f"Address {analysis['todo_comments']} TODO comments in the codebase"
+        )
+
+    if analysis["fixme_comments"] > 0:
+        suggestions.append(
+            f"Fix {analysis['fixme_comments']} FIXME issues in the codebase"
+        )
+
+    if analysis["undocumented_functions"] > 0:
+        suggestions.append(
+            f"Document {analysis['undocumented_functions']} functions missing docstrings"
+        )
+
+    if len(analysis["large_files"]) > 0:
+        suggestions.append(
+            f"Refactor {len(analysis['large_files'])} large files (>500 lines)"
+        )
+
+    # Add suggestions based on cyclomatic complexity analysis
+    if len(analysis["high_complexity_functions"]) > 0:
+        suggestions.append(
+            f"Refactor {len(analysis['high_complexity_functions'])} functions with high cyclomatic complexity (>10)"
+        )
+
+    # Add general suggestions
+    suggestions.append(
+        "Consider using the 'find_duplicate_code' tool to identify duplicated code sections"
+    )
+    suggestions.append(
+        "Use the 'list_undocumented_functions' tool for detailed analysis of missing documentation"
+    )
+
+    return suggestions
+
+
 def analyze_codebase_improvements_tool(codebase_path: str) -> dict:
     """
     Analyzes the codebase for potential improvements and suggestions.
-    
+
     This tool provides a comprehensive analysis of the codebase to identify
     areas for improvement, including TODO/FIXME comments, undocumented functions,
     large files, and other code quality metrics.
-    
+
     Args:
         codebase_path (str): Path to the indexed codebase.
-        
+
     Returns:
         dict: Analysis results with suggestions for improvement.
     """
@@ -471,8 +628,7 @@ def analyze_codebase_improvements_tool(codebase_path: str) -> dict:
         # Import codebase manager
         from codesage_mcp.codebase_manager import codebase_manager
         import os
-        import fnmatch
-        
+
         # Check if codebase is indexed
         abs_codebase_path = str(os.path.abspath(codebase_path))
         if abs_codebase_path not in codebase_manager.indexed_codebases:
@@ -485,10 +641,10 @@ def analyze_codebase_improvements_tool(codebase_path: str) -> dict:
                     ),
                 }
             }
-        
+
         # Get indexed files
         indexed_files = codebase_manager.indexed_codebases[abs_codebase_path]["files"]
-        
+
         # Initialize analysis results
         analysis = {
             "total_files": len(indexed_files),
@@ -498,151 +654,75 @@ def analyze_codebase_improvements_tool(codebase_path: str) -> dict:
             "undocumented_functions": 0,
             "potential_duplicates": 0,
             "large_files": [],  # Files with > 500 lines
-            "suggestions": []
+            "high_complexity_functions": [],  # Functions with cyclomatic complexity > 10
+            "suggestions": [],
         }
-        
+
         # Analyze each file
         for relative_file_path in indexed_files:
             # Skip archived files
             if "archive/" in relative_file_path:
                 continue
-                
+
             file_path = os.path.join(codebase_path, relative_file_path)
-            
+
             # Only analyze Python files for detailed metrics
             if file_path.endswith(".py"):
                 analysis["python_files"] += 1
-                
+
                 try:
                     # Count lines
                     with open(file_path, "r", encoding="utf-8") as f:
                         lines = f.readlines()
-                    
-                    line_count = len(lines)
-                    if line_count > 500:
-                        analysis["large_files"].append({
-                            "file": str(file_path),
-                            "lines": line_count
-                        })
-                    
+
+                    large_file_info = _count_large_files(file_path, lines)
+                    if large_file_info:
+                        analysis["large_files"].append(large_file_info)
+
                     # Search for TODO and FIXME comments (more precise)
                     # Only count actual TODO/FIXME comments, not mentions in strings or comments
-                    todo_count = 0
-                    fixme_count = 0
-                    in_multiline_comment = False
-                    multiline_comment_delimiter = None
-                    
-                    for line_num, line in enumerate(lines, 1):
-                        stripped_line = line.strip()
-                        
-                        # Handle multiline comments
-                        if in_multiline_comment:
-                            if multiline_comment_delimiter in line:
-                                in_multiline_comment = False
-                            continue
-                        
-                        # Check for multiline comment start
-                        if '"""' in line:
-                            in_multiline_comment = True
-                            multiline_comment_delimiter = '"""'
-                            # Check if it's also closed on the same line
-                            if line.count('"""') >= 2:
-                                in_multiline_comment = False
-                            continue
-                        elif "'''" in line:
-                            in_multiline_comment = True
-                            multiline_comment_delimiter = "'''"
-                            # Check if it's also closed on the same line
-                            if line.count("'''") >= 2:
-                                in_multiline_comment = False
-                            continue
-                        
-                        # Check for single-line comments that start with # TODO or # FIXME
-                        if stripped_line.startswith("# TODO"):
-                            todo_count += 1
-                        elif stripped_line.startswith("# FIXME"):
-                            fixme_count += 1
-                        
-                        # Also check for TODO/FIXME in regular comments (not at the start)
-                        # but only if it's clearly a comment marker
-                        comment_parts = line.split("#", 1)
-                        if len(comment_parts) > 1:
-                            comment_content = comment_parts[1].strip()
-                            if comment_content.startswith("TODO"):
-                                # Make sure it's not part of a string or variable name
-                                if len(comment_content) > 4 and (len(comment_content) == 4 or not comment_content[4].isalnum()):
-                                    todo_count += 1
-                            elif comment_content.startswith("FIXME"):
-                                # Make sure it's not part of a string or variable name
-                                if len(comment_content) > 5 and (len(comment_content) == 5 or not comment_content[5].isalnum()):
-                                    fixme_count += 1
-                    
-                    analysis["todo_comments"] += todo_count
-                    analysis["fixme_comments"] += fixme_count
-                    
+                    found_todo_fixme_comments = _count_todo_fixme_comments(lines)
+                    analysis["todo_comments"] += len(
+                        [
+                            c
+                            for c in found_todo_fixme_comments
+                            if "TODO" in c["comment"].upper()
+                        ]
+                    )
+                    analysis["fixme_comments"] += len(
+                        [
+                            c
+                            for c in found_todo_fixme_comments
+                            if "FIXME" in c["comment"].upper()
+                        ]
+                    )
+
                     # For Python files, check for undocumented functions using AST
-                    try:
-                        with open(file_path, "r", encoding="utf-8") as f:
-                            tree = ast.parse(f.read())
-                        
-                        # Count functions with and without docstrings
-                        function_count = 0
-                        documented_function_count = 0
-                        
-                        for node in ast.walk(tree):
-                            if isinstance(node, ast.FunctionDef):
-                                function_count += 1
-                                # Check if the function has a docstring
-                                if (node.body and 
-                                    isinstance(node.body[0], ast.Expr) and 
-                                    isinstance(node.body[0].value, ast.Constant) and 
-                                    isinstance(node.body[0].value.value, str)):
-                                    documented_function_count += 1
-                        
-                        # Add undocumented functions to the count
-                        analysis["undocumented_functions"] += (function_count - documented_function_count)
-                    except SyntaxError:
-                        # Skip files with syntax errors
-                        pass
-                    
+                    undocumented_functions_count = _count_undocumented_functions(
+                        file_path
+                    )
+                    analysis["undocumented_functions"] += undocumented_functions_count
+
+                    # Analyze cyclomatic complexity using radon
+                    high_complexity_functions = _analyze_cyclomatic_complexity(
+                        file_path
+                    )
+                    analysis["high_complexity_functions"].extend(
+                        high_complexity_functions
+                    )
+
                 except Exception:
                     # Skip files that can't be read
                     continue
-        
+
         # Generate suggestions based on analysis
-        if analysis["todo_comments"] > 0:
-            analysis["suggestions"].append(
-                f"Address {analysis['todo_comments']} TODO comments in the codebase"
-            )
-        
-        if analysis["fixme_comments"] > 0:
-            analysis["suggestions"].append(
-                f"Fix {analysis['fixme_comments']} FIXME issues in the codebase"
-            )
-        
-        if analysis["undocumented_functions"] > 0:
-            analysis["suggestions"].append(
-                f"Document {analysis['undocumented_functions']} functions missing docstrings"
-            )
-        
-        if len(analysis["large_files"]) > 0:
-            analysis["suggestions"].append(
-                f"Refactor {len(analysis['large_files'])} large files (>500 lines)"
-            )
-        
-        # Add general suggestions
-        analysis["suggestions"].append(
-            "Consider using the 'find_duplicate_code' tool to identify duplicated code sections"
-        )
-        analysis["suggestions"].append(
-            "Use the 'list_undocumented_functions' tool for detailed analysis of missing documentation"
-        )
-        
+        analysis["suggestions"] = _generate_suggestions_based_on_analysis(analysis)
+
         return {
             "message": "Codebase analysis completed successfully.",
-            "analysis": analysis
+            "analysis": analysis,
         }
-        
+
     except Exception as e:
         return {
             "error": {
@@ -652,88 +732,106 @@ def analyze_codebase_improvements_tool(codebase_path: str) -> dict:
         }
 
 
-def profile_code_performance_tool(file_path: str, function_name: str = None) -> dict:
+def profile_code_performance_tool(
+    file_path: str, function_name: str = None, llm_analysis_manager=None
+) -> dict:
     """
     Profiles the performance of a specific function or the entire file.
-    
+
     This tool uses cProfile to measure the execution time and resource usage
     of Python code. It can profile either a specific function or the entire file.
-    
+
     Args:
         file_path (str): Path to the Python file to profile.
         function_name (str, optional): Name of the specific function to profile.
             If None, profiles the entire file.
-            
+        llm_analysis_manager (LLMAnalysisManager, optional): An instance of LLMAnalysisManager to use.
+            If None, creates a new instance of LLMAnalysisManager.
+
     Returns:
         dict: Profiling results including execution time, function calls, and
             performance bottlenecks.
     """
     try:
-        profiling_results = codebase_manager.profile_code_performance(file_path, function_name)
+        if llm_analysis_manager is None:
+            # Create a new instance of LLMAnalysisManager if none is provided
+            from codesage_mcp.llm_analysis import LLMAnalysisManager
+            from codesage_mcp.codebase_manager import codebase_manager
+
+            llm_analysis_manager = LLMAnalysisManager(
+                groq_client=codebase_manager.groq_client,
+                openrouter_client=codebase_manager.openrouter_client,
+                google_ai_client=codebase_manager.google_ai_client,
+            )
+
+        # Use the provided or newly created llm_analysis_manager
+        profiling_results = llm_analysis_manager.profile_code_performance(
+            file_path, function_name
+        )
         return profiling_results
     except FileNotFoundError as e:
-        return {
-            "error": {
-                "code": "FILE_NOT_FOUND",
-                "message": str(e)
-            }
-        }
+        return {"error": {"code": "FILE_NOT_FOUND", "message": str(e)}}
     except ValueError as e:
-        return {
-            "error": {
-                "code": "FUNCTION_NOT_FOUND",
-                "message": str(e)
-            }
-        }
+        return {"error": {"code": "FUNCTION_NOT_FOUND", "message": str(e)}}
     except Exception as e:
         return {
             "error": {
                 "code": "PROFILING_ERROR",
-                "message": f"An unexpected error occurred during performance profiling: {str(e)}"
+                "message": f"An unexpected error occurred during performance profiling: {str(e)}",
             }
         }
 
 
-def suggest_code_improvements_tool(file_path: str, start_line: int = None, end_line: int = None) -> dict:
+def suggest_code_improvements_tool(
+    file_path: str,
+    start_line: int = None,
+    end_line: int = None,
+    llm_analysis_manager=None,
+) -> dict:
     """
     Analyzes a code section and suggests improvements by consulting external LLMs.
-    
+
     This tool extracts a code snippet from the specified file and sends it to
     external LLMs for analysis. It identifies potential code quality issues and
     provides suggestions for improvements.
-    
+
     Args:
         file_path (str): Path to the file to analyze.
         start_line (int, optional): Starting line number of the section to analyze.
             If None, analyzes from the beginning of the file.
         end_line (int, optional): Ending line number of the section to analyze.
             If None, analyzes to the end of the file.
-            
+        llm_analysis_manager (LLMAnalysisManager, optional): An instance of LLMAnalysisManager to use.
+            If None, uses the default codebase_manager.
+
     Returns:
         dict: Analysis results with suggestions for improvements, or an error message.
     """
     try:
-        analysis_results = codebase_manager.suggest_code_improvements(file_path, start_line, end_line)
+        if llm_analysis_manager is None:
+            # Use the default codebase_manager if no llm_analysis_manager is provided
+            from codesage_mcp.codebase_manager import codebase_manager
+
+            analysis_results = (
+                codebase_manager.llm_analysis_manager.suggest_code_improvements(
+                    file_path, start_line, end_line
+                )
+            )
+        else:
+            # Use the provided llm_analysis_manager
+            analysis_results = llm_analysis_manager.suggest_code_improvements(
+                file_path, start_line, end_line
+            )
         return analysis_results
     except FileNotFoundError as e:
-        return {
-            "error": {
-                "code": "FILE_NOT_FOUND",
-                "message": str(e)
-            }
-        }
+        return {"error": {"code": "FILE_NOT_FOUND", "message": str(e)}}
     except ValueError as e:
-        return {
-            "error": {
-                "code": "INVALID_INPUT",
-                "message": str(e)
-            }
-        }
+        return {"error": {"code": "INVALID_INPUT", "message": str(e)}}
     except Exception as e:
         return {
             "error": {
                 "code": "ANALYSIS_ERROR",
-                "message": f"An unexpected error occurred during code analysis: {str(e)}"
+                "message": f"An unexpected error occurred during code analysis: {str(e)}",
             }
         }
 
@@ -741,41 +839,38 @@ def suggest_code_improvements_tool(file_path: str, start_line: int = None, end_l
 def generate_unit_tests_tool(file_path: str, function_name: str = None) -> dict:
     """
     Generates unit tests for functions in a Python file.
-    
+
     This tool analyzes function signatures and return types to generate
     appropriate test cases with edge cases. The generated tests can be
     manually reviewed and added to the test suite.
-    
+
     Args:
         file_path (str): Path to the Python file to analyze.
         function_name (str, optional): Name of a specific function to generate tests for.
             If None, generates tests for all functions in the file.
-            
+
     Returns:
         dict: Generated test code and metadata, or an error message.
     """
     try:
-        test_results = codebase_manager.generate_unit_tests(file_path, function_name)
+        test_results = codebase_manager.llm_analysis_manager.generate_unit_tests(
+            file_path, function_name
+        )
         return test_results
     except FileNotFoundError as e:
-        return {
-            "error": {
-                "code": "FILE_NOT_FOUND",
-                "message": str(e)
-            }
-        }
+        return {"error": {"code": "FILE_NOT_FOUND", "message": str(e)}}
     except ValueError as e:
-        return {
-            "error": {
-                "code": "INVALID_INPUT",
-                "message": str(e)
-            }
-        }
+        if "Function" in str(e) and "not found" in str(e):
+            return {"error": {"code": "FUNCTION_NOT_FOUND", "message": str(e)}}
+        elif "No functions found" in str(e):
+            return {"error": {"code": "NO_FUNCTIONS_FOUND", "message": str(e)}}
+        else:
+            return {"error": {"code": "INVALID_INPUT", "message": str(e)}}
     except Exception as e:
         return {
             "error": {
                 "code": "TEST_GENERATION_ERROR",
-                "message": f"An unexpected error occurred during test generation: {str(e)}"
+                "message": f"An unexpected error occurred during test generation: {str(e)}",
             }
         }
 
@@ -783,40 +878,143 @@ def generate_unit_tests_tool(file_path: str, function_name: str = None) -> dict:
 def auto_document_tool(tool_name: str = None) -> dict:
     """
     Automatically generates documentation for tools that lack detailed documentation.
-    
+
     This tool analyzes tool functions in the codebase, extracts their signatures
     and docstrings, and uses LLMs to generate human-readable documentation in
     the existing format. It can document a specific tool or all tools that lack
     detailed documentation.
-    
+
     Args:
         tool_name (str, optional): Name of a specific tool to document.
             If None, documents all tools that lack detailed documentation.
-            
+
     Returns:
         dict: Generated documentation and metadata, or an error message.
     """
     try:
-        documentation_results = codebase_manager.auto_document_tool(tool_name)
+        documentation_results = (
+            codebase_manager.llm_analysis_manager.auto_document_tool(tool_name)
+        )
         return documentation_results
     except FileNotFoundError as e:
-        return {
-            "error": {
-                "code": "FILE_NOT_FOUND",
-                "message": str(e)
-            }
-        }
+        return {"error": {"code": "FILE_NOT_FOUND", "message": str(e)}}
     except ValueError as e:
-        return {
-            "error": {
-                "code": "INVALID_INPUT",
-                "message": str(e)
-            }
-        }
+        return {"error": {"code": "INVALID_INPUT", "message": str(e)}}
     except Exception as e:
         return {
             "error": {
                 "code": "DOCUMENTATION_ERROR",
-                "message": f"An unexpected error occurred during documentation generation: {str(e)}"
+                "message": f"An unexpected error occurred during documentation generation: {str(e)}",
+            }
+        }
+
+
+def resolve_todo_fixme_tool(file_path: str, line_number: int = None) -> dict:
+    """
+    Analyzes a TODO/FIXME comment and suggests potential resolutions using LLMs.
+
+    Args:
+        file_path (str): The absolute path to the file containing the TODO/FIXME comment.
+        line_number (int, optional): The specific line number of the TODO/FIXME comment.
+            If None, the tool will attempt to find and resolve the first TODO/FIXME comment in the file.
+
+    Returns:
+        dict: Suggested resolutions from LLMs, or an error message.
+    """
+    try:
+        resolution_results = codebase_manager.llm_analysis_manager.resolve_todo_fixme(
+            file_path, line_number
+        )
+        return resolution_results
+    except FileNotFoundError as e:
+        return {"error": {"code": "FILE_NOT_FOUND", "message": str(e)}}
+    except ValueError as e:
+        return {"error": {"code": "INVALID_INPUT", "message": str(e)}}
+    except Exception as e:
+        return {
+            "error": {
+                "code": "TODO_FIXME_RESOLUTION_ERROR",
+                "message": f"An unexpected error occurred during TODO/FIXME resolution: {str(e)}",
+            }
+        }
+
+
+def parse_llm_response_tool(llm_response_content: str) -> dict:
+    """
+    Parses the content of an LLM response, extracting and validating JSON data.
+
+    This tool is designed to robustly handle various LLM output formats, including
+    responses wrapped in markdown code blocks, and attempts to parse them as JSON.
+
+    Args:
+        llm_response_content (str): The raw content string received from an LLM.
+
+    Returns:
+        dict: A dictionary containing the parsed JSON data under the 'parsed_data' key,
+              or an 'error' key with a message if parsing fails.
+    """
+    try:
+        parsed_data = codebase_manager.llm_analysis_manager.parse_llm_response(
+            llm_response_content
+        )
+        return {
+            "message": "LLM response parsed successfully.",
+            "parsed_data": parsed_data,
+        }
+    except ValueError as e:
+        return {"error": {"code": "JSON_PARSE_ERROR", "message": str(e)}}
+    except Exception as e:
+        return {
+            "error": {
+                "code": "LLM_RESPONSE_PARSING_ERROR",
+                "message": f"An unexpected error occurred during LLM response parsing: {str(e)}",
+            }
+        }
+
+
+def generate_llm_api_wrapper_tool(
+    llm_provider: str,
+    model_name: str,
+    api_key_env_var: str = None,
+    output_file_path: str = None,
+) -> dict:
+    """
+    Generates Python wrapper code for interacting with various LLM APIs.
+
+    This tool creates a Python class that abstracts away the specifics of different
+    LLM providers (Groq, OpenRouter, Google AI), providing a unified interface for
+    making LLM calls. It handles API key loading from environment variables and
+    includes basic error handling.
+
+    Args:
+        llm_provider (str): The LLM provider (e.g., 'groq', 'openrouter', 'google').
+        model_name (str): The specific model name to use (e.g., 'llama3-8b-8192', 'gemini-pro').
+        api_key_env_var (str, optional): The name of the environment variable that stores the API key.
+            If None, a default will be used based on the provider.
+        output_file_path (str, optional): The absolute path to save the generated wrapper code.
+            If None, the generated code will be returned as a string.
+
+    Returns:
+        dict: A dictionary containing the generated wrapper code (as a string) or a success message
+              if saved to a file, or an error message if generation fails.
+    """
+    try:
+        generated_code = codebase_manager.llm_analysis_manager.generate_llm_api_wrapper(
+            llm_provider, model_name, api_key_env_var
+        )
+
+        if output_file_path:
+            with open(output_file_path, "w", encoding="utf-8") as f:
+                f.write(generated_code)
+            return {"message": f"LLM API wrapper saved to {output_file_path}"}
+        else:
+            return {"generated_code": generated_code}
+    except ValueError as e:
+        return {"error": {"code": "INVALID_INPUT", "message": str(e)}}
+    except Exception as e:
+        return {
+            "error": {
+                "code": "WRAPPER_GENERATION_ERROR",
+                "message": f"An unexpected error occurred during wrapper generation: {str(e)}",
             }
         }

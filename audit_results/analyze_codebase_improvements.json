@@ -1,0 +1,188 @@
+{
+  "message": "Codebase analysis completed successfully.",
+  "analysis": {
+    "total_files": 32,
+    "python_files": 15,
+    "todo_comments": 2,
+    "fixme_comments": 0,
+    "undocumented_functions": 11,
+    "potential_duplicates": 0,
+    "large_files": [
+      {
+        "file": "./tests/test_main.py",
+        "lines": 553
+      },
+      {
+        "file": "./tests/test_codebase_manager.py",
+        "lines": 654
+      },
+      {
+        "file": "./codesage_mcp/codebase_manager.py",
+        "lines": 1135
+      },
+      {
+        "file": "./codesage_mcp/llm_analysis.py",
+        "lines": 916
+      },
+      {
+        "file": "./codesage_mcp/tools.py",
+        "lines": 922
+      }
+    ],
+    "high_complexity_functions": [
+      {
+        "file": "./analyze_self.py",
+        "function": "main",
+        "complexity": 12
+      },
+      {
+        "file": "./tests/test_main.py",
+        "function": "test_mcp_tool_call_success",
+        "complexity": 11
+      },
+      {
+        "file": "./tests/test_main.py",
+        "function": "test_mcp_tool_call_list_undocumented_functions",
+        "complexity": 11
+      },
+      {
+        "file": "./tests/test_main.py",
+        "function": "test_mcp_tool_call_find_duplicate_code_success",
+        "complexity": 11
+      },
+      {
+        "file": "./tests/test_main.py",
+        "function": "test_mcp_tool_call_get_configuration_success",
+        "complexity": 13
+      },
+      {
+        "file": "./tests/test_main.py",
+        "function": "test_mcp_tool_call_analyze_codebase_improvements_success",
+        "complexity": 26
+      },
+      {
+        "file": "./tests/test_main.py",
+        "function": "test_mcp_tool_call_profile_code_performance_success",
+        "complexity": 20
+      },
+      {
+        "file": "./tests/test_main_suggest_code_improvements.py",
+        "function": "test_mcp_tool_call_suggest_code_improvements_with_line_range",
+        "complexity": 14
+      },
+      {
+        "file": "./tests/test_codebase_manager.py",
+        "function": "test_analyze_codebase_improvements_tool",
+        "complexity": 13
+      },
+      {
+        "file": "./tests/test_codebase_manager.py",
+        "function": "test_profile_code_performance_tool",
+        "complexity": 14
+      },
+      {
+        "file": "./scripts/generate_tools_reference.py",
+        "function": "parse_docstring_for_parameters",
+        "complexity": 25
+      },
+      {
+        "file": "./scripts/generate_tools_reference.py",
+        "function": "generate_tools_reference",
+        "complexity": 20
+      },
+      {
+        "file": "./codesage_mcp/codebase_manager.py",
+        "function": "search_codebase",
+        "complexity": 15
+      },
+      {
+        "file": "./codesage_mcp/codebase_manager.py",
+        "function": "find_duplicate_code",
+        "complexity": 17
+      },
+      {
+        "file": "./codesage_mcp/codebase_manager.py",
+        "function": "suggest_code_improvements",
+        "complexity": 17
+      },
+      {
+        "file": "./codesage_mcp/codebase_manager.py",
+        "function": "generate_unit_tests",
+        "complexity": 23
+      },
+      {
+        "file": "./codesage_mcp/codebase_manager.py",
+        "function": "auto_document_tool",
+        "complexity": 15
+      },
+      {
+        "file": "./codesage_mcp/llm_analysis.py",
+        "function": "profile_code_performance",
+        "complexity": 13
+      },
+      {
+        "file": "./codesage_mcp/llm_analysis.py",
+        "function": "suggest_code_improvements",
+        "complexity": 17
+      },
+      {
+        "file": "./codesage_mcp/llm_analysis.py",
+        "function": "generate_unit_tests",
+        "complexity": 23
+      },
+      {
+        "file": "./codesage_mcp/llm_analysis.py",
+        "function": "auto_document_tool",
+        "complexity": 16
+      },
+      {
+        "file": "./codesage_mcp/indexing.py",
+        "function": "index_codebase",
+        "complexity": 12
+      },
+      {
+        "file": "./codesage_mcp/searching.py",
+        "function": "SearchingManager",
+        "complexity": 11
+      },
+      {
+        "file": "./codesage_mcp/searching.py",
+        "function": "search_codebase",
+        "complexity": 15
+      },
+      {
+        "file": "./codesage_mcp/searching.py",
+        "function": "find_duplicate_code",
+        "complexity": 17
+      },
+      {
+        "file": "./codesage_mcp/tools.py",
+        "function": "summarize_code_section_tool",
+        "complexity": 18
+      },
+      {
+        "file": "./codesage_mcp/tools.py",
+        "function": "list_undocumented_functions_tool",
+        "complexity": 11
+      },
+      {
+        "file": "./codesage_mcp/tools.py",
+        "function": "get_dependencies_overview_tool",
+        "complexity": 30
+      },
+      {
+        "file": "./codesage_mcp/tools.py",
+        "function": "analyze_codebase_improvements_tool",
+        "complexity": 42
+      }
+    ],
+    "suggestions": [
+      "Address 2 TODO comments in the codebase",
+      "Document 11 functions missing docstrings",
+      "Refactor 5 large files (>500 lines)",
+      "Refactor 29 functions with high cyclomatic complexity (>10)",
+      "Consider using the 'find_duplicate_code' tool to identify duplicated code sections",
+      "Use the 'list_undocumented_functions' tool for detailed analysis of missing documentation"
+    ]
+  }
+}

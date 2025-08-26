@@ -1,0 +1,225 @@
+{
+  "message": "Dependency overview generated.",
+  "total_python_files_analyzed": 31,
+  "total_internal_dependencies": 9,
+  "total_stdlib_dependencies": 52,
+  "total_third_party_dependencies": 30,
+  "unique_stdlib_modules": [
+    "ast",
+    "cProfile",
+    "collections",
+    "fnmatch",
+    "importlib",
+    "inspect",
+    "io",
+    "json",
+    "logging",
+    "os",
+    "pathlib",
+    "pstats",
+    "re",
+    "shutil",
+    "sys",
+    "tempfile",
+    "textwrap",
+    "typing",
+    "unittest"
+  ],
+  "unique_third_party_modules": [
+    "config",
+    "faiss",
+    "fastapi",
+    "google",
+    "groq",
+    "indexing",
+    "llm_analysis",
+    "numpy",
+    "openai",
+    "pydantic",
+    "pytest",
+    "radon",
+    "requests",
+    "searching",
+    "sentence_transformers",
+    "stdlib_list"
+  ],
+  "installed_third_party_modules": [
+    "faiss",
+    "fastapi",
+    "google",
+    "groq",
+    "numpy",
+    "openai",
+    "pydantic",
+    "pytest",
+    "radon",
+    "requests",
+    "sentence_transformers",
+    "stdlib_list"
+  ],
+  "not_installed_third_party_modules": [
+    "config",
+    "indexing",
+    "llm_analysis",
+    "searching"
+  ],
+  "internal_dependencies_by_file": {
+    "tests/test_main.py": [
+      "codesage_mcp"
+    ],
+    "tests/test_suggest_code_improvements.py": [
+      "codesage_mcp"
+    ],
+    "tests/test_main_suggest_code_improvements.py": [
+      "codesage_mcp"
+    ],
+    "tests/test_codebase_manager.py": [
+      "codesage_mcp"
+    ],
+    "tests/test_generate_unit_tests.py": [
+      "codesage_mcp"
+    ],
+    "scripts/generate_tools_reference.py": [
+      "codesage_mcp"
+    ],
+    "codesage_mcp/codebase_manager.py": [
+      "codesage_mcp"
+    ],
+    "codesage_mcp/main.py": [
+      "codesage_mcp"
+    ],
+    "codesage_mcp/tools.py": [
+      "codesage_mcp"
+    ]
+  },
+  "stdlib_dependencies_by_file": {
+    "analyze_self.py": [
+      "json"
+    ],
+    "tests/test_main.py": [
+      "shutil",
+      "unittest"
+    ],
+    "tests/test_suggest_code_improvements.py": [
+      "os",
+      "tempfile",
+      "unittest"
+    ],
+    "tests/test_codebase_manager.py": [
+      "json",
+      "os",
+      "pathlib",
+      "shutil",
+      "tempfile",
+      "unittest"
+    ],
+    "tests/test_generate_unit_tests.py": [
+      "os",
+      "tempfile"
+    ],
+    "scripts/generate_tools_reference.py": [
+      "inspect",
+      "os",
+      "pathlib",
+      "sys",
+      "textwrap"
+    ],
+    "codesage_mcp/codebase_manager.py": [
+      "ast",
+      "fnmatch",
+      "inspect",
+      "os",
+      "pathlib",
+      "re",
+      "textwrap"
+    ],
+    "codesage_mcp/llm_analysis.py": [
+      "ast",
+      "cProfile",
+      "importlib",
+      "inspect",
+      "io",
+      "os",
+      "pathlib",
+      "pstats",
+      "tempfile",
+      "textwrap"
+    ],
+    "codesage_mcp/main.py": [
+      "json",
+      "logging",
+      "typing"
+    ],
+    "codesage_mcp/indexing.py": [
+      "fnmatch",
+      "json",
+      "os",
+      "pathlib"
+    ],
+    "codesage_mcp/searching.py": [
+      "ast",
+      "fnmatch",
+      "pathlib",
+      "re"
+    ],
+    "codesage_mcp/tools.py": [
+      "ast",
+      "collections",
+      "importlib",
+      "os",
+      "sys"
+    ]
+  },
+  "third_party_dependencies_by_file": {
+    "analyze_self.py": [
+      "requests"
+    ],
+    "tests/test_main.py": [
+      "fastapi",
+      "pytest"
+    ],
+    "tests/test_suggest_code_improvements.py": [
+      "google",
+      "groq",
+      "openai"
+    ],
+    "tests/test_main_suggest_code_improvements.py": [
+      "fastapi",
+      "pytest"
+    ],
+    "tests/test_codebase_manager.py": [
+      "pytest",
+      "sentence_transformers"
+    ],
+    "codesage_mcp/codebase_manager.py": [
+      "config",
+      "faiss",
+      "google",
+      "groq",
+      "indexing",
+      "llm_analysis",
+      "numpy",
+      "openai",
+      "searching",
+      "sentence_transformers"
+    ],
+    "codesage_mcp/main.py": [
+      "fastapi",
+      "pydantic"
+    ],
+    "codesage_mcp/indexing.py": [
+      "faiss",
+      "numpy",
+      "sentence_transformers"
+    ],
+    "codesage_mcp/searching.py": [
+      "faiss",
+      "numpy"
+    ],
+    "codesage_mcp/tools.py": [
+      "fastapi",
+      "radon",
+      "stdlib_list"
+    ]
+  }
+}

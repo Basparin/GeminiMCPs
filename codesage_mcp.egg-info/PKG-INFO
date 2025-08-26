@@ -1,0 +1,19 @@
+Metadata-Version: 2.4
+Name: codesage-mcp
+Version: 0.1.0
+Summary: CodeSage Model Context Protocol (MCP) Server
+Requires-Python: >=3.9
+Requires-Dist: fastapi
+Requires-Dist: uvicorn
+Requires-Dist: python-dotenv
+Requires-Dist: groq
+Requires-Dist: openai
+Requires-Dist: google-generativeai
+Requires-Dist: sentence-transformers
+Requires-Dist: faiss-cpu
+Requires-Dist: python-multipart
+Requires-Dist: radon
+Requires-Dist: stdlib-list
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: ruff; extra == "dev"

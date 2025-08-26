@@ -1,7 +1,5 @@
 import pytest
 from fastapi.testclient import TestClient
-import shutil
-from pathlib import Path
 
 from codesage_mcp.main import app
 
@@ -26,7 +24,7 @@ def hello_world():
 if __name__ == "__main__":
     hello_world()
 """)
-    
+
     # Test analyzing the entire file
     analysis_response = client.post(
         "/mcp",
@@ -37,12 +35,12 @@ if __name__ == "__main__":
                 "name": "suggest_code_improvements",
                 "arguments": {
                     "file_path": str(test_file_path),
-                }
+                },
             },
             "id": "suggest_code_improvements_test_1",
         },
     )
-    
+
     # Verify the response
     assert analysis_response.status_code == 200
     analysis_data = analysis_response.json()
@@ -50,13 +48,13 @@ if __name__ == "__main__":
     assert analysis_data["id"] == "suggest_code_improvements_test_1"
     assert "result" in analysis_data
     result = analysis_data["result"]
-    
+
     # Verify the result structure
     assert "message" in result
     assert "file_path" in result
     assert "suggestions" in result
     assert result["file_path"] == str(test_file_path)
-    
+
     # Check that we got suggestions (could be from LLMs or static analysis)
     assert isinstance(result["suggestions"], list)
 
@@ -80,7 +78,7 @@ def efficient_function():
 # Line 9
 # Line 10
 """)
-    
+
     # Test analyzing a specific line range
     analysis_response = client.post(
         "/mcp",
@@ -92,13 +90,13 @@ def efficient_function():
                 "arguments": {
                     "file_path": str(test_file_path),
                     "start_line": 3,
-                    "end_line": 8
-                }
+                    "end_line": 8,
+                },
             },
             "id": "suggest_code_improvements_test_2",
         },
     )
-    
+
     # Verify the response
     assert analysis_response.status_code == 200
     analysis_data = analysis_response.json()
@@ -106,7 +104,7 @@ def efficient_function():
     assert analysis_data["id"] == "suggest_code_improvements_test_2"
     assert "result" in analysis_data
     result = analysis_data["result"]
-    
+
     # Verify the result structure
     assert "message" in result
     assert "file_path" in result
@@ -116,7 +114,7 @@ def efficient_function():
     assert result["file_path"] == str(test_file_path)
     assert result["start_line"] == 3
     assert result["end_line"] == 8
-    
+
     # Check that we got suggestions
     assert isinstance(result["suggestions"], list)
 
@@ -133,12 +131,12 @@ def test_mcp_tool_call_suggest_code_improvements_error():
                 "name": "suggest_code_improvements",
                 "arguments": {
                     "file_path": "/test/nonexistent/file.py",
-                }
+                },
             },
             "id": "suggest_code_improvements_test_3",
         },
     )
-    
+
     # Verify the response
     assert analysis_response.status_code == 200
     analysis_data = analysis_response.json()
@@ -146,7 +144,7 @@ def test_mcp_tool_call_suggest_code_improvements_error():
     assert analysis_data["id"] == "suggest_code_improvements_test_3"
     assert "result" in analysis_data
     result = analysis_data["result"]
-    
+
     # Check that we get an error
     assert "error" in result
     assert result["error"]["code"] == "FILE_NOT_FOUND"

@@ -1,3 +1,21 @@
+"""Main Module for CodeSage MCP Server.
+
+This module defines the FastAPI application and handles JSON-RPC requests for the CodeSage MCP Server.
+It registers all available tools and provides endpoints for the Gemini CLI to interact with.
+
+The server exposes a set of tools to the Gemini CLI:
+- Codebase Indexing
+- File Reading
+- Code Search
+- File Structure Overview
+- LLM-Powered Code Summarization
+- Duplicate Code Detection
+- And many more...
+
+It also integrates with various Large Language Models (LLMs) like Groq, OpenRouter, and Google AI
+for specialized tasks like code analysis and summarization.
+"""
+
 import logging
 import json
 from typing import List, Dict, Any, Union, Optional
@@ -11,7 +29,7 @@ from codesage_mcp.tools import (
     semantic_search_codebase_tool,
     find_duplicate_code_tool,
     get_configuration_tool,
-    analyze_codebase_improvements_tool, # Import the new tool function
+    analyze_codebase_improvements_tool,  # Import the new tool function
     suggest_code_improvements_tool,  # Import the new code improvement tool
     summarize_code_section_tool,
     get_file_structure_tool,
@@ -23,6 +41,9 @@ from codesage_mcp.tools import (
     profile_code_performance_tool,  # Import the new profiling tool
     generate_unit_tests_tool,  # Import the new test generation tool
     auto_document_tool,  # Import the new auto documentation tool
+    resolve_todo_fixme_tool,  # Import the new TODO/FIXME resolution tool
+    parse_llm_response_tool,  # Import the new LLM response parsing tool
+    generate_llm_api_wrapper_tool,  # Import the new LLM API wrapper generation tool
 )
 
 # Configure logging
@@ -47,6 +68,22 @@ class JSONRPCResponse(BaseModel):
 
 
 def get_all_tools_definitions_as_object():
+    """
+    Returns a dictionary of all available tool definitions, keyed by tool name.
+
+    This function is used internally to provide tool metadata for the
+    `initialize` and `tools/list` JSON-RPC methods. It aggregates the
+    definitions of all registered tools into a single object for easy access.
+
+    Returns:
+        dict: A dictionary where keys are tool names (e.g., 'read_code_file')
+              and values are dictionaries containing the tool's metadata
+              (name, description, inputSchema, type).
+
+    Note:
+        The actual tool implementations are mapped separately in the
+        `TOOL_FUNCTIONS` dictionary.
+    """
     # Return tools as an object (dictionary) keyed by tool name
     return {
         "read_code_file": {
@@ -81,7 +118,7 @@ def get_all_tools_definitions_as_object():
                     "codebase_path": {"type": "string"},
                     "pattern": {"type": "string"},
                     "file_types": {"type": "array", "items": {"type": "string"}},
-                    "exclude_patterns": {"type": "array", "items": {"type": "string"}}
+                    "exclude_patterns": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["codebase_path", "pattern"],
             },
@@ -172,14 +209,17 @@ def get_all_tools_definitions_as_object():
                 "Counts lines of code (LOC) in the indexed codebase, "
                 "providing a summary by file type."
             ),
-            "inputSchema": {"type": "object", "properties": {}, "required": []},
+            "inputSchema": {
+                "type": "object",
+                "properties": {"codebase_path": {"type": "string"}},
+                "required": ["codebase_path"],
+            },
             "type": "function",
         },
         "configure_api_key": {
             "name": "configure_api_key",
             "description": (
-                "Configures API keys for LLMs (e.g., Groq, OpenRouter, "
-                "Google AI)."
+                "Configures API keys for LLMs (e.g., Groq, OpenRouter, Google AI)."
             ),
             "inputSchema": {
                 "type": "object",
@@ -198,7 +238,11 @@ def get_all_tools_definitions_as_object():
                 "import statements, providing a high-level overview of internal "
                 "and external dependencies."
             ),
-            "inputSchema": {"type": "object", "properties": {}, "required": []},
+            "inputSchema": {
+                "type": "object",
+                "properties": {"codebase_path": {"type": "string"}},
+                "required": ["codebase_path"],
+            },
             "type": "function",
         },
         "profile_code_performance": {
@@ -273,8 +317,8 @@ def get_all_tools_definitions_as_object():
             },
             "type": "function",
         },
-        "auto_document": {
-            "name": "auto_document",
+        "auto_document_tool": {
+            "name": "auto_document_tool",
             "description": (
                 "Automatically generates documentation for tools that lack detailed documentation. "
                 "Analyzes tool functions in the codebase, extracts their signatures and docstrings, "
@@ -286,6 +330,52 @@ def get_all_tools_definitions_as_object():
                     "tool_name": {"type": "string"},
                 },
                 "required": [],
+            },
+            "type": "function",
+        },
+        "resolve_todo_fixme": {
+            "name": "resolve_todo_fixme",
+            "description": (
+                "Analyzes a TODO/FIXME comment and suggests potential resolutions using LLMs."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "file_path": {"type": "string"},
+                    "line_number": {"type": "integer"},
+                },
+                "required": ["file_path"],
+            },
+            "type": "function",
+        },
+        "parse_llm_response": {
+            "name": "parse_llm_response",
+            "description": (
+                "Parses the content of an LLM response, extracting and validating JSON data."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "llm_response_content": {"type": "string"},
+                },
+                "required": ["llm_response_content"],
+            },
+            "type": "function",
+        },
+        "generate_llm_api_wrapper": {
+            "name": "generate_llm_api_wrapper",
+            "description": (
+                "Generates Python wrapper code for interacting with various LLM APIs."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "llm_provider": {"type": "string"},
+                    "model_name": {"type": "string"},
+                    "api_key_env_var": {"type": "string"},
+                    "output_file_path": {"type": "string"},
+                },
+                "required": ["llm_provider", "model_name"],
             },
             "type": "function",
         },
@@ -306,11 +396,14 @@ TOOL_FUNCTIONS = {
     "configure_api_key": configure_api_key_tool,
     "get_dependencies_overview": get_dependencies_overview_tool,
     "get_configuration": get_configuration_tool,
-    "analyze_codebase_improvements": analyze_codebase_improvements_tool, # Register the new tool
+    "analyze_codebase_improvements": analyze_codebase_improvements_tool,  # Register the new tool
     "suggest_code_improvements": suggest_code_improvements_tool,  # Register the new code improvement tool
     "generate_unit_tests": generate_unit_tests_tool,  # Register the new test generation tool
-    "auto_document": auto_document_tool,  # Register the new auto documentation tool
-    "profile_code_performance": profile_code_performance_tool, # Register the new profiling tool
+    "auto_document_tool": auto_document_tool,  # Register the new auto documentation tool
+    "profile_code_performance": profile_code_performance_tool,  # Register the new profiling tool
+    "resolve_todo_fixme": resolve_todo_fixme_tool,  # Register the new TODO/FIXME resolution tool
+    "parse_llm_response": parse_llm_response_tool,  # Register the new LLM response parsing tool
+    "generate_llm_api_wrapper": generate_llm_api_wrapper_tool,  # Register the new LLM API wrapper generation tool
 }
 
 
