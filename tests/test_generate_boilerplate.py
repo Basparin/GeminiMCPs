@@ -10,7 +10,7 @@ def test_generate_boilerplate_file_header():
     # Check the structure of the result
     assert "boilerplate" in result
     assert "Brief description of the module" in result["boilerplate"]
-    assert "TODO: Add module-level imports here" in result["boilerplate"]
+    assert "import logging" in result["boilerplate"]
 
 
 def test_generate_boilerplate_module():
@@ -34,7 +34,7 @@ def test_generate_boilerplate_tool():
     # Check the structure of the result
     assert "boilerplate" in result
     assert "def test_tool(param1: str = None) -> dict:" in result["boilerplate"]
-    assert "TODO: Implement tool logic here" in result["boilerplate"]
+    assert "Process the input parameters" in result["boilerplate"]
 
 
 def test_generate_boilerplate_test():
@@ -69,7 +69,7 @@ def test_generate_boilerplate_function():
     # Check the structure of the result
     assert "boilerplate" in result
     assert "def test_function(param1: str = None) -> str:" in result["boilerplate"]
-    assert "TODO: Implement function logic" in result["boilerplate"]
+    assert "Do something with param1" in result["boilerplate"]
 
 
 def test_generate_boilerplate_invalid_type():
@@ -100,7 +100,7 @@ def test_generate_boilerplate_save_to_file():
         with open(temp_file_path, "r", encoding="utf-8") as f:
             content = f.read()
             assert "Brief description of the module" in content
-            assert "TODO: Add module-level imports here" in content
+            assert "import logging" in content
 
     finally:
         # Clean up the temporary file

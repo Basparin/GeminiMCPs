@@ -1067,7 +1067,10 @@ def generate_boilerplate_tool(
                 [Additional information about the module's purpose and functionality]
                 """
 
-                # TODO: Add module-level imports here
+                import logging
+                from typing import Optional, Dict, Any
+
+                logger = logging.getLogger(__name__)
             ''').strip()
 
         elif boilerplate_type == "module":
@@ -1081,10 +1084,20 @@ def generate_boilerplate_tool(
                 """
 
                 import logging
+                from typing import Optional, Dict, Any
 
                 logger = logging.getLogger(__name__)
 
-                # TODO: Add module implementation here
+
+                def main():
+                    """Main function for the module."""
+                    logger.info("{formatted_module_name} initialized")
+                    # Add your module logic here
+                    pass
+
+
+                if __name__ == "__main__":
+                    main()
             ''').strip()
 
         elif boilerplate_type == "tool":
@@ -1106,16 +1119,21 @@ def FUNCTION_NAME_PLACEHOLDER(param1: str = None) -> dict:
         [Exception]: [Description of when this exception might be raised].
     """
     try:
-        # TODO: Implement tool logic here
-        result = {"message": "Tool executed successfully"}
+        # Process the input parameters
+        if param1:
+            # Do something with param1
+            result_message = f"Processed parameter: {param1}"
+        else:
+            result_message = "Tool executed with default parameters"
+
+        result = {"message": result_message}
         return result
     except Exception as e:
-        # Log the error (assuming logger is available from the module)
-        # logger.error(f"Error in FUNCTION_NAME_PLACEHOLDER: {e}")
+        logger.error(f"Error in FUNCTION_NAME_PLACEHOLDER: {e}")
         return {
             "error": {
-                "code": "TOOL_ERROR",
-                "message": f"An error occurred in FUNCTION_NAME_PLACEHOLDER: {e}"
+                "code": "TOOL_EXECUTION_ERROR",
+                "message": f"An error occurred during tool execution: {e}"
             }
         }
 '''
@@ -1137,13 +1155,16 @@ def FUNCTION_NAME_PLACEHOLDER(param1: str = None) -> dict:
 
                 def test_{module_name}():
                     """Test the {module_name} functionality."""
-                    # TODO: Add test implementation
-                    # Example test structure:
-                    # result = {module_name}_tool(param1="test_value")
-                    # assert "message" in result
-                    # assert result["message"] == "Expected message"
-                    pass
+                    # Example test implementation:
+                    result = {module_name}_tool(param1="test_value")
+                    assert "message" in result
+                    assert "processed" in result["message"].lower()
 
+                def test_{module_name}_with_default_params():
+                    """Test the {module_name} functionality with default parameters."""
+                    result = {module_name}_tool()
+                    assert "message" in result
+                    assert "default" in result["message"].lower()
 
                 # Additional test functions can be added here
             ''').strip()
@@ -1177,13 +1198,21 @@ def FUNCTION_NAME_PLACEHOLDER(param1: str = None) -> dict:
                         Returns:
                             str: [Description of what the method returns].
                         """
-                        # TODO: Implement method logic
-                        return "Example result"
+                        try:
+                            if self.param1:
+                                # Do something with self.param1
+                                result = "Processed: " + str(self.param1)
+                            else:
+                                result = "Method executed with default state"
+                            return result
+                        except Exception as e:
+                            logger.error("Error in example_method: " + str(e))
+                            raise
             ''').strip()
 
         elif boilerplate_type == "function":
             function_name = function_name or "new_function"
-            boilerplate = textwrap.dedent(f'''\
+            boilerplate = textwrap.dedent(f'''
                 def {function_name}(param1: str = None) -> str:
                     """
                     [Brief description of what the function does].
@@ -1199,8 +1228,15 @@ def FUNCTION_NAME_PLACEHOLDER(param1: str = None) -> dict:
                     Raises:
                         [Exception]: [Description of when this exception might be raised].
                     """
-                    # TODO: Implement function logic
-                    return "Example result"
+                    try:
+                        if param1:
+                            # Do something with param1
+                            result = "Processed: " + str(param1)
+                        else:
+                            result = "Function executed with default parameters"
+                        return result
+                    except Exception as e:
+                        raise Exception("An error occurred in " + function_name + ": " + str(e))
             ''').strip()
 
         else:
