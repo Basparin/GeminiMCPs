@@ -48,94 +48,27 @@ class LLMAnalysisManager:
         self.openrouter_client = openrouter_client
         self.google_ai_client = google_ai_client
 
-    def _summarize_with_groq(self, code_snippet: str, llm_model: str) -> str:
+    def _summarize_with_llm(self, code_snippet: str, llm_model: str) -> str:
         """
-        Resume un fragmento de código usando la API de Groq.
+        Unified method to summarize a code snippet using any supported LLM provider.
 
         Args:
-            code_snippet (str): El fragmento de código a resumir.
-            llm_model (str): El modelo LLM de Groq a usar para el resumen.
+            code_snippet (str): The code snippet to summarize.
+            llm_model (str): The LLM model to use for summarization.
 
         Returns:
-            str: El resumen del fragmento de código o un mensaje de error si falla.
+            str: The summary of the code snippet or an error message if it fails.
         """
-        if not self.groq_client:
-            return "Error: GROQ_API_KEY not configured."
-        try:
-            chat_completion = self.groq_client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a helpful assistant that summarizes code.",
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Please summarize the following code snippet:\n\n"
-                        f"```\n{code_snippet}```",
-                    },
-                ],
-                model=llm_model,
-            )
-            return chat_completion.choices[0].message.content
-        except Exception as e:
-            return f"Error during summarization: {e}"
+        prompt = (
+            "You are a helpful assistant that summarizes code.\n\n"
+            "Please summarize the following code snippet:\n\n"
+            f"```\n{code_snippet}```"
+        )
 
-    def _summarize_with_openrouter(self, code_snippet: str, llm_model: str) -> str:
-        """
-        Resume un fragmento de código usando la API de OpenRouter.
-
-        Args:
-            code_snippet (str): El fragmento de código a resumir.
-            llm_model (str): El modelo LLM de OpenRouter a usar para el resumen.
-
-        Returns:
-            str: El resumen del fragmento de código o un mensaje de error si falla.
-        """
-        if not self.openrouter_client:
-            return "Error: OPENROUTER_API_KEY not configured."
-        try:
-            chat_completion = self.openrouter_client.chat.completions.create(
-                model=llm_model.replace("openrouter/", "", 1),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a helpful assistant that summarizes code.",
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Please summarize the following code snippet:\n\n"
-                        f"```\n{code_snippet}```",
-                    },
-                ],
-            )
-            return chat_completion.choices[0].message.content
-        except Exception as e:
-            return f"Error during summarization: {e}"
-
-    def _summarize_with_google_ai(self, code_snippet: str, llm_model: str) -> str:
-        """
-        Resume un fragmento de código usando la API de Google AI.
-
-        Args:
-            code_snippet (str): El fragmento de código a resumir.
-            llm_model (str): El modelo LLM de Google AI a usar para el resumen.
-
-        Returns:
-            str: El resumen del fragmento de código o un mensaje de error si falla.
-        """
-        if not self.google_ai_client:
-            return "Error: GOOGLE_API_KEY not configured."
-        try:
-            model = self.google_ai_client.GenerativeModel(
-                llm_model.replace("google/", "", 1)
-            )
-            response = model.generate_content(
-                "Please summarize the following code snippet:\n\n"
-                f"```\n{code_snippet}```"
-            )
-            return response.text
-        except Exception as e:
-            return f"Error during summarization: {e}"
+        response_content, error_message = self._get_llm_response(prompt, llm_model)
+        if error_message:
+            return f"Error during summarization: {error_message}"
+        return response_content
 
     def summarize_code_section(
         self,
@@ -174,14 +107,8 @@ class LLMAnalysisManager:
 
         code_snippet = "".join(lines)
 
-        if llm_model.startswith("openrouter/"):
-            return self._summarize_with_openrouter(code_snippet, llm_model)
-        elif llm_model.startswith("llama3") or llm_model.startswith("mixtral"):
-            return self._summarize_with_groq(code_snippet, llm_model)
-        elif llm_model.startswith("google/"):
-            return self._summarize_with_google_ai(code_snippet, llm_model)
-        else:
-            return f"LLM model '{llm_model}' not supported yet."
+        # Use the unified LLM summarization method
+        return self._summarize_with_llm(code_snippet, llm_model)
 
     def _get_llm_response(self, prompt: str, llm_model: str) -> tuple[str, str]:
         """Helper to get LLM response from various providers."""
@@ -204,7 +131,9 @@ class LLMAnalysisManager:
                 )
                 return chat_completion.choices[0].message.content, None
             except Exception as e:
-                return None, f"Error during LLM call: {e}"
+                return None, self._handle_llm_error(e, "Google AI LLM call")["error"][
+                    "message"
+                ]
         elif llm_model.startswith("llama3") or llm_model.startswith("mixtral"):
             if not self.groq_client:
                 return None, "Error: GROQ_API_KEY not configured."
@@ -224,7 +153,9 @@ class LLMAnalysisManager:
                 )
                 return chat_completion.choices[0].message.content, None
             except Exception as e:
-                return None, f"Error during LLM call: {e}"
+                return None, self._handle_llm_error(e, "Groq LLM call")["error"][
+                    "message"
+                ]
         elif llm_model.startswith("google/"):
             if not self.google_ai_client:
                 return None, "Error: GOOGLE_API_KEY not configured."
@@ -232,9 +163,440 @@ class LLMAnalysisManager:
                 response = self.google_ai_client.generate_content(prompt)
                 return response.text, None
             except Exception as e:
-                return None, f"Error during LLM call: {e}"
+                return None, self._handle_llm_error(e, "OpenRouter LLM call")["error"][
+                    "message"
+                ]
         else:
             return None, f"LLM model '{llm_model}' not supported yet."
+
+    def _get_llm_suggestions(
+        self, prompt: str, system_message: str = "You are a helpful assistant."
+    ) -> list[dict]:
+        """
+        Get suggestions from multiple LLM providers.
+
+        Args:
+            prompt (str): The prompt to send to the LLMs.
+            system_message (str): The system message for the LLMs.
+
+        Returns:
+            list[dict]: List of suggestions from available LLM providers.
+        """
+        suggestions = []
+
+        # Try Groq first
+        if self.groq_client:
+            try:
+                chat_completion = self.groq_client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": prompt},
+                    ],
+                    model="llama3-8b-8192",
+                    temperature=0.1,
+                    max_tokens=2048,
+                )
+                suggestions.append(
+                    {
+                        "provider": "Groq (Llama3)",
+                        "suggestions": chat_completion.choices[0].message.content,
+                    }
+                )
+            except Exception as e:
+                suggestions.append(
+                    {
+                        "provider": "Groq (Llama3)",
+                        "error": self._handle_llm_error(e, "Groq LLM suggestions")[
+                            "error"
+                        ]["message"],
+                    }
+                )
+
+        # Try OpenRouter
+        if self.openrouter_client:
+            try:
+                chat_completion = self.openrouter_client.chat.completions.create(
+                    model="openrouter/google/gemini-pro",
+                    messages=[
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.1,
+                    max_tokens=2048,
+                )
+                suggestions.append(
+                    {
+                        "provider": "OpenRouter (Gemini)",
+                        "suggestions": chat_completion.choices[0].message.content,
+                    }
+                )
+            except Exception as e:
+                suggestions.append(
+                    {
+                        "provider": "OpenRouter (Gemini)",
+                        "error": self._handle_llm_error(
+                            e, "OpenRouter LLM suggestions"
+                        )["error"]["message"],
+                    }
+                )
+
+        # Try Google AI
+        if self.google_ai_client:
+            try:
+                model = self.google_ai_client.GenerativeModel("gemini-pro")
+                response = model.generate_content(
+                    prompt,
+                    generation_config=self.google_ai_client.types.GenerationConfig(
+                        temperature=0.1, max_output_tokens=2048
+                    ),
+                )
+                suggestions.append(
+                    {"provider": "Google AI (Gemini)", "suggestions": response.text}
+                )
+            except Exception as e:
+                suggestions.append(
+                    {
+                        "provider": "Google AI (Gemini)",
+                        "error": self._handle_llm_error(e, "Google AI LLM suggestions")[
+                            "error"
+                        ]["message"],
+                    }
+                )
+
+        # If no LLM providers are configured, provide a basic static analysis
+        if not suggestions:
+            suggestions.append(
+                {
+                    "provider": "Static Analysis",
+                    "suggestions": "No LLM providers configured. Please configure API keys for Groq, OpenRouter, or Google AI to get detailed suggestions.",
+                }
+            )
+
+        return suggestions
+
+    def _validate_and_normalize_line_numbers(
+        self, start_line: int, end_line: int, total_lines: int
+    ) -> tuple[int, int]:
+        """
+        Validate and normalize line numbers for code analysis.
+
+        Args:
+            start_line (int): The starting line number.
+            end_line (int): The ending line number.
+            total_lines (int): The total number of lines in the file.
+
+        Returns:
+            tuple[int, int]: A tuple of (start_line, end_line) after validation and normalization.
+
+        Raises:
+            ValueError: If the line numbers are invalid.
+        """
+        if start_line is None:
+            start_line = 1
+        if end_line is None:
+            end_line = total_lines
+
+        # Validate line numbers
+        if start_line < 1:
+            start_line = 1
+        if end_line > total_lines:
+            end_line = total_lines
+        if start_line > end_line:
+            raise ValueError("Start line must be less than or equal to end line.")
+
+        return start_line, end_line
+
+    def _extract_code_snippet(
+        self, lines: list[str], start_line: int, end_line: int
+    ) -> str:
+        """
+        Extract a code snippet from the given lines.
+
+        Args:
+            lines (list[str]): The lines of the file.
+            start_line (int): The starting line number (1-based).
+            end_line (int): The ending line number (1-based).
+
+        Returns:
+            str: The extracted code snippet.
+        """
+        return "".join(lines[start_line - 1 : end_line])
+
+    def _parse_functions_from_content(
+        self, content: str, function_name: str = None
+    ) -> list[ast.FunctionDef]:
+        """
+        Parse functions from Python file content.
+
+        Args:
+            content (str): The file content.
+            function_name (str, optional): Specific function name to find.
+
+        Returns:
+            list[ast.FunctionDef]: List of function nodes.
+
+        Raises:
+            ValueError: If no functions found or specific function not found.
+        """
+        tree = ast.parse(content)
+        functions_to_test = []
+
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef):
+                if function_name is None or node.name == function_name:
+                    functions_to_test.append(node)
+
+        if not functions_to_test:
+            if function_name:
+                raise ValueError(f"Function '{function_name}' not found in file")
+            else:
+                raise ValueError("No functions found in file")
+
+        return functions_to_test
+
+    def _parse_functions_from_file(
+        self, file_path: str, function_name: str = None
+    ) -> list[dict]:
+        """
+        Parse functions from Python file using AST and return structured information.
+
+        Args:
+            file_path (str): Path to the Python file.
+            function_name (str, optional): Specific function name to find.
+
+        Returns:
+            list[dict]: List of function information dictionaries.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+            ValueError: If no functions found or specific function not found.
+        """
+        content = self._read_file_content(file_path)
+        func_nodes = self._parse_functions_from_content(content, function_name)
+
+        functions = []
+        lines = content.splitlines()
+
+        for func_node in func_nodes:
+            func_name = func_node.name
+            args = [arg.arg for arg in func_node.args.args]
+
+            # Try to infer return type from annotation
+            return_type = None
+            if func_node.returns:
+                return_type = ast.unparse(func_node.returns)
+
+            # Try to extract docstring
+            docstring = ast.get_docstring(func_node)
+
+            # Extract function source code
+            func_start = func_node.lineno - 1
+            func_end = func_node.end_lineno
+            func_lines = lines[func_start:func_end]
+            source = "\n".join(func_lines)
+
+            functions.append(
+                {
+                    "function_name": func_name,
+                    "args": args,
+                    "return_type": return_type,
+                    "docstring": docstring,
+                    "source": source,
+                }
+            )
+
+        return functions
+
+    def _generate_test_template(self, func_node: ast.FunctionDef) -> dict:
+        """
+        Generate a test template for a function.
+
+        Args:
+            func_node (ast.FunctionDef): The function AST node.
+
+        Returns:
+            dict: Test template information.
+        """
+        func_name = func_node.name
+        args = [arg.arg for arg in func_node.args.args]
+
+        # Try to infer return type from annotation
+        return_type = None
+        if func_node.returns:
+            return_type = ast.unparse(func_node.returns)
+
+        # Try to extract docstring
+        docstring = ast.get_docstring(func_node)
+
+        # Generate a basic test template
+        test_template = textwrap.dedent(f'''
+            def test_{func_name}():
+                """Test the {func_name} function."""
+                # TODO: Add actual test implementation
+                # Function signature: {func_name}({", ".join(args)})
+                # Return type: {return_type or "Unknown"}
+                # Docstring: {docstring or "None"}
+
+                # Test with typical inputs
+                # result = {func_name}(...)
+                # assert result == expected_value
+
+                # Test edge cases
+                # ...
+
+                # Test error conditions
+                # ...
+
+                pass
+        ''').strip()
+
+        return {
+            "function_name": func_name,
+            "test_code": test_template,
+            "arguments": args,
+            "return_type": return_type,
+            "docstring": docstring,
+        }
+
+    def _generate_basic_test_templates(self, functions: list[dict]) -> list[dict]:
+        """
+        Generate basic test templates for a list of functions.
+
+        Args:
+            functions (list[dict]): List of function information dictionaries.
+
+        Returns:
+            list[dict]: List of test template dictionaries.
+        """
+        test_templates = []
+        for func_info in functions:
+            func_name = func_info["function_name"]
+            args = func_info["args"]
+            return_type = func_info["return_type"]
+            docstring = func_info["docstring"]
+
+            # Generate a basic test template
+            test_template = textwrap.dedent(f'''
+                def test_{func_name}():
+                    """Test the {func_name} function."""
+                    # TODO: Add actual test implementation
+                    # Function signature: {func_name}({", ".join(args)})
+                    # Return type: {return_type or "Unknown"}
+                    # Docstring: {docstring or "None"}
+
+                    # Test with typical inputs
+                    # result = {func_name}(...)
+                    # assert result == expected_value
+
+                    # Test edge cases
+                    # ...
+
+                    # Test error conditions
+                    # ...
+
+                    pass
+            ''').strip()
+
+            test_templates.append(
+                {
+                    "function_name": func_name,
+                    "test_code": test_template,
+                    "arguments": args,
+                    "return_type": return_type,
+                    "docstring": docstring,
+                }
+            )
+
+        return test_templates
+
+    def _extract_function_source(self, file_path: str, function_name: str) -> str:
+        """
+        Extract the source code of a specific function from a file.
+
+        Args:
+            file_path (str): Path to the Python file.
+            function_name (str): Name of the function to extract.
+
+        Returns:
+            str: The source code of the function.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+            ValueError: If the function is not found.
+        """
+        content = self._read_file_content(file_path)
+        func_nodes = self._parse_functions_from_content(content, function_name)
+
+        if not func_nodes:
+            raise ValueError(f"Function '{function_name}' not found in {file_path}")
+
+        func_node = func_nodes[0]  # Should be only one if function_name specified
+        lines = content.splitlines()
+        func_start = func_node.lineno - 1
+        func_end = func_node.end_lineno
+        func_lines = lines[func_start:func_end]
+        return "\n".join(func_lines)
+
+    def _prepare_unit_test_prompt(self, code_snippet: str, file_path: str) -> str:
+        """
+        Prepare the prompt for unit test generation using LLM.
+
+        Args:
+            code_snippet (str): The source code of the functions.
+            file_path (str): Path to the file containing the functions.
+
+        Returns:
+            str: The prepared prompt for LLM analysis.
+        """
+        template = """
+            Please generate comprehensive unit tests for the following Python function(s).
+            Focus on:
+            1. Testing typical use cases
+            2. Testing edge cases and boundary conditions
+            3. Testing error conditions and exceptions
+            4. Following pytest conventions
+            5. Including descriptive test names and docstrings
+
+            Functions from file '{file_path}':
+            ```python
+            {code_snippet}
+            ```
+
+            Please provide the test code in a format ready to be added to a pytest test file.
+        """
+        return self._build_user_prompt(
+            template, file_path=file_path, code_snippet=code_snippet
+        )
+
+    def _collect_unit_test_suggestions(self, prompt: str) -> list[dict]:
+        """
+        Collect unit test suggestions from multiple LLM providers.
+
+        Args:
+            prompt (str): The prompt for unit test generation.
+
+        Returns:
+            list[dict]: List of suggestions from LLM providers.
+        """
+        providers = [
+            "llama3-8b-8192",
+            "openrouter/google/gemini-pro",
+            "google/gemini-pro",
+        ]
+        responses = self._collect_llm_responses(prompt, providers)
+
+        # Map "response" to "suggestions" for compatibility
+        suggestions = []
+        for resp in responses:
+            if "response" in resp:
+                suggestions.append(
+                    {"provider": resp["provider"], "suggestions": resp["response"]}
+                )
+            elif "error" in resp:
+                suggestions.append(
+                    {"provider": resp["provider"], "error": resp["error"]}
+                )
+        return suggestions
 
     def profile_code_performance(
         self, file_path: str, function_name: str = None
@@ -362,14 +724,194 @@ class LLMAnalysisManager:
                 if os.path.exists(temp_file_path):
                     os.unlink(temp_file_path)
         except Exception as e:
+            error_info = self._handle_llm_error(e, "Performance profiling")["error"]
             return {
                 "error": {
                     "code": "PROFILING_ERROR",
-                    "message": (
-                        f"An error occurred during performance profiling: {str(e)}"
-                    ),
+                    "message": error_info["message"],
                 }
             }
+
+    def _read_file_content(
+        self, file_path: str, as_lines: bool = False
+    ) -> str | list[str]:
+        """
+        Read file content and validate existence.
+
+        Args:
+            file_path (str): Path to the file to read.
+            as_lines (bool): If True, return list of lines; otherwise, return as string.
+
+        Returns:
+            str | list[str]: File content as string or list of lines.
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+        """
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            if as_lines:
+                return f.readlines()
+            return f.read()
+
+    def _collect_llm_responses(self, prompt: str, providers: list[str]) -> list[dict]:
+        """
+        Collect responses from multiple LLM providers.
+
+        Args:
+            prompt (str): The prompt to send to the LLMs.
+            providers (list[str]): List of LLM model identifiers.
+
+        Returns:
+            list[dict]: List of responses from available providers.
+        """
+        responses = []
+        for provider in providers:
+            response_content, error_message = self._get_llm_response(prompt, provider)
+            if error_message:
+                responses.append({"provider": provider, "error": error_message})
+            else:
+                responses.append({"provider": provider, "response": response_content})
+        return responses
+
+    def _create_error_response(self, error_code: str, message: str) -> dict:
+        """
+        Create a standardized error response.
+
+        Args:
+            error_code (str): The error code.
+            message (str): The error message.
+
+        Returns:
+            dict: Standardized error response.
+        """
+        return {
+            "error": {
+                "code": error_code,
+                "message": message,
+            }
+        }
+
+    def _handle_llm_error(self, exception: Exception, context: str = "") -> dict:
+        """Standardized LLM error handling.
+
+        Args:
+            exception: The caught exception
+            context: Additional context about where the error occurred
+
+        Returns:
+            dict: Standardized error response
+        """
+        return {
+            "error": {
+                "code": "LLM_ERROR",
+                "message": f"{context}: {str(exception)}"
+                if context
+                else str(exception),
+                "type": type(exception).__name__,
+            }
+        }
+
+    def _build_system_prompt(
+        self, role_description: str = "You are a helpful assistant."
+    ) -> str:
+        """Standardized system prompt builder.
+
+        Args:
+            role_description: Description of the assistant's role
+
+        Returns:
+            str: Formatted system prompt
+        """
+        return role_description
+
+    def _build_user_prompt(self, template: str, **kwargs) -> str:
+        """Standardized user prompt builder with dedenting.
+
+        Args:
+            template: Multi-line template string
+            **kwargs: Variables to interpolate
+
+        Returns:
+            str: Formatted and dedented user prompt
+        """
+        return textwrap.dedent(template).strip().format(**kwargs)
+
+    def _validate_file_and_lines(
+        self, file_path: str, start_line: int, end_line: int
+    ) -> tuple[list[str], int, int]:
+        """
+        Validate file existence and normalize line numbers.
+
+        Args:
+            file_path (str): Path to the file.
+            start_line (int): Starting line number.
+            end_line (int): Ending line number.
+
+        Returns:
+            tuple[list[str], int, int]: Tuple of (lines, normalized_start_line, normalized_end_line).
+
+        Raises:
+            FileNotFoundError: If the file does not exist.
+        """
+        lines = self._read_file_content(file_path, as_lines=True)
+        start_line, end_line = self._validate_and_normalize_line_numbers(
+            start_line, end_line, len(lines)
+        )
+        return lines, start_line, end_line
+
+    def _prepare_improvement_prompt(self, code_snippet: str, file_path: str) -> str:
+        """
+        Prepare the prompt for code improvement analysis, including file path context.
+
+        Args:
+            code_snippet (str): The code snippet to analyze.
+            file_path (str): The file path for context.
+
+        Returns:
+            str: The prepared prompt for LLM analysis.
+        """
+        template = """
+            Please analyze the following Python code snippet from file '{file_path}' and suggest
+            improvements.
+            Focus on:
+            1. Code readability and maintainability
+            2. Performance optimizations
+            3. Python best practices
+            4. Potential bugs or issues
+
+            For each suggestion, provide:
+            - A clear description of the issue
+            - An explanation of why it's a problem
+            - A specific recommendation for improvement
+            - An example of the improved code if applicable
+
+            Code snippet:
+            ```python
+            {code_snippet}
+            ```
+
+            Please format your response as a clear, structured list of suggestions.
+        """
+        return self._build_user_prompt(
+            template, file_path=file_path, code_snippet=code_snippet
+        )
+
+    def _collect_improvement_suggestions(self, prompt: str) -> list[dict]:
+        """
+        Collect improvement suggestions from multiple LLM providers.
+
+        Args:
+            prompt (str): The prompt for improvement analysis.
+
+        Returns:
+            list[dict]: List of suggestions from LLM providers.
+        """
+        return self._get_llm_suggestions(
+            prompt, "You are a helpful assistant that suggests code improvements."
+        )
 
     def suggest_code_improvements(
         self, file_path: str, start_line: int = None, end_line: int = None
@@ -396,149 +938,19 @@ class LLMAnalysisManager:
             raise FileNotFoundError(f"File not found: {file_path}")
 
         try:
-            # Read the file content
-            with open(file_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
-
-            # Determine the range of lines to analyze
-            if start_line is None:
-                start_line = 1
-            if end_line is None:
-                end_line = len(lines)
-
-            # Validate line numbers
-            if start_line < 1:
-                start_line = 1
-            if end_line > len(lines):
-                end_line = len(lines)
-            if start_line > end_line:
-                return {
-                    "error": {
-                        "code": "INVALID_INPUT",
-                        "message": "Start line must be less than or equal to end line.",
-                    }
-                }
+            # Validate file and normalize lines
+            lines, start_line, end_line = self._validate_file_and_lines(
+                file_path, start_line, end_line
+            )
 
             # Extract the code snippet
-            code_snippet = "".join(lines[start_line - 1 : end_line])
+            code_snippet = self._extract_code_snippet(lines, start_line, end_line)
 
             # Prepare the prompt for LLM analysis
-            prompt = textwrap.dedent(f"""
-                Please analyze the following Python code snippet and suggest
-improvements.
-                Focus on:
-                1. Code readability and maintainability
-                2. Performance optimizations
-                3. Python best practices
-                4. Potential bugs or issues
+            prompt = self._prepare_improvement_prompt(code_snippet, file_path)
 
-                For each suggestion, provide:
-                - A clear description of the issue
-                - An explanation of why it's a problem
-                - A specific recommendation for improvement
-                - An example of the improved code if applicable
-
-                Code snippet:
-                ```python
-                {code_snippet}
-                ```
-
-                Please format your response as a clear, structured list of suggestions.
-            """).strip()
-
-            # Try to get suggestions from different LLM providers
-            suggestions = []
-
-            # Try Groq first
-            if self.groq_client:
-                try:
-                    chat_completion = self.groq_client.chat.completions.create(
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": "You are a helpful assistant that suggests code improvements.",
-                            },
-                            {"role": "user", "content": prompt},
-                        ],
-                        model="llama3-8b-8192",
-                        temperature=0.1,
-                        max_tokens=2048,
-                    )
-                    groq_suggestion = chat_completion.choices[0].message.content
-                    suggestions.append(
-                        {"provider": "Groq (Llama3)", "suggestions": groq_suggestion}
-                    )
-                except Exception as e:
-                    suggestions.append(
-                        {
-                            "provider": "Groq (Llama3)",
-                            "error": f"Failed to get suggestions from Groq: {str(e)}",
-                        }
-                    )
-
-            # Try OpenRouter
-            if self.openrouter_client:
-                try:
-                    chat_completion = self.openrouter_client.chat.completions.create(
-                        model="openrouter/google/gemini-pro",
-                        messages=[
-                            {
-                                "role": "system",
-                                "content": "You are a helpful assistant that suggests code improvements.",
-                            },
-                            {"role": "user", "content": prompt},
-                        ],
-                        temperature=0.1,
-                        max_tokens=2048,
-                    )
-                    openrouter_suggestion = chat_completion.choices[0].message.content
-                    suggestions.append(
-                        {
-                            "provider": "OpenRouter (Gemini)",
-                            "suggestions": openrouter_suggestion,
-                        }
-                    )
-                except Exception as e:
-                    suggestions.append(
-                        {
-                            "provider": "OpenRouter (Gemini)",
-                            "error": f"Failed to get suggestions from OpenRouter: {str(e)}",
-                        }
-                    )
-
-            # Try Google AI
-            if self.google_ai_client:
-                try:
-                    model = self.google_ai_client.GenerativeModel("gemini-pro")
-                    response = model.generate_content(
-                        prompt,
-                        generation_config=self.google_ai_client.types.GenerationConfig(
-                            temperature=0.1, max_output_tokens=2048
-                        ),
-                    )
-                    google_suggestion = response.text
-                    suggestions.append(
-                        {
-                            "provider": "Google AI (Gemini)",
-                            "suggestions": google_suggestion,
-                        }
-                    )
-                except Exception as e:
-                    suggestions.append(
-                        {
-                            "provider": "Google AI (Gemini)",
-                            "error": f"Failed to get suggestions from Google AI: {str(e)}",
-                        }
-                    )
-
-            # If no LLM providers are configured, provide a basic static analysis
-            if not suggestions:
-                suggestions.append(
-                    {
-                        "provider": "Static Analysis",
-                        "suggestions": "No LLM providers configured. Please configure API keys for Groq, OpenRouter, or Google AI to get detailed suggestions.",
-                    }
-                )
+            # Collect improvement suggestions
+            suggestions = self._collect_improvement_suggestions(prompt)
 
             return {
                 "message": f"Code improvements analysis completed for {file_path}"
@@ -554,12 +966,9 @@ improvements.
             }
 
         except Exception as e:
-            return {
-                "error": {
-                    "code": "ANALYSIS_ERROR",
-                    "message": f"An error occurred during code analysis: {str(e)}",
-                }
-            }
+            return self._create_error_response(
+                "ANALYSIS_ERROR", f"An error occurred during code analysis: {str(e)}"
+            )
 
     def generate_unit_tests(self, file_path: str, function_name: str = None) -> dict:
         """
@@ -580,151 +989,24 @@ improvements.
             raise FileNotFoundError(f"File not found: {file_path}")
 
         try:
-            # Read the file content
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            # Parse functions from the file
+            functions = self._parse_functions_from_file(file_path, function_name)
 
-            # Parse the file to find functions
-            tree = ast.parse(content)
-
-            # Find all functions or the specific function
-            functions_to_test = []
-            for node in ast.walk(tree):
-                if isinstance(node, ast.FunctionDef):
-                    if function_name is None or node.name == function_name:
-                        functions_to_test.append(node)
-
-            if not functions_to_test:
-                if function_name:
-                    raise ValueError(
-                        f"Function '{function_name}' not found in {file_path}"
-                    )
-                else:
-                    raise ValueError(f"No functions found in {file_path}")
-
-            # Generate tests for each function
-            generated_tests = []
-
-            for func_node in functions_to_test:
-                # Extract function name and arguments
-                func_name = func_node.name
-                args = [arg.arg for arg in func_node.args.args]
-
-                # Try to infer return type from annotation
-                return_type = None
-                if func_node.returns:
-                    return_type = ast.unparse(func_node.returns)
-
-                # Try to extract docstring
-                docstring = ast.get_docstring(func_node)
-
-                # Generate a basic test template
-                test_template = textwrap.dedent(f'''
-                    def test_{func_name}():
-                        """Test the {func_name} function."""
-                        # TODO: Add actual test implementation
-                        # Function signature: {func_name}({", ".join(args)})
-                        # Return type: {return_type or "Unknown"}
-                        # Docstring: {docstring or "None"}
-
-                        # Test with typical inputs
-                        # result = {func_name}(...)
-                        # assert result == expected_value
-
-                        # Test edge cases
-                        # ...
-
-                        # Test error conditions
-                        # ...
-
-                        pass
-                ''').strip()
-
-                generated_tests.append(
-                    {
-                        "function_name": func_name,
-                        "test_code": test_template,
-                        "arguments": args,
-                        "return_type": return_type,
-                        "docstring": docstring,
-                    }
-                )
+            # Generate basic test templates
+            generated_tests = self._generate_basic_test_templates(functions)
 
             # Try to get suggestions from LLM providers if available
             llm_suggestions = []
-
-            # Prepare code snippet for LLM analysis
-            if functions_to_test:
-                # Get the full function definitions
-                function_definitions = []
-                for func_node in functions_to_test:
-                    # Extract the function source code
-                    func_start = func_node.lineno - 1
-                    func_end = func_node.end_lineno
-                    func_lines = content.splitlines()[func_start:func_end]
-                    function_definitions.append("\n".join(func_lines))
-
-                code_snippet = "\n\n".join(function_definitions)
+            if functions:
+                # Combine function sources for LLM analysis
+                function_sources = [func["source"] for func in functions]
+                code_snippet = "\n\n".join(function_sources)
 
                 # Prepare the prompt for LLM test generation
-                prompt = textwrap.dedent(f"""
-                    Please generate comprehensive unit tests for the following Python function(s).
-                    Focus on:
-                    1. Testing typical use cases
-                    2. Testing edge cases and boundary conditions
-                    3. Testing error conditions and exceptions
-                    4. Following pytest conventions
-                    5. Including descriptive test names and docstrings
+                prompt = self._prepare_unit_test_prompt(code_snippet, file_path)
 
-                    Functions to test:
-                    ```python
-                    {code_snippet}
-                    ```
-
-                    Please provide the test code in a format ready to be added to a pytest test file.
-                """).strip()
-
-                response_content, error_message = self._get_llm_response(
-                    prompt, "llama3-8b-8192"
-                )
-                if response_content:
-                    llm_suggestions.append(
-                        {"provider": "Groq (Llama3)", "suggestions": response_content}
-                    )
-                elif error_message:
-                    llm_suggestions.append(
-                        {"provider": "Groq (Llama3)", "error": error_message}
-                    )
-
-                response_content, error_message = self._get_llm_response(
-                    prompt, "openrouter/google/gemini-pro"
-                )
-                if response_content:
-                    llm_suggestions.append(
-                        {
-                            "provider": "OpenRouter (Gemini)",
-                            "suggestions": response_content,
-                        }
-                    )
-                elif error_message:
-                    llm_suggestions.append(
-                        {"provider": "OpenRouter (Gemini)", "error": error_message}
-                    )
-
-                response_content, error_message = self._get_llm_response(
-                    prompt, "google/gemini-pro"
-                )
-                if response_content:
-                    llm_suggestions.append(
-                        {
-                            "provider": "Google AI (Gemini)",
-                            "suggestions": response_content,
-                        }
-                    )
-                elif error_message:
-                    llm_suggestions.append(
-                        {"provider": "Google AI (Gemini)", "error": error_message}
-                    )
+                # Collect suggestions from LLM providers
+                llm_suggestions = self._collect_unit_test_suggestions(prompt)
 
             return {
                 "message": f"Unit test generation completed for {file_path}"
@@ -736,12 +1018,10 @@ improvements.
             }
 
         except Exception as e:
-            return {
-                "error": {
-                    "code": "TEST_GENERATION_ERROR",
-                    "message": f"An error occurred during test generation: {str(e)}",
-                }
-            }
+            return self._create_error_response(
+                "TEST_GENERATION_ERROR",
+                f"An error occurred during test generation: {str(e)}",
+            )
 
     def _extract_function_info(self, tool_name: str, tool_function) -> dict:
         """
@@ -819,10 +1099,8 @@ improvements.
                 function_info = self._extract_function_info(tool, tool_function)
 
                 # Generate documentation using LLMs
-                llm_suggestions = []
-
                 # Prepare the prompt for LLM documentation generation
-                prompt = textwrap.dedent(f"""
+                template = """
                     Please generate comprehensive documentation for the following Python tool function.
                     The documentation should follow this format:
 
@@ -850,97 +1128,23 @@ improvements.
                     Name: {tool}
                     Signature: {sig}
                     Docstring: {docstring}
-                    Function implementation: {function_info.get("source", "Source not available")}
+                    Function implementation: {function_info}
 
                     Please provide the documentation in the exact format specified above.
-                """).strip()
+                """
+                prompt = self._build_user_prompt(
+                    template,
+                    tool=tool,
+                    sig=sig,
+                    docstring=docstring,
+                    function_info=function_info.get("source", "Source not available"),
+                )
 
-                # Try Groq first
-                if self.groq_client:
-                    try:
-                        chat_completion = self.groq_client.chat.completions.create(
-                            messages=[
-                                {
-                                    "role": "system",
-                                    "content": "You are a helpful assistant that generates documentation for Python tools in a specific format.",
-                                },
-                                {"role": "user", "content": prompt},
-                            ],
-                            model="llama3-8b-8192",
-                            temperature=0.1,
-                            max_tokens=2048,
-                        )
-                        groq_suggestion = chat_completion.choices[0].message.content
-                        llm_suggestions.append(
-                            {
-                                "provider": "Groq (Llama3)",
-                                "suggestions": groq_suggestion,
-                            }
-                        )
-                    except Exception as e:
-                        llm_suggestions.append(
-                            {
-                                "provider": "Groq (Llama3)",
-                                "error": f"Failed to get suggestions from Groq: {str(e)}",
-                            }
-                        )
-
-                # Try OpenRouter
-                if self.openrouter_client:
-                    try:
-                        chat_completion = self.openrouter_client.chat.completions.create(
-                            model="openrouter/google/gemini-pro",
-                            messages=[
-                                {
-                                    "role": "system",
-                                    "content": "You are a helpful assistant that generates documentation for Python tools in a specific format.",
-                                },
-                                {"role": "user", "content": prompt},
-                            ],
-                            temperature=0.1,
-                            max_tokens=2048,
-                        )
-                        openrouter_suggestion = chat_completion.choices[
-                            0
-                        ].message.content
-                        llm_suggestions.append(
-                            {
-                                "provider": "OpenRouter (Gemini)",
-                                "suggestions": openrouter_suggestion,
-                            }
-                        )
-                    except Exception as e:
-                        llm_suggestions.append(
-                            {
-                                "provider": "OpenRouter (Gemini)",
-                                "error": f"Failed to get suggestions from OpenRouter: {str(e)}",
-                            }
-                        )
-
-                # Try Google AI
-                if self.google_ai_client:
-                    try:
-                        model = self.google_ai_client.GenerativeModel("gemini-pro")
-                        response = model.generate_content(
-                            prompt,
-                            generation_config=self.google_ai_client.types.GenerationConfig(
-                                temperature=0.1, max_output_tokens=2048
-                            ),
-                        )
-                        google_suggestion = response.text
-                        llm_suggestions.append(
-                            {
-                                "provider": "Google AI (Gemini)",
-                                "suggestions": google_suggestion,
-                            }
-                        )
-                    except Exception as e:
-                        llm_suggestions.append(
-                            {
-                                "provider": "Google AI (Gemini)",
-                                "error": f"Failed to get suggestions from Google AI: {str(e)}",
-                            }
-                        )
+                # Get suggestions from multiple LLM providers using the common method
+                llm_suggestions = self._get_llm_suggestions(
+                    prompt,
+                    "You are a helpful assistant that generates documentation for Python tools in a specific format.",
+                )
 
                 generated_docs.append(
                     {
@@ -998,94 +1202,110 @@ improvements.
             else:
                 raise ValueError(f"Unsupported LLM provider: {llm_provider}")
 
-        # Template for the wrapper class
-        wrapper_template = textwrap.dedent("""
-            import os
-            from typing import Any, Dict, Optional
+        # Provider-specific configurations
+        provider_configs = {
+            "groq": {
+                "llm_client_import": "from groq import Groq",
+                "class_name": "Groq",
+                "client_initialization": "self.client = Groq(api_key=self.api_key)",
+                "generate_content_logic": [
+                    "            chat_completion = self.client.chat.completions.create(",
+                    '                messages=[{"role": "user", "content": prompt}],',
+                    "                model=self.model_name,",
+                    "                **kwargs",
+                    "            )",
+                    "            return chat_completion.choices[0].message.content",
+                ],
+            },
+            "openrouter": {
+                "llm_client_import": "from openai import OpenAI",
+                "class_name": "OpenRouter",
+                "client_initialization": [
+                    "self.client = OpenAI(",
+                    '    base_url="https://openrouter.ai/api/v1",',
+                    "    api_key=self.api_key,",
+                    ")",
+                ],
+                "generate_content_logic": [
+                    "            chat_completion = self.client.chat.completions.create(",
+                    "                extra_headers={",
+                    '                    "HTTP-Referer": "http://localhost:8000",  # Replace with your actual site URL',
+                    '                    "X-Title": "CodeSage MCP Server",  # Replace with your actual app name',
+                    "                },",
+                    '                messages=[{"role": "user", "content": prompt}],',
+                    "                model=self.model_name,",
+                    "                **kwargs",
+                    "            )",
+                    "            return chat_completion.choices[0].message.content",
+                ],
+            },
+            "google": {
+                "llm_client_import": "import google.generativeai as genai",
+                "class_name": "Google",
+                "client_initialization": [
+                    "genai.configure(api_key=self.api_key)",
+                    "self.client = genai.GenerativeModel(self.model_name)",
+                ],
+                "generate_content_logic": [
+                    "            response = self.client.generate_content(prompt, **kwargs)",
+                    "            return response.text",
+                ],
+            },
+        }
 
-            # Import specific LLM client libraries
-            {llm_client_import}
-
-            class {class_name}LLMClient:
-                def __init__(self, model_name: str = "{model_name}", api_key: Optional[str] = None):
-                    self.model_name = model_name
-                    self.api_key = api_key if api_key else os.getenv("{api_key_env_var}")
-                    if not self.api_key:
-                        raise ValueError(f"API key not found for {llm_provider}. Please set the {api_key_env_var} environment variable.")
-                    {client_initialization}
-
-                def generate_content(self, prompt: str, **kwargs) -> str:
-                    ""
-                    Generates content using the {llm_provider} LLM.
-                    ""
-                    try:
-                        {generate_content_logic}
-                    except Exception as e:
-                        return f"Error generating content with {llm_provider} LLM: {{e}}"
-
-        """).strip()
-
-        llm_client_import = ""
-        class_name = ""
-        client_initialization = ""
-        generate_content_logic = ""
-
-        if provider_lower == "groq":
-            llm_client_import = "from groq import Groq"
-            class_name = "Groq"
-            client_initialization = "self.client = Groq(api_key=self.api_key)"
-            generate_content_logic = textwrap.dedent("""
-                chat_completion = self.client.chat.completions.create(
-                    messages=[{"role": "user", "content": prompt}],
-                    model=self.model_name,
-                    **kwargs
-                )
-                return chat_completion.choices[0].message.content
-            """).strip()
-        elif provider_lower == "openrouter":
-            llm_client_import = "from openai import OpenAI"
-            class_name = "OpenRouter"
-            client_initialization = textwrap.dedent("""
-                self.client = OpenAI(
-                    base_url="https://openrouter.ai/api/v1",
-                    api_key=self.api_key,
-                )
-            """).strip()
-            generate_content_logic = textwrap.dedent("""
-                chat_completion = self.client.chat.completions.create(
-                    extra_headers={
-                        "HTTP-Referer": "http://localhost:8000", # Replace with your actual site URL
-                        "X-Title": "CodeSage MCP Server", # Replace with your actual app name
-                    },
-                    messages=[{"role": "user", "content": prompt}],
-                    model=self.model_name,
-                    **kwargs
-                )
-                return chat_completion.choices[0].message.content
-            """).strip()
-        elif provider_lower == "google":
-            llm_client_import = "import google.generativeai as genai"
-            class_name = "Google"
-            client_initialization = textwrap.dedent("""
-                genai.configure(api_key=self.api_key)
-                self.client = genai.GenerativeModel(self.model_name)
-            """).strip()
-            generate_content_logic = textwrap.dedent("""
-                response = self.client.generate_content(prompt, **kwargs)
-                return response.text
-            """).strip()
-        else:
+        if provider_lower not in provider_configs:
             raise ValueError(f"Unsupported LLM provider: {llm_provider}")
 
-        return wrapper_template.format(
-            llm_client_import=llm_client_import,
-            class_name=class_name,
-            model_name=model_name,
-            api_key_env_var=api_key_env_var,
-            llm_provider=llm_provider,
-            client_initialization=client_initialization,
-            generate_content_logic=generate_content_logic,
+        config = provider_configs[provider_lower]
+
+        # Build the code using lists to ensure proper formatting
+        lines = [
+            "import os",
+            "from typing import Any, Dict, Optional",
+            "",
+            "# Import specific LLM client libraries",
+            config["llm_client_import"],
+            "",
+            f"class {config['class_name']}LLMClient:",
+            '    def __init__(self, model_name: str = "'
+            + model_name
+            + '", api_key: Optional[str] = None):',
+            "        self.model_name = model_name",
+            f'        self.api_key = api_key if api_key else os.getenv("{api_key_env_var}")',
+            "        if not self.api_key:",
+            f'            raise ValueError(f"API key not found for {llm_provider}. Please set the {api_key_env_var} environment variable.")',
+        ]
+
+        # Add client initialization
+        if isinstance(config["client_initialization"], list):
+            lines.extend(
+                [f"        {line}" for line in config["client_initialization"]]
+            )
+        else:
+            lines.append(f"        {config['client_initialization']}")
+
+        # Add generate_content method
+        lines.extend(
+            [
+                "",
+                "    def generate_content(self, prompt: str, **kwargs) -> str:",
+                f"        '''Generates content using the {llm_provider} LLM.'''",
+                "        try:",
+            ]
         )
+
+        # Add generate content logic
+        lines.extend(config["generate_content_logic"])
+
+        # Add exception handling
+        lines.extend(
+            [
+                "        except Exception as e:",
+                f'            return f"Error generating content with {llm_provider} LLM: {{e}}"',
+            ]
+        )
+
+        return "\n".join(lines)
 
     def parse_llm_response(self, llm_response_content: str) -> dict:
         """
@@ -1167,14 +1387,14 @@ improvements.
             code_context = "".join(lines[context_start:context_end])
 
             # Prepare the prompt for LLM resolution
-            prompt = textwrap.dedent(f"""
+            template = """
                 Analyze the following code snippet and the associated TODO/FIXME comment.
                 Your task is to suggest a resolution for the TODO/FIXME. Provide the suggested
                 code changes, an explanation of your approach, and any assumptions made.
 
-                TODO/FIXME Comment: {target_comment["comment"]}
+                TODO/FIXME Comment: {comment}
                 File: {file_path}
-                Line: {target_comment["line_number"]}
+                Line: {line_number}
 
                 Code Context:
                 ```python
@@ -1192,7 +1412,14 @@ improvements.
                 ```
                 If no code changes are needed, leave "suggested_code" empty.
                 If the TODO/FIXME is complex and requires multiple steps, outline them in the explanation.
-            """).strip()
+            """
+            prompt = self._build_user_prompt(
+                template,
+                comment=target_comment["comment"],
+                file_path=file_path,
+                line_number=target_comment["line_number"],
+                code_context=code_context,
+            )
 
             # Use a powerful LLM for resolution
             llm_model = "google/gemini-pro"  # Prioritize Gemini for complex tasks
