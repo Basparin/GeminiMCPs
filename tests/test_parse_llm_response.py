@@ -1,21 +1,42 @@
 import pytest
+from unittest.mock import patch
 from codesage_mcp.llm_analysis import LLMAnalysisManager
 from codesage_mcp.tools import parse_llm_response_tool
 
 
 @pytest.fixture
 def llm_analysis_manager():
-    # Mock clients are not needed for parse_llm_response as it doesn't interact with LLMs
-    return LLMAnalysisManager(None, None, None)
+    """Mock LLMAnalysisManager for testing."""
+    with patch(
+        "tests.test_parse_llm_response.LLMAnalysisManager", autospec=True
+    ) as mock_manager:
+        yield mock_manager.return_value
 
 
 def test_parse_llm_response_valid_json(llm_analysis_manager):
+    """Test parsing a valid JSON string.
+    
+    This test verifies that a valid JSON string is correctly parsed and returned
+    as a Python dictionary without any modifications.
+    
+    Args:
+        llm_analysis_manager: Mocked LLMAnalysisManager instance.
+    """
     json_string = '{"key": "value", "number": 123}'
     parsed_data = llm_analysis_manager.parse_llm_response(json_string)
     assert parsed_data == {"key": "value", "number": 123}
 
 
 def test_parse_llm_response_json_with_markdown_fences(llm_analysis_manager):
+    """Test parsing a JSON string wrapped in markdown code fences.
+    
+    This test verifies that JSON strings wrapped in markdown code fences
+    (```json {...} ```) are correctly parsed by stripping the markdown
+    wrappers and returning the underlying JSON as a Python dictionary.
+    
+    Args:
+        llm_analysis_manager: Mocked LLMAnalysisManager instance.
+    """
     json_string = '```json\n{"key": "value", "number": 123}\n```'
     parsed_data = llm_analysis_manager.parse_llm_response(json_string)
     assert parsed_data == {"key": "value", "number": 123}
@@ -24,24 +45,57 @@ def test_parse_llm_response_json_with_markdown_fences(llm_analysis_manager):
 def test_parse_llm_response_json_with_markdown_fences_and_extra_whitespace(
     llm_analysis_manager,
 ):
+    """Test Parse LLM response json with markdown fences and extra whitespace.
+
+    This test verifies that JSON strings with markdown code fences and extra 
+    whitespace are correctly parsed by stripping the markdown wrappers and 
+    whitespace, then returning the underlying JSON as a Python dictionary.
+
+    Args:
+        llm_analysis_manager: Mocked Llm Analysis Manager instance.
+    """
     json_string = '  ```json\n  {"key": "value", "number": 123}\n  ```  '
     parsed_data = llm_analysis_manager.parse_llm_response(json_string)
     assert parsed_data == {"key": "value", "number": 123}
 
 
 def test_parse_llm_response_invalid_json(llm_analysis_manager):
+    """Test parsing an invalid JSON string raises appropriate exception.
+    
+    This test verifies that when an invalid JSON string is provided,
+    the parse_llm_response method raises a ValueError with an appropriate
+    error message indicating that JSON parsing failed.
+    
+    Args:
+        llm_analysis_manager: Mocked LLMAnalysisManager instance.
+    """
     invalid_json_string = '{"key": "value", "number": 123,'
     with pytest.raises(ValueError, match="Failed to parse LLM response as JSON"):
         llm_analysis_manager.parse_llm_response(invalid_json_string)
 
 
 def test_parse_llm_response_empty_string(llm_analysis_manager):
+    """Test Parse LLM response empty string.
+
+    This test verifies behavior with empty input in parse llm response empty string.
+
+    Args:
+        llm_analysis_manager: Mocked Llm Analysis Manager instance.
+    """
     empty_string = ""
     with pytest.raises(ValueError, match="Failed to parse LLM response as JSON"):
         llm_analysis_manager.parse_llm_response(empty_string)
 
 
 def test_parse_llm_response_non_json_string(llm_analysis_manager):
+    """Test Parse LLM response non json string.
+
+    This test verifies that non-JSON strings are handled appropriately by 
+    the parse_llm_response method, ensuring proper error handling.
+
+    Args:
+        llm_analysis_manager: Mocked Llm Analysis Manager instance.
+    """
     non_json_string = "This is not a JSON string."
     with pytest.raises(ValueError, match="Failed to parse LLM response as JSON"):
         llm_analysis_manager.parse_llm_response(non_json_string)
@@ -49,6 +103,12 @@ def test_parse_llm_response_non_json_string(llm_analysis_manager):
 
 # Test the tool function
 def test_parse_llm_response_tool_success():
+    """Test Parse LLM response tool success.
+
+    This test verifies successful execution of parse llm response tool success.
+    It checks that a valid JSON string is correctly parsed by the tool function
+    and returns the expected structure with parsed data.
+    """
     json_string = '{"status": "success"}'
     result = parse_llm_response_tool(json_string)
     assert "message" in result
@@ -58,6 +118,12 @@ def test_parse_llm_response_tool_success():
 
 
 def test_parse_llm_response_tool_markdown_success():
+    """Test Parse LLM response tool markdown success.
+
+    This test verifies successful execution of parse llm response tool markdown success.
+    It checks that a JSON string wrapped in markdown code fences is correctly parsed
+    by the tool function and returns the expected structure with parsed data.
+    """
     json_string = '```json\n{"status": "success"}\n```'
     result = parse_llm_response_tool(json_string)
     assert "message" in result
@@ -67,6 +133,12 @@ def test_parse_llm_response_tool_markdown_success():
 
 
 def test_parse_llm_response_tool_invalid_json():
+    """Test Parse LLM response tool invalid json.
+
+    This test verifies that parse llm response tool invalid json behaves correctly.
+    It checks that when an invalid JSON string is provided to the tool function,
+    it properly handles the error and returns an appropriate error message.
+    """
     invalid_json_string = '{"status": "error",'
     result = parse_llm_response_tool(invalid_json_string)
     assert "error" in result
@@ -75,6 +147,12 @@ def test_parse_llm_response_tool_invalid_json():
 
 
 def test_parse_llm_response_tool_general_error():
+    """Test Parse LLM response tool general error.
+
+    This test verifies error handling in parse llm response tool general error.
+    It checks that when an unexpected error occurs in the underlying manager method,
+    the tool function properly handles the error and returns an appropriate error message.
+    """
     # Simulate an unexpected error in the underlying manager method
     # This requires mocking the manager, which is more complex for a simple test
     # For now, we'll rely on the direct method tests for error handling.

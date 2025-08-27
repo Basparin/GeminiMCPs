@@ -299,6 +299,16 @@ def test_semantic_search_with_results(temp_codebase):
     mock_dummy_embedding = [0.0, 1.0, 0.0]  # Different
 
     def mock_encode(text):
+        """Test Mock encode.
+
+        Creates mock embeddings for testing semantic search functionality.
+        This function simulates the behavior of a sentence transformer
+        by returning predefined embeddings based on the input text content
+        for the first semantic search test scenario.
+
+        Args:
+            text: Test parameter representing the text to encode.
+        """
         if "hello world" in text:  # This is in file1.py
             return mock_file1_embedding
         elif text == "dummy content":  # This is for the dummy file
@@ -355,6 +365,16 @@ def test_semantic_search_top_k():
 
     # Custom mock side effect for search to respect top_k
     def mock_search_side_effect(query_vector, k):
+        """Test Mock search side effect.
+
+        Creates a custom mock side effect for FAISS search operations
+        to respect the top_k parameter. This function simulates FAISS
+        returning different numbers of results based on the requested k value.
+
+        Args:
+            query_vector: Test parameter representing the query vector.
+            k: Test parameter representing the number of results to return.
+        """
         # Simulate FAISS returning two results if k >= 2, otherwise one.
         if k >= 2:
             return ([[0.1, 0.2]], [[0, 1]])
@@ -461,6 +481,16 @@ def test_find_duplicate_code_with_results(temp_codebase):
     mock_dummy_embedding = [0.0, 1.0, 0.0]  # Different
 
     def mock_encode(text):
+        """Test Mock encode.
+
+        Creates mock embeddings for testing duplicate code detection functionality.
+        This function simulates the behavior of a sentence transformer
+        by returning predefined embeddings based on the input text content
+        for the duplicate code detection test scenario.
+
+        Args:
+            text: Test parameter representing the text to encode.
+        """
         if "hello world" in text:  # This is in file1.py
             return mock_file1_embedding
         elif text == "dummy content":  # This is for the dummy file

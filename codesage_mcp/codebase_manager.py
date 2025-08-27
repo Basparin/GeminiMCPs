@@ -24,7 +24,13 @@ from collections import defaultdict  # New import
 # Importaciones para modelos y búsqueda
 from sentence_transformers import SentenceTransformer
 
-from .config import GROQ_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY
+from .config import (
+    GROQ_API_KEY,
+    OPENROUTER_API_KEY,
+    GOOGLE_API_KEY,
+    validate_configuration,
+    get_configuration_status
+)
 
 # Importar los nuevos módulos
 from .indexing import IndexingManager
@@ -185,7 +191,16 @@ class CodebaseManager:
 
         Sets up the indexing manager, sentence transformer model,
         and API clients for Groq, OpenRouter, and Google AI.
+        Validates configuration and logs any issues.
         """
+        # Validate configuration on startup
+        config_status = get_configuration_status()
+        if not config_status["valid"]:
+            print("Warning: Configuration issues detected:")
+            for issue in config_status["issues"]:
+                print(f"  - {issue}")
+            print("Some LLM providers may not be available.")
+
         # Inicializar el gestor de indexación
         self.indexing_manager = IndexingManager()
         # Inicializar el gestor de búsqueda
@@ -196,20 +211,41 @@ class CodebaseManager:
         # Se usan propiedades para mantener la sincronización.
 
         self.sentence_transformer_model = SentenceTransformer("all-MiniLM-L6-v2")
-        self.groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-        self.openrouter_client = (
-            OpenAI(
-                base_url="https://openrouter.ai/api/v1",
-                api_key=OPENROUTER_API_KEY,
-            )
-            if OPENROUTER_API_KEY
-            else None
-        )
-        if GOOGLE_API_KEY:
-            genai.configure(api_key=GOOGLE_API_KEY)
-            self.google_ai_client = genai.GenerativeModel("gemini-2.0-flash")
+
+        # Initialize API clients with proper error handling
+        self.groq_client = None
+        if GROQ_API_KEY:
+            try:
+                self.groq_client = Groq(api_key=GROQ_API_KEY)
+                print("Groq client initialized successfully.")
+            except Exception as e:
+                print(f"Failed to initialize Groq client: {e}")
         else:
-            self.google_ai_client = None
+            print("Groq API key not configured - Groq features will be unavailable.")
+
+        self.openrouter_client = None
+        if OPENROUTER_API_KEY:
+            try:
+                self.openrouter_client = OpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=OPENROUTER_API_KEY,
+                )
+                print("OpenRouter client initialized successfully.")
+            except Exception as e:
+                print(f"Failed to initialize OpenRouter client: {e}")
+        else:
+            print("OpenRouter API key not configured - OpenRouter features will be unavailable.")
+
+        self.google_ai_client = None
+        if GOOGLE_API_KEY:
+            try:
+                genai.configure(api_key=GOOGLE_API_KEY)
+                self.google_ai_client = genai.GenerativeModel("gemini-2.0-flash")
+                print("Google AI client initialized successfully.")
+            except Exception as e:
+                print(f"Failed to initialize Google AI client: {e}")
+        else:
+            print("Google API key not configured - Google AI features will be unavailable.")
 
         # Inicializar el gestor de análisis con LLM
         self.llm_analysis_manager = LLMAnalysisManager(
