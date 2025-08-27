@@ -1,4 +1,6 @@
+import os
 import re
+from functools import wraps
 
 
 def _update_multiline_comment_state(
@@ -53,5 +55,59 @@ def _count_todo_fixme_comments(lines: list[str]) -> list[dict]:
             found_comments.append({"line_number": line_num, "comment": line.strip()})
         if fixme_match:
             found_comments.append({"line_number": line_num, "comment": line.strip()})
-
     return found_comments
+
+
+def create_error_response(error_code: str, message: str) -> dict:
+    """Create a standardized error response dictionary.
+
+    Args:
+        error_code: The error code identifier
+        message: The error message
+
+    Returns:
+        dict: Standardized error response
+    """
+    return {"error": {"code": error_code, "message": message}}
+
+
+def tool_error_handler(func):
+    """Decorator for tool functions to provide standardized error handling.
+
+    Catches common exceptions and returns standardized error responses.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except FileNotFoundError as e:
+            return create_error_response("FILE_NOT_FOUND", str(e))
+        except ValueError as e:
+            return create_error_response("INVALID_INPUT", str(e))
+        except PermissionError as e:
+            return create_error_response("PERMISSION_DENIED", str(e))
+        except Exception as e:
+            return create_error_response("TOOL_ERROR", f"An error occurred: {str(e)}")
+
+    return wrapper
+
+
+def safe_read_file(file_path: str, as_lines: bool = False) -> str | list[str]:
+    """Safely read a file with consistent error handling.
+
+    Args:
+        file_path: Path to the file to read
+        as_lines: If True, return list of lines; if False, return string content
+
+    Returns:
+        File content as string or list of lines
+
+    Raises:
+        FileNotFoundError: If the file does not exist
+    """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+
+    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        return f.readlines() if as_lines else f.read()
+

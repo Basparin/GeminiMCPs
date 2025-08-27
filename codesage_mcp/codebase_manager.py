@@ -30,6 +30,7 @@ from .config import GROQ_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY
 from .indexing import IndexingManager
 from .searching import SearchingManager
 from .llm_analysis import LLMAnalysisManager
+from .utils import safe_read_file
 
 
 def _is_module_installed(module_name: str) -> bool:
@@ -269,10 +270,7 @@ class CodebaseManager:
         Raises:
             FileNotFoundError: If the file does not exist.
         """
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            return f.read()
+        return safe_read_file(file_path)
 
     def index_codebase(self, path: str) -> list[str]:
         """Indexes a given codebase path for analysis, respecting .gitignore rules.

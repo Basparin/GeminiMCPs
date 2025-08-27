@@ -24,7 +24,7 @@ import importlib.util
 import ast
 import inspect
 import re  # New import
-from codesage_mcp.utils import _count_todo_fixme_comments  # New import
+from codesage_mcp.utils import _count_todo_fixme_comments, safe_read_file  # New import
 import json  # New import
 
 
@@ -96,11 +96,8 @@ class LLMAnalysisManager:
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        lines = []
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            for i, line in enumerate(f, 1):
-                if start_line <= i <= end_line:
-                    lines.append(line)
+        all_lines = safe_read_file(file_path, as_lines=True)
+        lines = all_lines[start_line-1:end_line]
 
         if not lines:
             return "No code found in the specified line range."
@@ -623,8 +620,7 @@ class LLMAnalysisManager:
 
         try:
             # Read the file content
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            content = safe_read_file(file_path)
 
             # Create a temporary file for profiling
             with tempfile.NamedTemporaryFile(
@@ -748,13 +744,7 @@ class LLMAnalysisManager:
         Raises:
             FileNotFoundError: If the file does not exist.
         """
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
-
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            if as_lines:
-                return f.readlines()
-            return f.read()
+        return safe_read_file(file_path, as_lines)
 
     def _collect_llm_responses(self, prompt: str, providers: list[str]) -> list[dict]:
         """
@@ -1358,8 +1348,7 @@ class LLMAnalysisManager:
             raise FileNotFoundError(f"File not found: {file_path}")
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                lines = f.readlines()
+            lines = safe_read_file(file_path, as_lines=True)
 
             todo_fixme_comments = _count_todo_fixme_comments(lines)
 

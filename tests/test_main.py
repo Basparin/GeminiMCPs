@@ -9,6 +9,14 @@ client = TestClient(app)
 
 @pytest.fixture
 def temp_dir(tmp_path):
+    """Test Temp dir.
+
+    Creates a temporary directory with a test file for testing purposes.
+    The directory and its contents are automatically cleaned up after the test.
+
+    Args:
+        tmp_path: Pytest fixture that provides a temporary directory.
+    """
     d = tmp_path / "test_dir"
     d.mkdir()
     (d / "file1.txt").write_text("hello")
@@ -62,12 +70,23 @@ def another_undocumented_function():
 
 
 def test_root_endpoint():
+    """Test Root endpoint.
+
+    This test verifies that the root endpoint returns the expected welcome message.
+    It checks that the server is running and responding correctly to basic requests.
+    """
     response = client.get("/")
     assert response.status_code == 200
     assert response.json() == {"message": "CodeSage MCP Server is running!"}
 
 
 def test_mcp_initialize():
+    """Test Mcp initialize.
+
+    This test verifies that the MCP initialization process works correctly.
+    It checks that the server responds with the expected protocol version
+    and server information when initializing the connection.
+    """
     response = client.post(
         "/mcp", json={"jsonrpc": "2.0", "method": "initialize", "id": "1"}
     )
@@ -79,6 +98,12 @@ def test_mcp_initialize():
 
 
 def test_mcp_tools_list():
+    """Test Mcp tools list.
+
+    This test verifies that the tools list endpoint returns the expected
+    list of available tools. It checks that all registered tools are properly
+    listed with their correct names and descriptions.
+    """
     response = client.post(
         "/mcp", json={"jsonrpc": "2.0", "method": "tools/list", "id": "2"}
     )
@@ -91,6 +116,15 @@ def test_mcp_tools_list():
 
 
 def test_mcp_tool_call_success(temp_dir):
+    """Test Mcp tool call success.
+
+    This test verifies successful execution of mcp tool call success.
+    It checks that when a valid tool call is made, the server correctly
+    processes the request and returns the expected result.
+
+    Args:
+        temp_dir: Test parameter providing a temporary directory.
+    """
     # Use a real tool that doesn't have complex dependencies
     # get_file_structure requires the codebase to be indexed first.
 
@@ -140,6 +174,12 @@ def test_mcp_tool_call_success(temp_dir):
 
 
 def test_mcp_tool_call_not_found():
+    """Test Mcp tool call not found.
+
+    This test verifies that when a tool call is made for a non-existent tool,
+    the server correctly returns an appropriate error response indicating
+    that the tool was not found.
+    """
     response = client.post(
         "/mcp",
         json={
@@ -202,7 +242,7 @@ def test_mcp_tool_call_list_undocumented_functions(temp_code_file_for_docs):
 # --- New Tests for Semantic Search Tool Function ---
 
 
-@patch("codesage_mcp.tools.codebase_manager")
+@patch("codesage_mcp.tools.llm_analysis.codebase_manager")
 def test_semantic_search_codebase_tool_success(mock_codebase_manager):
     """Test the semantic_search_codebase_tool function for a successful search."""
     # Arrange: Mock the manager's method to return a specific result
@@ -233,7 +273,7 @@ def test_semantic_search_codebase_tool_success(mock_codebase_manager):
     )
 
 
-@patch("codesage_mcp.tools.codebase_manager")
+@patch("codesage_mcp.tools.llm_analysis.codebase_manager")
 def test_semantic_search_codebase_tool_error(mock_codebase_manager):
     """Test the semantic_search_codebase_tool function when the manager
     raises an error."""
@@ -251,7 +291,7 @@ def test_semantic_search_codebase_tool_error(mock_codebase_manager):
 
     # Assert: Check the structure and content of the error result
     assert "error" in result
-    assert result["error"]["code"] == "SEMANTIC_SEARCH_ERROR"
+    assert result["error"]["code"] == "TOOL_ERROR"
     assert "Test error from FAISS" in result["error"]["message"]
 
     # Verify the mock was called

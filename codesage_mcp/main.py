@@ -46,6 +46,7 @@ from codesage_mcp.tools import (
     generate_llm_api_wrapper_tool,  # Import the new LLM API wrapper generation tool
     generate_boilerplate_tool,  # Import the new boilerplate generation tool
 )
+from codesage_mcp.utils import create_error_response
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -485,8 +486,9 @@ async def handle_jsonrpc_request(request: Request):
                 return JSONRPCResponse(result=tool_result, id=jsonrpc_request.id)
             except Exception as e:
                 logger.error(f"Error executing tool {tool_name}: {e}")
-                raise HTTPException(
-                    status_code=500, detail=f"Error executing tool {tool_name}: {e}"
+                return JSONRPCResponse(
+                    error=create_error_response("TOOL_EXECUTION_ERROR", f"Error executing tool {tool_name}: {e}"),
+                    id=jsonrpc_request.id
                 )
         else:
             raise HTTPException(
