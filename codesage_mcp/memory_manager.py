@@ -13,16 +13,19 @@ Classes:
     ModelCache: Handles model loading and caching.
 """
 
-import os
 import psutil
 import threading
 import time
+import logging
 from typing import Dict, Optional, Any, Tuple
 from pathlib import Path
 from datetime import datetime, timedelta
 import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 from .config import (
     ENABLE_MEMORY_MAPPED_INDEXES,
@@ -47,8 +50,8 @@ class ModelCache:
         with self._lock:
             if model_name in self._cache:
                 entry = self._cache[model_name]
-                if datetime.now() < entry['expires_at']:
-                    return entry['model'], True
+                if datetime.now() < entry["expires_at"]:
+                    return entry["model"], True
                 else:
                     # Remove expired model
                     del self._cache[model_name]
@@ -59,9 +62,9 @@ class ModelCache:
         with self._lock:
             expires_at = datetime.now() + timedelta(minutes=self.ttl_minutes)
             self._cache[model_name] = {
-                'model': model,
-                'expires_at': expires_at,
-                'created_at': datetime.now()
+                "model": model,
+                "expires_at": expires_at,
+                "created_at": datetime.now(),
             }
 
     def clear_expired(self) -> int:
@@ -69,7 +72,7 @@ class ModelCache:
         with self._lock:
             expired = []
             for model_name, entry in self._cache.items():
-                if datetime.now() >= entry['expires_at']:
+                if datetime.now() >= entry["expires_at"]:
                     expired.append(model_name)
 
             for model_name in expired:
@@ -88,9 +91,9 @@ class ModelCache:
         """Get cache statistics."""
         with self._lock:
             return {
-                'cached_models': len(self._cache),
-                'model_names': list(self._cache.keys()),
-                'ttl_minutes': self.ttl_minutes
+                "cached_models": len(self._cache),
+                "model_names": list(self._cache.keys()),
+                "ttl_minutes": self.ttl_minutes,
             }
 
 
@@ -111,7 +114,9 @@ class MemoryManager:
     def _start_monitoring(self) -> None:
         """Start background memory monitoring thread."""
         self._stop_monitoring.clear()
-        self._monitoring_thread = threading.Thread(target=self._monitor_memory, daemon=True)
+        self._monitoring_thread = threading.Thread(
+            target=self._monitor_memory, daemon=True
+        )
         self._monitoring_thread.start()
 
     def _monitor_memory(self) -> None:
@@ -120,16 +125,18 @@ class MemoryManager:
             try:
                 memory_mb = self.get_memory_usage_mb()
                 if memory_mb > MAX_MEMORY_MB:
-                    print(f"Warning: Memory usage ({memory_mb:.1f}MB) exceeds limit ({MAX_MEMORY_MB}MB)")
+                    logger.warning(
+                        f"Memory usage ({memory_mb:.1f}MB) exceeds limit ({MAX_MEMORY_MB}MB)"
+                    )
                     self._cleanup_memory()
 
                 # Clear expired models periodically
                 cleared = self.model_cache.clear_expired()
                 if cleared > 0:
-                    print(f"Cleared {cleared} expired models from cache")
+                    logger.info(f"Cleared {cleared} expired models from cache")
 
             except Exception as e:
-                print(f"Memory monitoring error: {e}")
+                logger.error(f"Memory monitoring error: {e}")
 
             time.sleep(30)  # Check every 30 seconds
 
@@ -144,29 +151,32 @@ class MemoryManager:
         memory_percent = self.process.memory_percent()
 
         return {
-            'rss_mb': memory_info.rss / 1024 / 1024,
-            'vms_mb': memory_info.vms / 1024 / 1024,
-            'percent': memory_percent,
-            'limit_mb': MAX_MEMORY_MB,
-            'available_mb': MAX_MEMORY_MB - (memory_info.rss / 1024 / 1024),
-            'memory_mapped_indexes': len(self.memory_mapped_indexes),
-            'model_cache_stats': self.model_cache.get_stats()
+            "rss_mb": memory_info.rss / 1024 / 1024,
+            "vms_mb": memory_info.vms / 1024 / 1024,
+            "percent": memory_percent,
+            "limit_mb": MAX_MEMORY_MB,
+            "available_mb": MAX_MEMORY_MB - (memory_info.rss / 1024 / 1024),
+            "memory_mapped_indexes": len(self.memory_mapped_indexes),
+            "model_cache_stats": self.model_cache.get_stats(),
         }
 
     def _cleanup_memory(self) -> None:
         """Perform memory cleanup when usage is high."""
-        print("Performing memory cleanup...")
+        logger.info("Performing memory cleanup...")
 
         # Clear expired models
-        cleared_models = self.model_cache.clear_expired()
+        self.model_cache.clear_expired()
 
         # If still high memory, clear all model cache
         if self.get_memory_usage_mb() > MAX_MEMORY_MB * 0.9:
             cleared_all = self.model_cache.clear_all()
-            print(f"Cleared all {cleared_all} models from cache due to high memory usage")
+            logger.warning(
+                f"Cleared all {cleared_all} models from cache due to high memory usage"
+            )
 
         # Force garbage collection
         import gc
+
         gc.collect()
 
     def load_model(self, model_name: str) -> SentenceTransformer:
@@ -174,10 +184,10 @@ class MemoryManager:
         # Try to get from cache first
         cached_model, cache_hit = self.model_cache.get_model(model_name)
         if cache_hit and cached_model:
-            print(f"Loaded model '{model_name}' from cache")
+            logger.debug(f"Loaded model '{model_name}' from cache")
             return cached_model
 
-        print(f"Loading model '{model_name}'...")
+        logger.info(f"Loading model '{model_name}'...")
         try:
             model = SentenceTransformer(model_name)
 
@@ -185,13 +195,13 @@ class MemoryManager:
             if ENABLE_MODEL_QUANTIZATION:
                 try:
                     model = self._quantize_model(model)
-                    print(f"Applied quantization to model '{model_name}'")
+                    logger.info(f"Applied quantization to model '{model_name}'")
                 except Exception as e:
-                    print(f"Warning: Could not quantize model '{model_name}': {e}")
+                    logger.warning(f"Could not quantize model '{model_name}': {e}")
 
             # Cache the model
             self.model_cache.store_model(model_name, model)
-            print(f"Cached model '{model_name}'")
+            logger.debug(f"Cached model '{model_name}'")
 
             return model
 
@@ -210,7 +220,9 @@ class MemoryManager:
         # TODO: Implement actual quantization when needed
         return model
 
-    def load_faiss_index(self, index_path: str, memory_mapped: bool = None) -> faiss.Index:
+    def load_faiss_index(
+        self, index_path: str, memory_mapped: bool = None
+    ) -> faiss.Index:
         """Load FAISS index with optional memory mapping."""
         if memory_mapped is None:
             memory_mapped = ENABLE_MEMORY_MAPPED_INDEXES
@@ -221,12 +233,12 @@ class MemoryManager:
 
         try:
             if memory_mapped:
-                print(f"Loading memory-mapped FAISS index: {index_path}")
+                logger.info(f"Loading memory-mapped FAISS index: {index_path}")
                 index = faiss.read_index(str(index_path), faiss.IO_FLAG_MMAP)
                 with self._lock:
                     self.memory_mapped_indexes[str(index_path)] = index
             else:
-                print(f"Loading FAISS index into memory: {index_path}")
+                logger.info(f"Loading FAISS index into memory: {index_path}")
                 index = faiss.read_index(str(index_path))
 
             return index
@@ -234,7 +246,9 @@ class MemoryManager:
         except Exception as e:
             raise RuntimeError(f"Failed to load FAISS index '{index_path}': {e}")
 
-    def create_optimized_index(self, embeddings: np.ndarray, index_type: str = None) -> faiss.Index:
+    def create_optimized_index(
+        self, embeddings: np.ndarray, index_type: str = None
+    ) -> faiss.Index:
         """Create an optimized FAISS index based on dataset size and configuration."""
         if index_type is None:
             index_type = INDEX_TYPE
@@ -242,7 +256,9 @@ class MemoryManager:
         dimension = embeddings.shape[1]
         n_vectors = embeddings.shape[0]
 
-        print(f"Creating {index_type} index for {n_vectors} vectors of dimension {dimension}")
+        logger.info(
+            f"Creating {index_type} index for {n_vectors} vectors of dimension {dimension}"
+        )
 
         if index_type == "auto":
             # Auto-select index type based on dataset size
@@ -258,7 +274,9 @@ class MemoryManager:
 
         elif index_type in ["ivf", "ivf_small"]:
             # IVF indexes require training
-            nlist = min(100, max(4, n_vectors // 39))  # Rule of thumb: nlist = 4*sqrt(n)
+            nlist = min(
+                100, max(4, n_vectors // 39)
+            )  # Rule of thumb: nlist = 4*sqrt(n)
 
             if index_type == "ivf_small":
                 nlist = min(nlist, 50)  # Smaller IVF for smaller datasets
@@ -267,11 +285,11 @@ class MemoryManager:
             index = faiss.IndexIVFFlat(quantizer, dimension, nlist)
 
             # Train the index
-            print(f"Training IVF index with {nlist} clusters...")
+            logger.info(f"Training IVF index with {nlist} clusters...")
             if n_vectors >= nlist:
                 index.train(embeddings.astype(np.float32))
             else:
-                print("Warning: Not enough vectors for training, using Flat index")
+                logger.warning("Not enough vectors for training, using Flat index")
                 return faiss.IndexFlatL2(dimension)
 
             return index
@@ -284,11 +302,11 @@ class MemoryManager:
         with self._lock:
             if index_path in self.memory_mapped_indexes:
                 del self.memory_mapped_indexes[index_path]
-                print(f"Unloaded memory-mapped index: {index_path}")
+                logger.info(f"Unloaded memory-mapped index: {index_path}")
 
     def cleanup(self) -> None:
         """Perform full cleanup of memory resources."""
-        print("Performing full memory cleanup...")
+        logger.info("Performing full memory cleanup...")
 
         # Stop monitoring thread
         if self._monitoring_thread:
@@ -305,9 +323,12 @@ class MemoryManager:
 
         # Force garbage collection
         import gc
+
         gc.collect()
 
-        print(f"Memory cleanup completed: {cleared_models} models, {cleared_indexes} indexes cleared")
+        logger.info(
+            f"Memory cleanup completed: {cleared_models} models, {cleared_indexes} indexes cleared"
+        )
 
     def __del__(self):
         """Cleanup on destruction."""

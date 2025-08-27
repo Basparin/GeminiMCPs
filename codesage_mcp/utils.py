@@ -76,6 +76,7 @@ def tool_error_handler(func):
 
     Catches common exceptions and returns standardized error responses.
     """
+
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
@@ -110,4 +111,3 @@ def safe_read_file(file_path: str, as_lines: bool = False) -> str | list[str]:
 
     with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
         return f.readlines() if as_lines else f.read()
-

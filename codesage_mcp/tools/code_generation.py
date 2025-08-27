@@ -1,9 +1,8 @@
 """Code Generation Tools Module for CodeSage MCP Server."""
 
 import os
-import textwrap
 from codesage_mcp.codebase_manager import codebase_manager
-from codesage_mcp.utils import create_error_response, tool_error_handler, safe_read_file
+from codesage_mcp.utils import tool_error_handler
 
 
 @tool_error_handler
@@ -18,8 +17,8 @@ def generate_unit_tests_tool(file_path: str, function_name: str = None) -> dict:
 @tool_error_handler
 def auto_document_tool(tool_name: str = None) -> dict:
     """Automatically generates documentation for tools that lack detailed documentation."""
-    documentation_results = (
-        codebase_manager.llm_analysis_manager.auto_document_tool(tool_name)
+    documentation_results = codebase_manager.llm_analysis_manager.auto_document_tool(
+        tool_name
     )
     return documentation_results
 

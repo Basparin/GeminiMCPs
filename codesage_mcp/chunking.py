@@ -10,16 +10,20 @@ Classes:
 
 import re
 import tiktoken
-from typing import List, Dict, Tuple, Optional
-from pathlib import Path
+import logging
+from typing import List, Dict
 from dataclasses import dataclass
 
 from .config import CHUNK_SIZE_TOKENS
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 
 @dataclass
 class DocumentChunk:
     """Represents a document chunk with metadata."""
+
     content: str
     start_line: int
     end_line: int
@@ -48,9 +52,11 @@ class DocumentChunker:
             # Approximate token count (rough estimate)
             return len(text) // 4
 
-    def split_into_chunks(self, content: str, file_path: str = None) -> List[DocumentChunk]:
+    def split_into_chunks(
+        self, content: str, file_path: str = None
+    ) -> List[DocumentChunk]:
         """Split document content into semantic chunks."""
-        lines = content.split('\n')
+        lines = content.split("\n")
         chunks = []
 
         # First, try to extract semantic units (functions, classes, etc.)
@@ -71,22 +77,23 @@ class DocumentChunker:
 
         return chunks
 
-    def _extract_semantic_units(self, content: str, lines: List[str]) -> List[DocumentChunk]:
+    def _extract_semantic_units(
+        self, content: str, lines: List[str]
+    ) -> List[DocumentChunk]:
         """Extract semantic units like functions, classes, etc."""
         chunks = []
 
         # Python code patterns
         patterns = [
             # Functions and methods
-            (r'def\s+(\w+)\s*\([^)]*\)\s*:', 'function'),
+            (r"def\s+(\w+)\s*\([^)]*\)\s*:", "function"),
             # Classes
-            (r'class\s+(\w+)\s*[:\(]', 'class'),
+            (r"class\s+(\w+)\s*[:\(]", "class"),
             # Docstrings (triple-quoted strings at start of line)
-            (r'^\s*""".*?"""', 'docstring'),
-            (r"^\s*'''.*?'''", 'docstring'),
+            (r'^\s*""".*?"""', "docstring"),
+            (r"^\s*'''.*?'''", "docstring"),
         ]
 
-        current_line = 0
         for i, line in enumerate(lines):
             for pattern, chunk_type in patterns:
                 if re.match(pattern, line, re.MULTILINE):
@@ -94,25 +101,28 @@ class DocumentChunker:
                     start_line = i
                     end_line = self._find_end_of_unit(lines, i, chunk_type)
 
-                    unit_content = '\n'.join(lines[start_line:end_line + 1])
+                    unit_content = "\n".join(lines[start_line : end_line + 1])
                     token_count = self.count_tokens(unit_content)
 
                     if token_count > 0:
-                        chunks.append(DocumentChunk(
-                            content=unit_content,
-                            start_line=start_line + 1,  # 1-based line numbers
-                            end_line=end_line + 1,
-                            token_count=token_count,
-                            chunk_type=chunk_type,
-                            metadata={'pattern': pattern}
-                        ))
+                        chunks.append(
+                            DocumentChunk(
+                                content=unit_content,
+                                start_line=start_line + 1,  # 1-based line numbers
+                                end_line=end_line + 1,
+                                token_count=token_count,
+                                chunk_type=chunk_type,
+                                metadata={"pattern": pattern},
+                            )
+                        )
 
-                    current_line = end_line + 1
                     break
 
         return chunks
 
-    def _find_end_of_unit(self, lines: List[str], start_idx: int, unit_type: str) -> int:
+    def _find_end_of_unit(
+        self, lines: List[str], start_idx: int, unit_type: str
+    ) -> int:
         """Find the end line of a semantic unit."""
         indent_level = self._get_indent_level(lines[start_idx])
 
@@ -129,13 +139,16 @@ class DocumentChunker:
             # If we encounter a line with same or less indentation that's not empty
             if current_indent <= indent_level and line.strip():
                 # Check if it's another semantic unit at the same level
-                if any(re.match(pattern, line) for pattern, _ in [
-                    (r'def\s+(\w+)\s*\([^)]*\)\s*:', 'function'),
-                    (r'class\s+(\w+)\s*[:\(]', 'class'),
-                ]):
+                if any(
+                    re.match(pattern, line)
+                    for pattern, _ in [
+                        (r"def\s+(\w+)\s*\([^)]*\)\s*:", "function"),
+                        (r"class\s+(\w+)\s*[:\(]", "class"),
+                    ]
+                ):
                     return i - 1
                 # For docstrings, they end at the closing quotes
-                elif unit_type == 'docstring':
+                elif unit_type == "docstring":
                     if '"""' in line or "'''" in line:
                         return i
 
@@ -147,26 +160,34 @@ class DocumentChunker:
 
     def _split_large_chunk(self, chunk: DocumentChunk) -> List[DocumentChunk]:
         """Split a large chunk into smaller pieces."""
-        lines = chunk.content.split('\n')
+        lines = chunk.content.split("\n")
         sub_chunks = []
 
         current_chunk_lines = []
         current_token_count = 0
 
         for line in lines:
-            line_tokens = self.count_tokens(line + '\n')
+            line_tokens = self.count_tokens(line + "\n")
 
-            if current_token_count + line_tokens > self.chunk_size_tokens and current_chunk_lines:
+            if (
+                current_token_count + line_tokens > self.chunk_size_tokens
+                and current_chunk_lines
+            ):
                 # Create a sub-chunk
-                sub_content = '\n'.join(current_chunk_lines)
-                sub_chunks.append(DocumentChunk(
-                    content=sub_content,
-                    start_line=chunk.start_line + len(sub_chunks),
-                    end_line=chunk.start_line + len(sub_chunks) + len(current_chunk_lines) - 1,
-                    token_count=current_token_count,
-                    chunk_type='general',
-                    metadata={'parent_type': chunk.chunk_type}
-                ))
+                sub_content = "\n".join(current_chunk_lines)
+                sub_chunks.append(
+                    DocumentChunk(
+                        content=sub_content,
+                        start_line=chunk.start_line + len(sub_chunks),
+                        end_line=chunk.start_line
+                        + len(sub_chunks)
+                        + len(current_chunk_lines)
+                        - 1,
+                        token_count=current_token_count,
+                        chunk_type="general",
+                        metadata={"parent_type": chunk.chunk_type},
+                    )
+                )
 
                 current_chunk_lines = [line]
                 current_token_count = line_tokens
@@ -176,19 +197,23 @@ class DocumentChunker:
 
         # Add the last sub-chunk
         if current_chunk_lines:
-            sub_content = '\n'.join(current_chunk_lines)
-            sub_chunks.append(DocumentChunk(
-                content=sub_content,
-                start_line=chunk.start_line + len(sub_chunks),
-                end_line=chunk.end_line,
-                token_count=current_token_count,
-                chunk_type='general',
-                metadata={'parent_type': chunk.chunk_type}
-            ))
+            sub_content = "\n".join(current_chunk_lines)
+            sub_chunks.append(
+                DocumentChunk(
+                    content=sub_content,
+                    start_line=chunk.start_line + len(sub_chunks),
+                    end_line=chunk.end_line,
+                    token_count=current_token_count,
+                    chunk_type="general",
+                    metadata={"parent_type": chunk.chunk_type},
+                )
+            )
 
         return sub_chunks
 
-    def _chunk_by_lines(self, lines: List[str], file_path: str = None) -> List[DocumentChunk]:
+    def _chunk_by_lines(
+        self, lines: List[str], file_path: str = None
+    ) -> List[DocumentChunk]:
         """Fallback chunking by lines when semantic extraction fails."""
         chunks = []
 
@@ -197,19 +222,24 @@ class DocumentChunker:
         current_start_line = 0
 
         for i, line in enumerate(lines):
-            line_tokens = self.count_tokens(line + '\n')
+            line_tokens = self.count_tokens(line + "\n")
 
-            if current_token_count + line_tokens > self.chunk_size_tokens and current_chunk_lines:
+            if (
+                current_token_count + line_tokens > self.chunk_size_tokens
+                and current_chunk_lines
+            ):
                 # Create chunk
-                chunk_content = '\n'.join(current_chunk_lines)
-                chunks.append(DocumentChunk(
-                    content=chunk_content,
-                    start_line=current_start_line + 1,
-                    end_line=i,
-                    token_count=current_token_count,
-                    chunk_type='general',
-                    metadata={'file_path': str(file_path) if file_path else None}
-                ))
+                chunk_content = "\n".join(current_chunk_lines)
+                chunks.append(
+                    DocumentChunk(
+                        content=chunk_content,
+                        start_line=current_start_line + 1,
+                        end_line=i,
+                        token_count=current_token_count,
+                        chunk_type="general",
+                        metadata={"file_path": str(file_path) if file_path else None},
+                    )
+                )
 
                 current_chunk_lines = [line]
                 current_token_count = line_tokens
@@ -220,15 +250,17 @@ class DocumentChunker:
 
         # Add the last chunk
         if current_chunk_lines:
-            chunk_content = '\n'.join(current_chunk_lines)
-            chunks.append(DocumentChunk(
-                content=chunk_content,
-                start_line=current_start_line + 1,
-                end_line=len(lines),
-                token_count=current_token_count,
-                chunk_type='general',
-                metadata={'file_path': str(file_path) if file_path else None}
-            ))
+            chunk_content = "\n".join(current_chunk_lines)
+            chunks.append(
+                DocumentChunk(
+                    content=chunk_content,
+                    start_line=current_start_line + 1,
+                    end_line=len(lines),
+                    token_count=current_token_count,
+                    chunk_type="general",
+                    metadata={"file_path": str(file_path) if file_path else None},
+                )
+            )
 
         return chunks
 
@@ -246,13 +278,13 @@ class DocumentChunker:
             chunk_sizes.append(chunk.token_count)
 
         return {
-            'total_chunks': len(chunks),
-            'total_tokens': total_tokens,
-            'average_chunk_size': total_tokens / len(chunks),
-            'chunk_types': chunk_types,
-            'min_chunk_size': min(chunk_sizes),
-            'max_chunk_size': max(chunk_sizes),
-            'target_chunk_size': self.chunk_size_tokens
+            "total_chunks": len(chunks),
+            "total_tokens": total_tokens,
+            "average_chunk_size": total_tokens / len(chunks),
+            "chunk_types": chunk_types,
+            "min_chunk_size": min(chunk_sizes),
+            "max_chunk_size": max(chunk_sizes),
+            "target_chunk_size": self.chunk_size_tokens,
         }
 
 
@@ -261,13 +293,13 @@ def chunk_file(file_path: str, chunk_size_tokens: int = None) -> List[DocumentCh
     chunker = DocumentChunker(chunk_size_tokens)
 
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
         return chunker.split_into_chunks(content, file_path)
 
     except Exception as e:
-        print(f"Warning: Could not chunk file {file_path}: {e}")
+        logger.warning(f"Could not chunk file {file_path}: {e}")
         return []
 
 

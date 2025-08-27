@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  - job_name: 'codesage-mcp'
+    static_configs:
+      - targets: ['codesage-mcp:8000']
+    scrape_interval: 5s
+    metrics_path: '/metrics'
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']

@@ -19,7 +19,11 @@ import ast
 import os
 from collections import defaultdict
 from codesage_mcp.codebase_manager import codebase_manager
-from codesage_mcp.utils import _count_todo_fixme_comments, create_error_response, tool_error_handler, safe_read_file
+from codesage_mcp.utils import (
+    _count_todo_fixme_comments,
+    tool_error_handler,
+    safe_read_file,
+)
 
 
 def read_code_file_tool(file_path: str) -> dict:
@@ -285,18 +289,12 @@ def analyze_codebase_improvements_tool(codebase_path: str) -> dict:
                 )
 
                 # For Python files, check for undocumented functions using AST
-                undocumented_functions_count = _count_undocumented_functions(
-                    file_path
-                )
+                undocumented_functions_count = _count_undocumented_functions(file_path)
                 analysis["undocumented_functions"] += undocumented_functions_count
 
                 # Analyze cyclomatic complexity using radon
-                high_complexity_functions = _analyze_cyclomatic_complexity(
-                    file_path
-                )
-                analysis["high_complexity_functions"].extend(
-                    high_complexity_functions
-                )
+                high_complexity_functions = _analyze_cyclomatic_complexity(file_path)
+                analysis["high_complexity_functions"].extend(high_complexity_functions)
 
             except Exception:
                 # Skip files that can't be read
@@ -453,6 +451,3 @@ def _generate_suggestions_based_on_analysis(analysis: dict) -> list[str]:
     )
 
     return suggestions
-
-
-

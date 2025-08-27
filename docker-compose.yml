@@ -1,20 +1,218 @@
 version: '3.8'
 
+# ================================
+# Production-Ready Docker Compose Configuration
+# ================================
+
 services:
+  # -------------------------------
+  # Main CodeSage MCP Server
+  # -------------------------------
   codesage-mcp:
-    build: .
+    build:
+      context: .
+      target: runtime
+      dockerfile: Dockerfile
+    container_name: codesage-mcp-server
+    restart: unless-stopped
     ports:
-      - "8000:8000"
-    volumes:
-      - .:/app
+      - "${HOST_PORT:-8000}:8000"
     environment:
-      # These will be loaded from your host's environment or a .env file
-      # Make sure to set them in your host environment or in a .env file
-      # in the same directory as docker-compose.yml
+      # API Keys (loaded from .env file)
       - GROQ_API_KEY=${GROQ_API_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-    # Command to run the application, overriding the Dockerfile's CMD
-    # This is useful for development, as changes to code will be reflected
-    # without rebuilding the image.
-    command: uvicorn codesage_mcp.main:app --host 0.0.0.0 --port 8000 --reload
+
+      # Production Configuration
+      - ENABLE_CACHING=${ENABLE_CACHING:-true}
+      - ENABLE_MEMORY_MONITORING=${ENABLE_MEMORY_MONITORING:-true}
+      - ENABLE_INCREMENTAL_INDEXING=${ENABLE_INCREMENTAL_INDEXING:-true}
+      - MAX_MEMORY_MB=${MAX_MEMORY_MB:-2048}
+      - EMBEDDING_CACHE_SIZE=${EMBEDDING_CACHE_SIZE:-10000}
+      - SEARCH_CACHE_SIZE=${SEARCH_CACHE_SIZE:-2000}
+      - FILE_CACHE_SIZE=${FILE_CACHE_SIZE:-200}
+      - CACHE_SIMILARITY_THRESHOLD=${CACHE_SIMILARITY_THRESHOLD:-0.9}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-2}
+      - ENABLE_CACHE_PERSISTENCE=${ENABLE_CACHE_PERSISTENCE:-true}
+      - ENABLE_CACHE_WARMING=${ENABLE_CACHE_WARMING:-true}
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - PYTHONPATH=/app
+
+    volumes:
+      # Persistent cache storage
+      - codesage_cache:/app/.codesage
+      # Optional: Mount codebase for analysis (read-only)
+      - ${CODEBASE_PATH:-./}:/app/codebase:ro
+      # Logs
+      - codesage_logs:/app/logs
+
+    networks:
+      - codesage-network
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    deploy:
+      resources:
+        limits:
+          memory: ${MEMORY_LIMIT:-2g}
+          cpus: '${CPU_LIMIT:-1.0}'
+        reservations:
+          memory: ${MEMORY_RESERVATION:-1g}
+          cpus: '${CPU_RESERVATION:-0.5}'
+
+    # Security
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+
+  # -------------------------------
+  # Redis for Enhanced Caching (Optional)
+  # -------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: codesage-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-codesage}
+    volumes:
+      - redis_data:/data
+    networks:
+      - codesage-network
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '0.5'
+    profiles:
+      - with-redis
+
+  # -------------------------------
+  # Nginx Reverse Proxy (Optional)
+  # -------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: codesage-nginx
+    restart: unless-stopped
+    ports:
+      - "${NGINX_PORT:-80}:80"
+      - "${NGINX_SSL_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - codesage-mcp
+    networks:
+      - codesage-network
+    profiles:
+      - with-nginx
+
+  # -------------------------------
+  # Monitoring Stack (Optional)
+  # -------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: codesage-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - codesage-network
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: codesage-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - codesage-network
+    profiles:
+      - monitoring
+
+# ================================
+# Networks
+# ================================
+networks:
+  codesage-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ================================
+# Volumes
+# ================================
+volumes:
+  codesage_cache:
+    driver: local
+  codesage_logs:
+    driver: local
+  redis_data:
+    driver: local
+  nginx_logs:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# ================================
+# Configuration Notes
+# ================================
+#
+# Usage Examples:
+#
+# 1. Basic production deployment:
+#    docker-compose up -d
+#
+# 2. With Redis caching:
+#    docker-compose --profile with-redis up -d
+#
+# 3. With reverse proxy:
+#    docker-compose --profile with-nginx up -d
+#
+# 4. Full monitoring stack:
+#    docker-compose --profile monitoring up -d
+#
+# 5. Development with auto-reload:
+#    docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Environment Variables (.env file):
+# - HOST_PORT: Port to expose on host (default: 8000)
+# - CODEBASE_PATH: Path to codebase for analysis
+# - MEMORY_LIMIT: Container memory limit (default: 2g)
+# - CPU_LIMIT: Container CPU limit (default: 1.0)
+# - LOG_LEVEL: Logging level (default: INFO)
+# - REDIS_PASSWORD: Redis password (default: codesage)
+# - NGINX_PORT: Nginx HTTP port (default: 80)
+# - NGINX_SSL_PORT: Nginx HTTPS port (default: 443)
+# - GRAFANA_PASSWORD: Grafana admin password (default: admin)

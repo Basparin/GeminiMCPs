@@ -1,0 +1,81 @@
+CodeSage MCP Performance Benchmark Report
+Generated: 2025-08-27 04:10:02
+
+SUMMARY
+==================================================
+Total Tests: 21
+Passed: 21
+Failed: 0
+.1fOverall Status: PASS
+
+RESULTS BY CATEGORY
+==================================================
+INDEXING:
+  Passed: 6
+  Failed: 0
+  Total: 6
+
+SEARCH:
+  Passed: 4
+  Failed: 0
+  Total: 4
+
+CACHE:
+  Passed: 4
+  Failed: 0
+  Total: 4
+
+MEMORY:
+  Passed: 3
+  Failed: 0
+  Total: 3
+
+CHUNKING:
+  Passed: 4
+  Failed: 0
+  Total: 4
+
+DETAILED RESULTS
+==================================================
+indexing_small - indexing_time: 0.0187 seconds [✓ PASS]
+  Target: 30.0 seconds
+indexing_small - memory_usage: 0.6133 MB [✓ PASS]
+  Target: 500.0 MB
+indexing_small - files_per_second: 1760.2059 files/sec [✓ PASS]
+  Target: 5.0 files/sec
+indexing_medium - indexing_time: 0.0913 seconds [✓ PASS]
+  Target: 30.0 seconds
+indexing_medium - memory_usage: 0.2500 MB [✓ PASS]
+  Target: 500.0 MB
+indexing_medium - files_per_second: 1675.1596 files/sec [✓ PASS]
+  Target: 5.0 files/sec
+search_performance - semantic_search_avg_time: 0.0000 seconds [✓ PASS]
+  Target: 2.0 seconds
+search_performance - semantic_search_p95_time: 0.0000 seconds [✓ PASS]
+  Target: 5.0 seconds
+search_performance - text_search_avg_time: 0.0079 seconds [✓ PASS]
+  Target: 1.0 seconds
+search_performance - text_search_p95_time: 0.0082 seconds [✓ PASS]
+  Target: 3.0 seconds
+cache_performance - embedding_cache_hit_rate: 100.0000 percent [✓ PASS]
+  Target: 70.0 percent
+cache_performance - file_cache_hit_rate: 100.0000 percent [✓ PASS]
+  Target: 70.0 percent
+cache_performance - embedding_cache_avg_time: 0.0015 milliseconds [✓ PASS]
+  Target: 10.0 milliseconds
+cache_performance - file_cache_avg_time: 0.0015 milliseconds [✓ PASS]
+  Target: 5.0 milliseconds
+memory_management - model_cache_effectiveness: 3.0000 models_cached [✓ PASS]
+  Target: 3.0 models_cached
+memory_management - memory_monitoring_accuracy: 5.1123 percent [✓ PASS]
+  Target: 100.0 percent
+memory_management - model_loading_performance: 0.0002 seconds [✓ PASS]
+  Target: 1.0 seconds
+chunking_performance - chunking_time: 0.0019 seconds [✓ PASS]
+  Target: 1.0 seconds
+chunking_performance - chunking_time: 0.0049 seconds [✓ PASS]
+  Target: 1.0 seconds
+chunking_performance - chunking_time: 0.0098 seconds [✓ PASS]
+  Target: 1.0 seconds
+chunking_performance - chunking_time: 0.0496 seconds [✓ PASS]
+  Target: 1.0 seconds

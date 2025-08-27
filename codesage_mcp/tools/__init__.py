@@ -15,9 +15,3 @@ from .codebase_analysis import *
 from .llm_analysis import *
 from .code_generation import *
 from .configuration import *
-
-# Explicitly import analyze_codebase_improvements_tool to ensure it's available
-from .codebase_analysis import analyze_codebase_improvements_tool
-
-# Explicitly import cache statistics tool
-from .configuration import get_cache_statistics_tool

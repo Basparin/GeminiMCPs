@@ -114,7 +114,9 @@ except ValueError:
 
 # Load incremental indexing configuration
 try:
-    ENABLE_INCREMENTAL_INDEXING = get_optional_env_var("ENABLE_INCREMENTAL_INDEXING").lower() == "true"
+    ENABLE_INCREMENTAL_INDEXING = (
+        get_optional_env_var("ENABLE_INCREMENTAL_INDEXING").lower() == "true"
+    )
 except (ValueError, AttributeError):
     ENABLE_INCREMENTAL_INDEXING = True  # Default to enabled
 
@@ -145,7 +147,9 @@ except (ValueError, AttributeError):
     FILE_CACHE_SIZE = 100  # Default file cache size
 
 try:
-    CACHE_SIMILARITY_THRESHOLD = float(get_optional_env_var("CACHE_SIMILARITY_THRESHOLD") or "0.85")
+    CACHE_SIMILARITY_THRESHOLD = float(
+        get_optional_env_var("CACHE_SIMILARITY_THRESHOLD") or "0.85"
+    )
 except (ValueError, AttributeError):
     CACHE_SIMILARITY_THRESHOLD = 0.85  # Default similarity threshold for search caching
 
@@ -155,18 +159,24 @@ except (ValueError, AttributeError):
     MAX_FILE_SIZE_MB = 1  # Default max file size for caching (1MB)
 
 try:
-    ENABLE_CACHE_PERSISTENCE = get_optional_env_var("ENABLE_CACHE_PERSISTENCE").lower() == "true"
+    ENABLE_CACHE_PERSISTENCE = (
+        get_optional_env_var("ENABLE_CACHE_PERSISTENCE").lower() == "true"
+    )
 except (ValueError, AttributeError):
     ENABLE_CACHE_PERSISTENCE = True  # Default to enabled
 
 try:
-    ENABLE_CACHE_WARMING = get_optional_env_var("ENABLE_CACHE_WARMING").lower() == "true"
+    ENABLE_CACHE_WARMING = (
+        get_optional_env_var("ENABLE_CACHE_WARMING").lower() == "true"
+    )
 except (ValueError, AttributeError):
     ENABLE_CACHE_WARMING = True  # Default to enabled
 
 # Load memory optimization configuration
 try:
-    ENABLE_MEMORY_MAPPED_INDEXES = get_optional_env_var("ENABLE_MEMORY_MAPPED_INDEXES").lower() == "true"
+    ENABLE_MEMORY_MAPPED_INDEXES = (
+        get_optional_env_var("ENABLE_MEMORY_MAPPED_INDEXES").lower() == "true"
+    )
 except (ValueError, AttributeError):
     ENABLE_MEMORY_MAPPED_INDEXES = True  # Default to enabled
 
@@ -181,12 +191,16 @@ except (ValueError, AttributeError):
     MAX_MEMORY_MB = 2048  # Default 2GB
 
 try:
-    MODEL_CACHE_TTL_MINUTES = int(get_optional_env_var("MODEL_CACHE_TTL_MINUTES") or "60")
+    MODEL_CACHE_TTL_MINUTES = int(
+        get_optional_env_var("MODEL_CACHE_TTL_MINUTES") or "60"
+    )
 except (ValueError, AttributeError):
     MODEL_CACHE_TTL_MINUTES = 60  # Default 1 hour
 
 try:
-    ENABLE_MODEL_QUANTIZATION = get_optional_env_var("ENABLE_MODEL_QUANTIZATION").lower() == "true"
+    ENABLE_MODEL_QUANTIZATION = (
+        get_optional_env_var("ENABLE_MODEL_QUANTIZATION").lower() == "true"
+    )
 except (ValueError, AttributeError):
     ENABLE_MODEL_QUANTIZATION = False  # Default to disabled
 
@@ -196,7 +210,9 @@ except (ValueError, AttributeError):
     CHUNK_SIZE_TOKENS = 750  # Default chunk size
 
 try:
-    ENABLE_MEMORY_MONITORING = get_optional_env_var("ENABLE_MEMORY_MONITORING").lower() == "true"
+    ENABLE_MEMORY_MONITORING = (
+        get_optional_env_var("ENABLE_MEMORY_MONITORING").lower() == "true"
+    )
 except (ValueError, AttributeError):
     ENABLE_MEMORY_MONITORING = True  # Default to enabled
 
@@ -262,5 +278,5 @@ def get_configuration_status() -> dict:
             "model_quantization_enabled": ENABLE_MODEL_QUANTIZATION,
             "chunk_size_tokens": CHUNK_SIZE_TOKENS,
             "memory_monitoring_enabled": ENABLE_MEMORY_MONITORING,
-        }
+        },
     }

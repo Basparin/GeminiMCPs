@@ -15,6 +15,7 @@ Classes:
 """
 
 import os
+import logging
 from groq import Groq
 from openai import OpenAI
 import google.generativeai as genai
@@ -22,7 +23,9 @@ import ast
 from collections import defaultdict  # New import
 
 # Importaciones para modelos y búsqueda
-from sentence_transformers import SentenceTransformer
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 from .config import (
     GROQ_API_KEY,
@@ -30,8 +33,7 @@ from .config import (
     GOOGLE_API_KEY,
     ENABLE_INCREMENTAL_INDEXING,
     FORCE_FULL_REINDEX,
-    validate_configuration,
-    get_configuration_status
+    get_configuration_status,
 )
 
 # Importar los nuevos módulos
@@ -201,10 +203,10 @@ class CodebaseManager:
         # Validate configuration on startup
         config_status = get_configuration_status()
         if not config_status["valid"]:
-            print("Warning: Configuration issues detected:")
+            logger.warning("Configuration issues detected:")
             for issue in config_status["issues"]:
-                print(f"  - {issue}")
-            print("Some LLM providers may not be available.")
+                logger.warning(f"  - {issue}")
+            logger.warning("Some LLM providers may not be available.")
 
         # Inicializar el gestor de indexación
         self.indexing_manager = IndexingManager()
@@ -227,11 +229,13 @@ class CodebaseManager:
         if GROQ_API_KEY:
             try:
                 self.groq_client = Groq(api_key=GROQ_API_KEY)
-                print("Groq client initialized successfully.")
+                logger.info("Groq client initialized successfully.")
             except Exception as e:
-                print(f"Failed to initialize Groq client: {e}")
+                logger.error(f"Failed to initialize Groq client: {e}")
         else:
-            print("Groq API key not configured - Groq features will be unavailable.")
+            logger.warning(
+                "Groq API key not configured - Groq features will be unavailable."
+            )
 
         self.openrouter_client = None
         if OPENROUTER_API_KEY:
@@ -240,22 +244,26 @@ class CodebaseManager:
                     base_url="https://openrouter.ai/api/v1",
                     api_key=OPENROUTER_API_KEY,
                 )
-                print("OpenRouter client initialized successfully.")
+                logger.info("OpenRouter client initialized successfully.")
             except Exception as e:
-                print(f"Failed to initialize OpenRouter client: {e}")
+                logger.error(f"Failed to initialize OpenRouter client: {e}")
         else:
-            print("OpenRouter API key not configured - OpenRouter features will be unavailable.")
+            logger.warning(
+                "OpenRouter API key not configured - OpenRouter features will be unavailable."
+            )
 
         self.google_ai_client = None
         if GOOGLE_API_KEY:
             try:
                 genai.configure(api_key=GOOGLE_API_KEY)
                 self.google_ai_client = genai.GenerativeModel("gemini-2.0-flash")
-                print("Google AI client initialized successfully.")
+                logger.info("Google AI client initialized successfully.")
             except Exception as e:
-                print(f"Failed to initialize Google AI client: {e}")
+                logger.error(f"Failed to initialize Google AI client: {e}")
         else:
-            print("Google API key not configured - Google AI features will be unavailable.")
+            logger.warning(
+                "Google API key not configured - Google AI features will be unavailable."
+            )
 
         # Inicializar el gestor de análisis con LLM
         self.llm_analysis_manager = LLMAnalysisManager(
@@ -269,8 +277,10 @@ class CodebaseManager:
     def sentence_transformer_model(self):
         """Get the sentence transformer model, loading it on-demand if needed."""
         if self._sentence_transformer_model is None:
-            print(f"Loading sentence transformer model: {self._model_name}")
-            self._sentence_transformer_model = self.memory_manager.load_model(self._model_name)
+            logger.info(f"Loading sentence transformer model: {self._model_name}")
+            self._sentence_transformer_model = self.memory_manager.load_model(
+                self._model_name
+            )
         return self._sentence_transformer_model
 
     # --- Properties to maintain compatibility with legacy code ---
@@ -331,7 +341,7 @@ class CodebaseManager:
         if self.cache:
             cached_content, cache_hit = self.cache.get_file_content(file_path)
             if cache_hit:
-                print(f"Cache hit for file: {file_path}")
+                logger.debug(f"Cache hit for file: {file_path}")
                 return cached_content
 
         # Read from disk
@@ -340,15 +350,21 @@ class CodebaseManager:
         # Store in cache for future use
         if self.cache:
             self.cache.store_file_content(file_path, content)
-            print(f"Cached file content for: {file_path}")
+            logger.debug(f"Cached file content for: {file_path}")
 
             # Trigger smart prefetching based on usage patterns
             try:
-                prefetch_stats = self.cache.smart_prefetch(file_path, self.indexing_manager.indexed_codebases, self.sentence_transformer_model)
+                prefetch_stats = self.cache.smart_prefetch(
+                    file_path,
+                    self.indexing_manager.indexed_codebases,
+                    self.sentence_transformer_model,
+                )
                 if prefetch_stats["prefetched"] > 0:
-                    print(f"Smart prefetching completed: {prefetch_stats['prefetched']} files prefetched")
+                    logger.debug(
+                        f"Smart prefetching completed: {prefetch_stats['prefetched']} files prefetched"
+                    )
             except Exception as e:
-                print(f"Warning: Smart prefetching failed: {e}")
+                logger.warning(f"Smart prefetching failed: {e}")
 
         return content
 
@@ -366,23 +382,33 @@ class CodebaseManager:
             list[str]: List of indexed file paths relative to the codebase root.
         """
         # Determine if we should use incremental indexing
-        use_incremental = ENABLE_INCREMENTAL_INDEXING and not (force_full if force_full is not None else FORCE_FULL_REINDEX)
+        use_incremental = ENABLE_INCREMENTAL_INDEXING and not (
+            force_full if force_full is not None else FORCE_FULL_REINDEX
+        )
 
-        if use_incremental and hasattr(self.indexing_manager, 'index_codebase_incremental'):
+        if use_incremental and hasattr(
+            self.indexing_manager, "index_codebase_incremental"
+        ):
             # Use incremental indexing
-            indexed_files, was_incremental = self.indexing_manager.index_codebase_incremental(
-                path, self.sentence_transformer_model, force_full=force_full if force_full is not None else FORCE_FULL_REINDEX
+            indexed_files, was_incremental = (
+                self.indexing_manager.index_codebase_incremental(
+                    path,
+                    self.sentence_transformer_model,
+                    force_full=force_full
+                    if force_full is not None
+                    else FORCE_FULL_REINDEX,
+                )
             )
             if was_incremental:
-                print(f"Used incremental indexing for {path}")
+                logger.info(f"Used incremental indexing for {path}")
             else:
-                print(f"Used full indexing for {path}")
+                logger.info(f"Used full indexing for {path}")
         else:
             # Use traditional full indexing
             indexed_files = self.indexing_manager.index_codebase(
                 path, self.sentence_transformer_model
             )
-            print(f"Used full indexing for {path}")
+            logger.info(f"Used full indexing for {path}")
 
         # Actualizar las referencias locales para compatibilidad con el código existente
         self.indexed_codebases = self.indexing_manager.indexed_codebases
@@ -391,12 +417,19 @@ class CodebaseManager:
         # Warm the cache with commonly accessed files
         if self.cache and path:
             try:
-                warming_stats = self.cache.warm_cache(path, self.sentence_transformer_model)
-                if warming_stats["files_warmed"] > 0 or warming_stats["embeddings_cached"] > 0:
-                    print(f"Cache warming completed: {warming_stats['files_warmed']} files warmed, "
-                          f"{warming_stats['embeddings_cached']} embeddings cached")
+                warming_stats = self.cache.warm_cache(
+                    path, self.sentence_transformer_model
+                )
+                if (
+                    warming_stats["files_warmed"] > 0
+                    or warming_stats["embeddings_cached"] > 0
+                ):
+                    logger.info(
+                        f"Cache warming completed: {warming_stats['files_warmed']} files warmed, "
+                        f"{warming_stats['embeddings_cached']} embeddings cached"
+                    )
             except Exception as e:
-                print(f"Warning: Cache warming failed: {e}")
+                logger.warning(f"Cache warming failed: {e}")
 
         return indexed_files
 
@@ -606,9 +639,9 @@ class CodebaseManager:
 
         return {
             "cleanup_performed": True,
-            "memory_freed_mb": before_stats['rss_mb'] - after_stats['rss_mb'],
+            "memory_freed_mb": before_stats["rss_mb"] - after_stats["rss_mb"],
             "before_cleanup": before_stats,
-            "after_cleanup": after_stats
+            "after_cleanup": after_stats,
         }
 
 

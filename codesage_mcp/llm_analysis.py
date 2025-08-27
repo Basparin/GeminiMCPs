@@ -59,13 +59,24 @@ class LLMAnalysisManager:
         Returns:
             str: The summary of the code snippet or an error message if it fails.
         """
-        prompt = (
-            "You are a helpful assistant that summarizes code.\n\n"
-            "Please summarize the following code snippet:\n\n"
-            f"```\n{code_snippet}```"
+        system_message = self._build_system_prompt(
+            "You are a helpful assistant that summarizes code."
         )
 
-        response_content, error_message = self._get_llm_response(prompt, llm_model)
+        template = """
+            Please summarize the following code snippet:
+
+            ```python
+            {code_snippet}
+            ```
+
+            Provide a clear, concise summary that captures the main functionality and purpose of the code.
+        """
+        prompt = self._build_user_prompt(template, code_snippet=code_snippet)
+
+        response_content, error_message = self._get_llm_response(
+            prompt, llm_model, system_message
+        )
         if error_message:
             return f"Error during summarization: {error_message}"
         return response_content
@@ -97,7 +108,7 @@ class LLMAnalysisManager:
             raise FileNotFoundError(f"File not found: {file_path}")
 
         all_lines = safe_read_file(file_path, as_lines=True)
-        lines = all_lines[start_line-1:end_line]
+        lines = all_lines[start_line - 1 : end_line]
 
         if not lines:
             return "No code found in the specified line range."
@@ -107,156 +118,114 @@ class LLMAnalysisManager:
         # Use the unified LLM summarization method
         return self._summarize_with_llm(code_snippet, llm_model)
 
-    def _get_llm_response(self, prompt: str, llm_model: str) -> tuple[str, str]:
-        """Helper to get LLM response from various providers."""
-        if llm_model.startswith("openrouter/"):
-            if not self.openrouter_client:
-                return None, "Error: OPENROUTER_API_KEY not configured."
-            try:
+    def _get_llm_response(
+        self, prompt: str, llm_model: str, system_message: str = None
+    ) -> tuple[str, str]:
+        """
+        Helper to get LLM response from various providers using standardized patterns.
+
+        Args:
+            prompt: The user prompt to send to the LLM
+            llm_model: The LLM model identifier
+            system_message: Optional system message (defaults to standard assistant role)
+
+        Returns:
+            tuple[str, str]: (response_content, error_message)
+        """
+        if system_message is None:
+            system_message = self._build_system_prompt()
+
+        try:
+            if llm_model.startswith("openrouter/"):
+                if not self.openrouter_client:
+                    return None, "Error: OPENROUTER_API_KEY not configured."
+
                 chat_completion = self.openrouter_client.chat.completions.create(
                     model=llm_model.replace("openrouter/", "", 1),
                     messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a helpful assistant.",
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt,
-                        },
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": prompt},
                     ],
                 )
                 return chat_completion.choices[0].message.content, None
-            except Exception as e:
-                return None, self._handle_llm_error(e, "Google AI LLM call")["error"][
-                    "message"
-                ]
-        elif llm_model.startswith("llama3") or llm_model.startswith("mixtral"):
-            if not self.groq_client:
-                return None, "Error: GROQ_API_KEY not configured."
-            try:
+
+            elif llm_model.startswith("llama3") or llm_model.startswith("mixtral"):
+                if not self.groq_client:
+                    return None, "Error: GROQ_API_KEY not configured."
+
                 chat_completion = self.groq_client.chat.completions.create(
                     messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a helpful assistant.",
-                        },
-                        {
-                            "role": "user",
-                            "content": prompt,
-                        },
+                        {"role": "system", "content": system_message},
+                        {"role": "user", "content": prompt},
                     ],
                     model=llm_model,
                 )
                 return chat_completion.choices[0].message.content, None
-            except Exception as e:
-                return None, self._handle_llm_error(e, "Groq LLM call")["error"][
-                    "message"
-                ]
-        elif llm_model.startswith("google/"):
-            if not self.google_ai_client:
-                return None, "Error: GOOGLE_API_KEY not configured."
-            try:
+
+            elif llm_model.startswith("google/"):
+                if not self.google_ai_client:
+                    return None, "Error: GOOGLE_API_KEY not configured."
+
                 response = self.google_ai_client.generate_content(prompt)
                 return response.text, None
-            except Exception as e:
-                return None, self._handle_llm_error(e, "OpenRouter LLM call")["error"][
-                    "message"
-                ]
-        else:
-            return None, f"LLM model '{llm_model}' not supported yet."
+
+            else:
+                return None, f"LLM model '{llm_model}' not supported yet."
+
+        except Exception as e:
+            error_response = self._handle_llm_error(e, f"{llm_model} LLM call")
+            return None, error_response["error"]["message"]
 
     def _get_llm_suggestions(
-        self, prompt: str, system_message: str = "You are a helpful assistant."
+        self, prompt: str, system_message: str = None
     ) -> list[dict]:
         """
-        Get suggestions from multiple LLM providers.
+        Get suggestions from multiple LLM providers using standardized patterns.
 
         Args:
             prompt (str): The prompt to send to the LLMs.
-            system_message (str): The system message for the LLMs.
+            system_message (str): Optional system message (defaults to standard assistant role).
 
         Returns:
             list[dict]: List of suggestions from available LLM providers.
         """
+        if system_message is None:
+            system_message = self._build_system_prompt()
+
         suggestions = []
+        providers = [
+            ("llama3-8b-8192", "Groq (Llama3)"),
+            ("openrouter/google/gemini-pro", "OpenRouter (Gemini)"),
+            ("google/gemini-pro", "Google AI (Gemini)"),
+        ]
 
-        # Try Groq first
-        if self.groq_client:
+        for model, provider_name in providers:
             try:
-                chat_completion = self.groq_client.chat.completions.create(
-                    messages=[
-                        {"role": "system", "content": system_message},
-                        {"role": "user", "content": prompt},
-                    ],
-                    model="llama3-8b-8192",
-                    temperature=0.1,
-                    max_tokens=2048,
+                response_content, error_message = self._get_llm_response(
+                    prompt, model, system_message
                 )
-                suggestions.append(
-                    {
-                        "provider": "Groq (Llama3)",
-                        "suggestions": chat_completion.choices[0].message.content,
-                    }
-                )
+                if error_message:
+                    suggestions.append(
+                        {
+                            "provider": provider_name,
+                            "error": error_message,
+                        }
+                    )
+                else:
+                    suggestions.append(
+                        {
+                            "provider": provider_name,
+                            "suggestions": response_content,
+                        }
+                    )
             except Exception as e:
-                suggestions.append(
-                    {
-                        "provider": "Groq (Llama3)",
-                        "error": self._handle_llm_error(e, "Groq LLM suggestions")[
-                            "error"
-                        ]["message"],
-                    }
-                )
-
-        # Try OpenRouter
-        if self.openrouter_client:
-            try:
-                chat_completion = self.openrouter_client.chat.completions.create(
-                    model="openrouter/google/gemini-pro",
-                    messages=[
-                        {"role": "system", "content": system_message},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.1,
-                    max_tokens=2048,
+                error_response = self._handle_llm_error(
+                    e, f"{provider_name} LLM suggestions"
                 )
                 suggestions.append(
                     {
-                        "provider": "OpenRouter (Gemini)",
-                        "suggestions": chat_completion.choices[0].message.content,
-                    }
-                )
-            except Exception as e:
-                suggestions.append(
-                    {
-                        "provider": "OpenRouter (Gemini)",
-                        "error": self._handle_llm_error(
-                            e, "OpenRouter LLM suggestions"
-                        )["error"]["message"],
-                    }
-                )
-
-        # Try Google AI
-        if self.google_ai_client:
-            try:
-                model = self.google_ai_client.GenerativeModel("gemini-pro")
-                response = model.generate_content(
-                    prompt,
-                    generation_config=self.google_ai_client.types.GenerationConfig(
-                        temperature=0.1, max_output_tokens=2048
-                    ),
-                )
-                suggestions.append(
-                    {"provider": "Google AI (Gemini)", "suggestions": response.text}
-                )
-            except Exception as e:
-                suggestions.append(
-                    {
-                        "provider": "Google AI (Gemini)",
-                        "error": self._handle_llm_error(e, "Google AI LLM suggestions")[
-                            "error"
-                        ]["message"],
+                        "provider": provider_name,
+                        "error": error_response["error"]["message"],
                     }
                 )
 
@@ -565,6 +534,131 @@ class LLMAnalysisManager:
             template, file_path=file_path, code_snippet=code_snippet
         )
 
+    def _build_unit_test_system_prompt(self) -> str:
+        """Build standardized system prompt for unit test generation."""
+        return self._build_system_prompt(
+            "You are an expert Python developer that generates comprehensive unit tests. "
+            "Focus on pytest conventions, edge cases, error conditions, and best testing practices."
+        )
+
+    def _prepare_todo_fixme_prompt(
+        self, comment: str, file_path: str, line_number: int, code_context: str
+    ) -> str:
+        """
+        Prepare the prompt for TODO/FIXME resolution using LLM.
+
+        Args:
+            comment (str): The TODO/FIXME comment text.
+            file_path (str): Path to the file containing the comment.
+            line_number (int): Line number of the comment.
+            code_context (str): Surrounding code context.
+
+        Returns:
+            str: The prepared prompt for LLM analysis.
+        """
+        template = """
+            Analyze the following code snippet and the associated TODO/FIXME comment.
+            Your task is to suggest a resolution for the TODO/FIXME. Provide the suggested
+            code changes, an explanation of your approach, and any assumptions made.
+
+            TODO/FIXME Comment: {comment}
+            File: {file_path}
+            Line: {line_number}
+
+            Code Context:
+            ```python
+            {code_context}
+            ```
+
+            Please provide your response in the following JSON format:
+            ```json
+            {{
+              "suggested_code": "<suggested code changes>",
+              "explanation": "<explanation of the resolution>",
+              "line_start": <start line of suggested change (inclusive)>,
+              "line_end": <end line of suggested change (inclusive)>
+            }}
+            ```
+            If no code changes are needed, leave "suggested_code" empty.
+            If the TODO/FIXME is complex and requires multiple steps, outline them in the explanation.
+        """
+        return self._build_user_prompt(
+            template,
+            comment=comment,
+            file_path=file_path,
+            line_number=line_number,
+            code_context=code_context,
+        )
+
+    def _build_todo_fixme_system_prompt(self) -> str:
+        """Build standardized system prompt for TODO/FIXME resolution."""
+        return self._build_system_prompt(
+            "You are an expert Python developer that resolves TODO and FIXME comments. "
+            "Provide clear, actionable solutions with proper code changes and explanations."
+        )
+
+    def _prepare_documentation_prompt(
+        self, tool_name: str, signature: str, docstring: str, function_info: str
+    ) -> str:
+        """
+        Prepare the prompt for tool documentation generation using LLM.
+
+        Args:
+            tool_name (str): Name of the tool to document.
+            signature (str): Function signature.
+            docstring (str): Existing docstring.
+            function_info (str): Function implementation details.
+
+        Returns:
+            str: The prepared prompt for LLM analysis.
+        """
+        template = """
+            Please generate comprehensive documentation for the following Python tool function.
+            The documentation should follow this format:
+
+            ### {{tool_name}}
+            {{Brief description of what the tool does}}
+
+            **Parameters:**
+            {{List each parameter with its type and description}}
+            {{For optional parameters, indicate the default value}}
+
+            **Returns:**
+            {{Description of what the function returns}}
+
+            Example usage:
+            ```json
+            {{
+              "name": "{{tool_name}}",
+              "arguments": {{
+                {{example arguments}}
+              }}
+            }}
+            ```
+
+            Function to document:
+            Name: {tool_name}
+            Signature: {signature}
+            Docstring: {docstring}
+            Function implementation: {function_info}
+
+            Please provide the documentation in the exact format specified above.
+        """
+        return self._build_user_prompt(
+            template,
+            tool_name=tool_name,
+            signature=signature,
+            docstring=docstring,
+            function_info=function_info,
+        )
+
+    def _build_documentation_system_prompt(self) -> str:
+        """Build standardized system prompt for tool documentation generation."""
+        return self._build_system_prompt(
+            "You are a technical writer that creates comprehensive documentation for Python tools. "
+            "Follow the exact format specified and provide clear, accurate information."
+        )
+
     def _collect_unit_test_suggestions(self, prompt: str) -> list[dict]:
         """
         Collect unit test suggestions from multiple LLM providers.
@@ -575,25 +669,8 @@ class LLMAnalysisManager:
         Returns:
             list[dict]: List of suggestions from LLM providers.
         """
-        providers = [
-            "llama3-8b-8192",
-            "openrouter/google/gemini-pro",
-            "google/gemini-pro",
-        ]
-        responses = self._collect_llm_responses(prompt, providers)
-
-        # Map "response" to "suggestions" for compatibility
-        suggestions = []
-        for resp in responses:
-            if "response" in resp:
-                suggestions.append(
-                    {"provider": resp["provider"], "suggestions": resp["response"]}
-                )
-            elif "error" in resp:
-                suggestions.append(
-                    {"provider": resp["provider"], "error": resp["error"]}
-                )
-        return suggestions
+        system_message = self._build_unit_test_system_prompt()
+        return self._get_llm_suggestions(prompt, system_message)
 
     def profile_code_performance(
         self, file_path: str, function_name: str = None
@@ -720,13 +797,10 @@ class LLMAnalysisManager:
                 if os.path.exists(temp_file_path):
                     os.unlink(temp_file_path)
         except Exception as e:
-            error_info = self._handle_llm_error(e, "Performance profiling")["error"]
-            return {
-                "error": {
-                    "code": "PROFILING_ERROR",
-                    "message": error_info["message"],
-                }
-            }
+            error_response = self._handle_llm_error(e, "Performance profiling")
+            return self._create_error_response(
+                "PROFILING_ERROR", error_response["error"]["message"]
+            )
 
     def _read_file_content(
         self, file_path: str, as_lines: bool = False
@@ -745,26 +819,6 @@ class LLMAnalysisManager:
             FileNotFoundError: If the file does not exist.
         """
         return safe_read_file(file_path, as_lines)
-
-    def _collect_llm_responses(self, prompt: str, providers: list[str]) -> list[dict]:
-        """
-        Collect responses from multiple LLM providers.
-
-        Args:
-            prompt (str): The prompt to send to the LLMs.
-            providers (list[str]): List of LLM model identifiers.
-
-        Returns:
-            list[dict]: List of responses from available providers.
-        """
-        responses = []
-        for provider in providers:
-            response_content, error_message = self._get_llm_response(prompt, provider)
-            if error_message:
-                responses.append({"provider": provider, "error": error_message})
-            else:
-                responses.append({"provider": provider, "response": response_content})
-        return responses
 
     def _create_error_response(self, error_code: str, message: str) -> dict:
         """
@@ -889,6 +943,13 @@ class LLMAnalysisManager:
             template, file_path=file_path, code_snippet=code_snippet
         )
 
+    def _build_improvement_system_prompt(self) -> str:
+        """Build standardized system prompt for code improvement analysis."""
+        return self._build_system_prompt(
+            "You are an expert Python developer that provides detailed code improvement suggestions. "
+            "Focus on best practices, performance, maintainability, and potential bugs."
+        )
+
     def _collect_improvement_suggestions(self, prompt: str) -> list[dict]:
         """
         Collect improvement suggestions from multiple LLM providers.
@@ -899,9 +960,8 @@ class LLMAnalysisManager:
         Returns:
             list[dict]: List of suggestions from LLM providers.
         """
-        return self._get_llm_suggestions(
-            prompt, "You are a helpful assistant that suggests code improvements."
-        )
+        system_message = self._build_improvement_system_prompt()
+        return self._get_llm_suggestions(prompt, system_message)
 
     def suggest_code_improvements(
         self, file_path: str, start_line: int = None, end_line: int = None
@@ -956,8 +1016,9 @@ class LLMAnalysisManager:
             }
 
         except Exception as e:
+            error_response = self._handle_llm_error(e, "Code improvement analysis")
             return self._create_error_response(
-                "ANALYSIS_ERROR", f"An error occurred during code analysis: {str(e)}"
+                "ANALYSIS_ERROR", error_response["error"]["message"]
             )
 
     def generate_unit_tests(self, file_path: str, function_name: str = None) -> dict:
@@ -1008,9 +1069,10 @@ class LLMAnalysisManager:
             }
 
         except Exception as e:
+            error_response = self._handle_llm_error(e, "Unit test generation")
             return self._create_error_response(
                 "TEST_GENERATION_ERROR",
-                f"An error occurred during test generation: {str(e)}",
+                error_response["error"]["message"],
             )
 
     def _extract_function_info(self, tool_name: str, tool_function) -> dict:
@@ -1090,51 +1152,16 @@ class LLMAnalysisManager:
 
                 # Generate documentation using LLMs
                 # Prepare the prompt for LLM documentation generation
-                template = """
-                    Please generate comprehensive documentation for the following Python tool function.
-                    The documentation should follow this format:
-
-                    ### {{tool_name}}
-                    {{Brief description of what the tool does}}
-
-                    **Parameters:**
-                    {{List each parameter with its type and description}}
-                    {{For optional parameters, indicate the default value}}
-
-                    **Returns:**
-                    {{Description of what the function returns}}
-
-                    Example usage:
-                    ```json
-                    {{
-                      "name": "{{tool_name}}",
-                      "arguments": {{
-                        {{example arguments}}
-                      }}
-                    }}
-                    ```
-
-                    Function to document:
-                    Name: {tool}
-                    Signature: {sig}
-                    Docstring: {docstring}
-                    Function implementation: {function_info}
-
-                    Please provide the documentation in the exact format specified above.
-                """
-                prompt = self._build_user_prompt(
-                    template,
-                    tool=tool,
-                    sig=sig,
-                    docstring=docstring,
-                    function_info=function_info.get("source", "Source not available"),
+                prompt = self._prepare_documentation_prompt(
+                    tool,
+                    sig,
+                    docstring,
+                    function_info.get("source", "Source not available"),
                 )
 
                 # Get suggestions from multiple LLM providers using the common method
-                llm_suggestions = self._get_llm_suggestions(
-                    prompt,
-                    "You are a helpful assistant that generates documentation for Python tools in a specific format.",
-                )
+                system_message = self._build_documentation_system_prompt()
+                llm_suggestions = self._get_llm_suggestions(prompt, system_message)
 
                 generated_docs.append(
                     {
@@ -1154,12 +1181,10 @@ class LLMAnalysisManager:
             }
 
         except Exception as e:
-            return {
-                "error": {
-                    "code": "DOCUMENTATION_ERROR",
-                    "message": f"An error occurred during documentation generation: {str(e)}",
-                }
-            }
+            error_response = self._handle_llm_error(e, "Auto documentation generation")
+            return self._create_error_response(
+                "DOCUMENTATION_ERROR", error_response["error"]["message"]
+            )
 
     def generate_llm_api_wrapper(
         self, llm_provider: str, model_name: str, api_key_env_var: str = None
@@ -1376,43 +1401,19 @@ class LLMAnalysisManager:
             code_context = "".join(lines[context_start:context_end])
 
             # Prepare the prompt for LLM resolution
-            template = """
-                Analyze the following code snippet and the associated TODO/FIXME comment.
-                Your task is to suggest a resolution for the TODO/FIXME. Provide the suggested
-                code changes, an explanation of your approach, and any assumptions made.
-
-                TODO/FIXME Comment: {comment}
-                File: {file_path}
-                Line: {line_number}
-
-                Code Context:
-                ```python
-                {code_context}
-                ```
-
-                Please provide your response in the following JSON format:
-                ```json
-                {{
-                  "suggested_code": "<suggested code changes>",
-                  "explanation": "<explanation of the resolution>",
-                  "line_start": <start line of suggested change (inclusive)>,
-                  "line_end": <end line of suggested change (inclusive)>
-                }}
-                ```
-                If no code changes are needed, leave "suggested_code" empty.
-                If the TODO/FIXME is complex and requires multiple steps, outline them in the explanation.
-            """
-            prompt = self._build_user_prompt(
-                template,
-                comment=target_comment["comment"],
-                file_path=file_path,
-                line_number=target_comment["line_number"],
-                code_context=code_context,
+            prompt = self._prepare_todo_fixme_prompt(
+                target_comment["comment"],
+                file_path,
+                target_comment["line_number"],
+                code_context,
             )
 
             # Use a powerful LLM for resolution
             llm_model = "google/gemini-pro"  # Prioritize Gemini for complex tasks
-            response_content, error_message = self._get_llm_response(prompt, llm_model)
+            system_message = self._build_todo_fixme_system_prompt()
+            response_content, error_message = self._get_llm_response(
+                prompt, llm_model, system_message
+            )
 
             if error_message:
                 raise Exception(f"LLM resolution failed: {error_message}")
@@ -1430,4 +1431,7 @@ class LLMAnalysisManager:
                 )
 
         except Exception as e:
-            raise Exception(f"An error occurred during TODO/FIXME resolution: {str(e)}")
+            error_response = self._handle_llm_error(e, "TODO/FIXME resolution")
+            return self._create_error_response(
+                "TODO_FIXME_RESOLUTION_ERROR", error_response["error"]["message"]
+            )

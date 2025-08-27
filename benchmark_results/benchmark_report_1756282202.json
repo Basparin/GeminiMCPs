@@ -1,0 +1,307 @@
+{
+  "test_suite": "CodeSage MCP Performance Benchmark",
+  "timestamp": "2025-08-27 04:10:02",
+  "results": [
+    {
+      "test_name": "indexing_small",
+      "metric_name": "indexing_time",
+      "value": 0.018747806549072266,
+      "unit": "seconds",
+      "target": 30.0,
+      "achieved": true,
+      "metadata": {
+        "codebase_size": "small",
+        "files_indexed": 33
+      }
+    },
+    {
+      "test_name": "indexing_small",
+      "metric_name": "memory_usage",
+      "value": 0.61328125,
+      "unit": "MB",
+      "target": 500.0,
+      "achieved": true,
+      "metadata": {
+        "codebase_size": "small"
+      }
+    },
+    {
+      "test_name": "indexing_small",
+      "metric_name": "files_per_second",
+      "value": 1760.2059160159727,
+      "unit": "files/sec",
+      "target": 5.0,
+      "achieved": true,
+      "metadata": {
+        "codebase_size": "small",
+        "total_files": 33
+      }
+    },
+    {
+      "test_name": "indexing_medium",
+      "metric_name": "indexing_time",
+      "value": 0.09133458137512207,
+      "unit": "seconds",
+      "target": 30.0,
+      "achieved": true,
+      "metadata": {
+        "codebase_size": "medium",
+        "files_indexed": 153
+      }
+    },
+    {
+      "test_name": "indexing_medium",
+      "metric_name": "memory_usage",
+      "value": 0.25,
+      "unit": "MB",
+      "target": 500.0,
+      "achieved": true,
+      "metadata": {
+        "codebase_size": "medium"
+      }
+    },
+    {
+      "test_name": "indexing_medium",
+      "metric_name": "files_per_second",
+      "value": 1675.1595912134383,
+      "unit": "files/sec",
+      "target": 5.0,
+      "achieved": true,
+      "metadata": {
+        "codebase_size": "medium",
+        "total_files": 153
+      }
+    },
+    {
+      "test_name": "search_performance",
+      "metric_name": "semantic_search_avg_time",
+      "value": 1.8203258514404296e-05,
+      "unit": "seconds",
+      "target": 2.0,
+      "achieved": true,
+      "metadata": {
+        "queries": 100
+      }
+    },
+    {
+      "test_name": "search_performance",
+      "metric_name": "semantic_search_p95_time",
+      "value": 2.7644634246826173e-05,
+      "unit": "seconds",
+      "target": 5.0,
+      "achieved": true,
+      "metadata": {
+        "queries": 100
+      }
+    },
+    {
+      "test_name": "search_performance",
+      "metric_name": "text_search_avg_time",
+      "value": 0.007937002182006835,
+      "unit": "seconds",
+      "target": 1.0,
+      "achieved": true,
+      "metadata": {
+        "queries": 100
+      }
+    },
+    {
+      "test_name": "search_performance",
+      "metric_name": "text_search_p95_time",
+      "value": 0.008158528804779052,
+      "unit": "seconds",
+      "target": 3.0,
+      "achieved": true,
+      "metadata": {
+        "queries": 100
+      }
+    },
+    {
+      "test_name": "cache_performance",
+      "metric_name": "embedding_cache_hit_rate",
+      "value": 100.0,
+      "unit": "percent",
+      "target": 70.0,
+      "achieved": true,
+      "metadata": {
+        "operations": 1000
+      }
+    },
+    {
+      "test_name": "cache_performance",
+      "metric_name": "file_cache_hit_rate",
+      "value": 100.0,
+      "unit": "percent",
+      "target": 70.0,
+      "achieved": true,
+      "metadata": {
+        "operations": 1000
+      }
+    },
+    {
+      "test_name": "cache_performance",
+      "metric_name": "embedding_cache_avg_time",
+      "value": 0.0015468597412109375,
+      "unit": "milliseconds",
+      "target": 10.0,
+      "achieved": true,
+      "metadata": {
+        "operations": 1000
+      }
+    },
+    {
+      "test_name": "cache_performance",
+      "metric_name": "file_cache_avg_time",
+      "value": 0.0015342235565185547,
+      "unit": "milliseconds",
+      "target": 5.0,
+      "achieved": true,
+      "metadata": {
+        "operations": 1000
+      }
+    },
+    {
+      "test_name": "memory_management",
+      "metric_name": "model_cache_effectiveness",
+      "value": 3,
+      "unit": "models_cached",
+      "target": 3.0,
+      "achieved": true,
+      "metadata": {
+        "cache_stats": {
+          "cached_models": 3,
+          "model_names": [
+            "test_model_0",
+            "test_model_1",
+            "test_model_2"
+          ],
+          "ttl_minutes": 60
+        }
+      }
+    },
+    {
+      "test_name": "memory_management",
+      "metric_name": "memory_monitoring_accuracy",
+      "value": 5.112305508173037,
+      "unit": "percent",
+      "target": 100.0,
+      "achieved": true,
+      "metadata": {
+        "memory_stats": {
+          "rss_mb": 781.8125,
+          "vms_mb": 6614.99609375,
+          "percent": 5.112305508173037,
+          "limit_mb": 2048,
+          "available_mb": 1266.1875,
+          "memory_mapped_indexes": 0,
+          "model_cache_stats": {
+            "cached_models": 3,
+            "model_names": [
+              "test_model_0",
+              "test_model_1",
+              "test_model_2"
+            ],
+            "ttl_minutes": 60
+          }
+        }
+      }
+    },
+    {
+      "test_name": "memory_management",
+      "metric_name": "model_loading_performance",
+      "value": 0.00021338462829589844,
+      "unit": "seconds",
+      "target": 1.0,
+      "achieved": true,
+      "metadata": {
+        "loads": 10
+      }
+    },
+    {
+      "test_name": "chunking_performance",
+      "metric_name": "chunking_time",
+      "value": 0.0018677711486816406,
+      "unit": "seconds",
+      "target": 1.0,
+      "achieved": true,
+      "metadata": {
+        "content_size": 100,
+        "chunks_created": 30,
+        "avg_chunk_size": 24.0
+      }
+    },
+    {
+      "test_name": "chunking_performance",
+      "metric_name": "chunking_time",
+      "value": 0.004906892776489258,
+      "unit": "seconds",
+      "target": 1.0,
+      "achieved": true,
+      "metadata": {
+        "content_size": 500,
+        "chunks_created": 150,
+        "avg_chunk_size": 24.0
+      }
+    },
+    {
+      "test_name": "chunking_performance",
+      "metric_name": "chunking_time",
+      "value": 0.009849071502685547,
+      "unit": "seconds",
+      "target": 1.0,
+      "achieved": true,
+      "metadata": {
+        "content_size": 1000,
+        "chunks_created": 300,
+        "avg_chunk_size": 24.0
+      }
+    },
+    {
+      "test_name": "chunking_performance",
+      "metric_name": "chunking_time",
+      "value": 0.04960751533508301,
+      "unit": "seconds",
+      "target": 1.0,
+      "achieved": true,
+      "metadata": {
+        "content_size": 5000,
+        "chunks_created": 1500,
+        "avg_chunk_size": 24.0
+      }
+    }
+  ],
+  "summary": {
+    "total_tests": 21,
+    "passed_tests": 21,
+    "failed_tests": 0,
+    "performance_score": 100.0,
+    "categories": {
+      "indexing": {
+        "passed": 6,
+        "failed": 0,
+        "total": 6
+      },
+      "search": {
+        "passed": 4,
+        "failed": 0,
+        "total": 4
+      },
+      "cache": {
+        "passed": 4,
+        "failed": 0,
+        "total": 4
+      },
+      "memory": {
+        "passed": 3,
+        "failed": 0,
+        "total": 3
+      },
+      "chunking": {
+        "passed": 4,
+        "failed": 0,
+        "total": 4
+      }
+    },
+    "overall_status": "PASS"
+  }
+}

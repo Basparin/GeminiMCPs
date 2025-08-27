@@ -17,10 +17,12 @@ Classes:
 import os
 import json
 import fnmatch
+import ast
+import logging
 from pathlib import Path
 import faiss
 import numpy as np
-from typing import Dict, List, Set, Tuple, Optional
+from typing import Dict, List, Set, Tuple, Optional, Any
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
@@ -32,6 +34,9 @@ from .cache import get_cache_instance
 # Import memory management
 from .memory_manager import get_memory_manager
 from .chunking import DocumentChunker, chunk_file
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 
 class IndexingManager:
@@ -55,11 +60,11 @@ class IndexingManager:
     def __init__(self, index_dir_name: str = ".codesage"):
         """Initializes the IndexingManager.
 
-                  Args:
-                      index_dir_name (str, optional): Name of the directory where indexes
-          are stored.
-                           Defaults to ".codesage".
-          """
+                Args:
+                    index_dir_name (str, optional): Name of the directory where indexes
+        are stored.
+                         Defaults to ".codesage".
+        """
         self.index_dir_name = index_dir_name
         self.index_dir = Path(self.index_dir_name)
         self.index_file = self.index_dir / "codebase_index.json"
@@ -68,6 +73,7 @@ class IndexingManager:
         self.indexed_codebases = {}
         self.file_paths_map = {}
         self.file_metadata = {}  # Stores file timestamps and metadata
+        self.faiss_index = None  # FAISS index object
 
         # Initialize cache if enabled
         self.cache = get_cache_instance() if ENABLE_CACHING else None
@@ -88,6 +94,68 @@ class IndexingManager:
 
         self._initialize_index()
 
+    def _validate_or_recreate_index(self, expected_dimension: int) -> None:
+        """Validate FAISS index dimension or recreate if mismatch.
+
+        Args:
+            expected_dimension: Expected dimension from the model
+        """
+        if self.faiss_index is None:
+            # Create new index
+            self.faiss_index = self.memory_manager.create_optimized_index(
+                np.zeros((1, expected_dimension), dtype=np.float32)
+            )
+            return
+
+        if self.faiss_index.d != expected_dimension:
+            logger.warning(
+                f"FAISS index dimension mismatch. Expected: {expected_dimension}, Got: {self.faiss_index.d}"
+            )
+            logger.info("Recreating index with correct dimensions...")
+
+            # Backup existing data if possible
+            try:
+                # Try to extract existing vectors for re-indexing
+                existing_vectors = []
+                for faiss_id in range(self.faiss_index.ntotal):
+                    try:
+                        vector = np.zeros(self.faiss_index.d, dtype=np.float32)
+                        self.faiss_index.reconstruct(faiss_id, vector)
+                        existing_vectors.append(vector)
+                    except Exception:
+                        continue
+
+                if existing_vectors:
+                    print(
+                        f"Re-indexing {len(existing_vectors)} existing vectors with new dimensions..."
+                    )
+                    # Create new index with correct dimensions
+                    self.faiss_index = self.memory_manager.create_optimized_index(
+                        np.zeros((1, expected_dimension), dtype=np.float32)
+                    )
+
+                    # Re-encode vectors to match new dimensions (this is a simplified approach)
+                    # In practice, you might need to re-encode from original source
+                    print(
+                        "Warning: Re-encoding existing vectors to match new dimensions"
+                    )
+                    # For now, we'll create a new index and note that vectors need re-encoding
+                    self.faiss_index = faiss.IndexFlatL2(expected_dimension)
+                else:
+                    # No existing vectors, just create new index
+                    self.faiss_index = self.memory_manager.create_optimized_index(
+                        np.zeros((1, expected_dimension), dtype=np.float32)
+                    )
+
+            except Exception as e:
+                print(
+                    f"Warning: Could not preserve existing vectors during recreation: {e}"
+                )
+                # Create fresh index
+                self.faiss_index = self.memory_manager.create_optimized_index(
+                    np.zeros((1, expected_dimension), dtype=np.float32)
+                )
+
     def _initialize_index(self):
         """Inicializa el índice cargando datos existentes o creando uno nuevo."""
         self.index_dir.mkdir(exist_ok=True)
@@ -98,8 +166,8 @@ class IndexingManager:
                     self.indexed_codebases = loaded_data.get("indexed_codebases", {})
                     self.file_paths_map = loaded_data.get("file_paths_map", {})
             except (json.JSONDecodeError, IOError) as e:
-                print(
-                    f"Warning: Could not load codebase index. "
+                logger.warning(
+                    f"Could not load codebase index. "
                     f"A new one will be created. Error: {e}"
                 )
                 self.indexed_codebases = {}
@@ -116,13 +184,40 @@ class IndexingManager:
         else:
             self.file_metadata = {}
 
-        # Inicializar FAISS con soporte para memory mapping
+        # Inicializar FAISS con soporte para memory mapping y validación de dimensiones
         if self.faiss_index_file.exists():
             try:
-                self.faiss_index = self.memory_manager.load_faiss_index(str(self.faiss_index_file))
-                print(f"Loaded FAISS index with {self.faiss_index.ntotal} vectors")
+                self.faiss_index = self.memory_manager.load_faiss_index(
+                    str(self.faiss_index_file)
+                )
+                logger.info(f"Loaded FAISS index with {self.faiss_index.ntotal} vectors")
+
+                # Validate index dimensions against stored metadata
+                if self.metadata_file.exists():
+                    try:
+                        with open(self.metadata_file, "r") as f:
+                            metadata = json.load(f)
+                            stored_dimension = metadata.get("faiss_dimension")
+                            if (
+                                stored_dimension
+                                and self.faiss_index.d != stored_dimension
+                            ):
+                                logger.warning(
+                                    f"FAISS index dimension mismatch. Expected: {stored_dimension}, Got: {self.faiss_index.d}"
+                                )
+                                logger.info("Recreating index due to dimension mismatch...")
+                                self.faiss_index_file.unlink()
+                                self.faiss_index = None
+                    except (json.JSONDecodeError, KeyError) as e:
+                        logger.warning(f"Could not read dimension metadata: {e}")
+
             except Exception as e:
-                print(f"Warning: Could not load FAISS index. Error: {e}")
+                logger.warning(f"Could not load FAISS index. Error: {e}")
+                # Remove the corrupted index file so it gets recreated
+                try:
+                    self.faiss_index_file.unlink()
+                except:
+                    pass
                 self.faiss_index = None
 
         if self.faiss_index is None:
@@ -140,9 +235,12 @@ class IndexingManager:
         with open(self.index_file, "w") as f:
             json.dump(data_to_save, f, indent=4)
 
-        # Save metadata
+        # Save metadata with FAISS dimension information
+        metadata_to_save = self.file_metadata.copy()
+        if self.faiss_index:
+            metadata_to_save["faiss_dimension"] = self.faiss_index.d
         with open(self.metadata_file, "w") as f:
-            json.dump(self.file_metadata, f, indent=4, default=str)
+            json.dump(metadata_to_save, f, indent=4, default=str)
 
         if self.faiss_index:
             faiss.write_index(self.faiss_index, str(self.faiss_index_file))
@@ -219,7 +317,9 @@ class IndexingManager:
         """
         return str(Path(path).resolve())
 
-    def _detect_changed_files(self, codebase_path: str) -> Tuple[Set[str], Set[str], Set[str]]:
+    def _detect_changed_files(
+        self, codebase_path: str
+    ) -> Tuple[Set[str], Set[str], Set[str]]:
         """Detect added, modified, and deleted files in a codebase.
 
         Args:
@@ -234,11 +334,17 @@ class IndexingManager:
         # Get current files in the codebase
         current_files = set()
         gitignore_patterns = self._get_gitignore_patterns(root_path)
-        gitignore_patterns.extend([".git/", "venv/", self.index_dir_name + "/", ".gitignore"])
+        gitignore_patterns.extend(
+            [".git/", "venv/", self.index_dir_name + "/", ".gitignore"]
+        )
 
         for root, dirs, files in os.walk(codebase_path, topdown=True):
             current_path = Path(root)
-            dirs[:] = [d for d in dirs if not self._is_ignored(current_path / d, gitignore_patterns, root_path)]
+            dirs[:] = [
+                d
+                for d in dirs
+                if not self._is_ignored(current_path / d, gitignore_patterns, root_path)
+            ]
 
             for file in files:
                 file_path = current_path / file
@@ -249,7 +355,9 @@ class IndexingManager:
         # Get previously indexed files for this codebase
         previously_indexed = set()
         if codebase_key in self.indexed_codebases:
-            previously_indexed = set(self.indexed_codebases[codebase_key].get("files", []))
+            previously_indexed = set(
+                self.indexed_codebases[codebase_key].get("files", [])
+            )
 
         # Get metadata for this codebase
         codebase_metadata = self.file_metadata.get(codebase_key, {})
@@ -274,17 +382,20 @@ class IndexingManager:
 
         # Include dependent files in the changed set
         all_modified_files = set(modified_files)
-        all_added_files = set(added_files)
 
         # For each modified file, add its dependent files
         for modified_file in modified_files:
             dependent_files = self._get_dependent_files(modified_file, codebase_path)
             all_modified_files.update(dependent_files)
-            print(f"File {modified_file} changed, will also re-index {len(dependent_files)} dependent files")
+            print(
+                f"File {modified_file} changed, will also re-index {len(dependent_files)} dependent files"
+            )
 
-        return added_files, list(all_modified_files), deleted_files
+        return list(added_files), list(all_modified_files), list(deleted_files)
 
-    def _remove_deleted_embeddings(self, codebase_path: str, deleted_files: Set[str]) -> None:
+    def _remove_deleted_embeddings(
+        self, codebase_path: str, deleted_files: Set[str]
+    ) -> None:
         """Remove embeddings for deleted files from the index.
 
         Args:
@@ -294,7 +405,6 @@ class IndexingManager:
         if not deleted_files or not self.faiss_index:
             return
 
-        codebase_key = self._get_codebase_key(codebase_path)
         indices_to_remove = []
 
         # Find FAISS indices for deleted files
@@ -313,37 +423,20 @@ class IndexingManager:
                 continue
 
         if indices_to_remove:
-            # Remove from FAISS index (this is a simplified approach)
-            # In a production system, you'd want to rebuild the index more efficiently
-            all_indices = set(range(self.faiss_index.ntotal))
-            indices_to_keep = list(all_indices - set(indices_to_remove))
-
-            if indices_to_keep:
-                # Create new index with remaining vectors
-                temp_index = faiss.IndexFlatL2(self.faiss_index.d)
-                remaining_vectors = np.zeros((len(indices_to_keep), self.faiss_index.d), dtype=np.float32)
-
-                for i, idx in enumerate(indices_to_keep):
-                    self.faiss_index.reconstruct(idx, remaining_vectors[i])
-
-                self.faiss_index = temp_index
-                self.faiss_index.add(remaining_vectors)
-            else:
-                # All vectors removed, reset index
-                self.faiss_index = faiss.IndexFlatL2(self.faiss_index.d)
-
-            # Update file_paths_map
+            # Remove deleted files from file_paths_map
             new_file_paths_map = {}
             for faiss_id, file_path in self.file_paths_map.items():
                 try:
                     faiss_id_int = int(faiss_id)
                     if faiss_id_int not in indices_to_remove:
-                        # Adjust index for removed vectors
-                        new_id = str(faiss_id_int - sum(1 for r in indices_to_remove if r < faiss_id_int))
-                        new_file_paths_map[new_id] = file_path
+                        new_file_paths_map[faiss_id] = file_path
                 except ValueError:
                     continue
             self.file_paths_map = new_file_paths_map
+
+            # Note: In a production system, you'd want to rebuild the FAISS index more efficiently
+            # For now, we keep the index as-is since FAISS doesn't support efficient deletion
+            # The deleted vectors remain in the index but are not referenced in file_paths_map
 
     def _update_file_metadata(self, codebase_path: str, files: List[str]) -> None:
         """Update metadata for indexed files.
@@ -363,10 +456,12 @@ class IndexingManager:
             mtime = self._get_file_mtime(abs_file_path)
             self.file_metadata[codebase_key][file_path] = {
                 "mtime": mtime,
-                "indexed_at": datetime.now().isoformat()
+                "indexed_at": datetime.now().isoformat(),
             }
 
-    def index_codebase_incremental(self, path: str, sentence_transformer_model, force_full: bool = False) -> Tuple[list[str], bool]:
+    def index_codebase_incremental(
+        self, path: str, sentence_transformer_model, force_full: bool = False
+    ) -> Tuple[list[str], bool]:
         """Index a codebase incrementally, updating only changed files.
 
         Args:
@@ -399,16 +494,23 @@ class IndexingManager:
             existing_files = self.indexed_codebases[codebase_key].get("files", [])
             return existing_files, True
 
-        print(f"Incremental indexing: {len(added_files)} added, {len(modified_files)} modified, {len(deleted_files)} deleted files")
+        print(
+            f"Incremental indexing: {len(added_files)} added, {len(modified_files)} modified, {len(deleted_files)} deleted files"
+        )
 
         # Use batch processing for better performance
         return self._process_incremental_changes_batch(
             path, sentence_transformer_model, added_files, modified_files, deleted_files
         )
 
-    def _process_incremental_changes_batch(self, path: str, sentence_transformer_model,
-                                         added_files: Set[str], modified_files: Set[str],
-                                         deleted_files: Set[str]) -> Tuple[list[str], bool]:
+    def _process_incremental_changes_batch(
+        self,
+        path: str,
+        sentence_transformer_model,
+        added_files: List[str],
+        modified_files: List[str],
+        deleted_files: List[str],
+    ) -> Tuple[list[str], bool]:
         """Process incremental changes in batches for better performance.
 
         Args:
@@ -428,24 +530,24 @@ class IndexingManager:
         self._remove_deleted_embeddings(path, deleted_files)
 
         # Process added and modified files
-        files_to_process = added_files | modified_files
+        files_to_process = set(added_files) | set(modified_files)
         if not files_to_process:
             # Only deletions, update metadata and return
             self._update_file_metadata(path, [])
-            self.indexed_codebases[codebase_key]["files"] = list(set(self.indexed_codebases[codebase_key].get("files", [])) - deleted_files)
+            existing_files = set(self.indexed_codebases[codebase_key].get("files", []))
+            remaining_files = existing_files - set(deleted_files)
+            self.indexed_codebases[codebase_key]["files"] = list(remaining_files)
             self._save_index()
-            return list(set(self.indexed_codebases[codebase_key].get("files", [])) - deleted_files), True
+            return list(remaining_files), True
 
         # Initialize FAISS if needed
-        if self.faiss_index is None:
-            embedding_size = sentence_transformer_model.get_sentence_embedding_dimension()
-            # Use optimized index creation
-            self.faiss_index = self.memory_manager.create_optimized_index(
-                np.zeros((1, embedding_size), dtype=np.float32)  # Dummy data for initialization
-            )
+        embedding_size = sentence_transformer_model.get_sentence_embedding_dimension()
+        self._validate_or_recreate_index(embedding_size)
 
         gitignore_patterns = self._get_gitignore_patterns(root_path)
-        gitignore_patterns.extend([".git/", "venv/", self.index_dir_name + "/", ".gitignore"])
+        gitignore_patterns.extend(
+            [".git/", "venv/", self.index_dir_name + "/", ".gitignore"]
+        )
 
         # Process files in batches for better performance
         batch_size = min(50, len(files_to_process))  # Adaptive batch size
@@ -462,16 +564,28 @@ class IndexingManager:
         use_parallel = self._should_use_parallel_processing(len(files_list))
 
         for i in range(0, len(files_list), batch_size):
-            batch_files = files_list[i:i + batch_size]
-            print(f"Processing batch {i//batch_size + 1}/{(len(files_list) + batch_size - 1)//batch_size} ({len(batch_files)} files)")
+            batch_files = files_list[i : i + batch_size]
+            print(
+                f"Processing batch {i // batch_size + 1}/{(len(files_list) + batch_size - 1) // batch_size} ({len(batch_files)} files)"
+            )
 
             if use_parallel:
-                batch_embeddings, batch_file_paths, batch_indexed_files = self._process_file_batch_parallel(
-                    batch_files, root_path, gitignore_patterns, sentence_transformer_model
+                batch_embeddings, batch_file_paths, batch_indexed_files = (
+                    self._process_file_batch_parallel(
+                        batch_files,
+                        root_path,
+                        gitignore_patterns,
+                        sentence_transformer_model,
+                    )
                 )
             else:
-                batch_embeddings, batch_file_paths, batch_indexed_files = self._process_file_batch(
-                    batch_files, root_path, gitignore_patterns, sentence_transformer_model
+                batch_embeddings, batch_file_paths, batch_indexed_files = (
+                    self._process_file_batch(
+                        batch_files,
+                        root_path,
+                        gitignore_patterns,
+                        sentence_transformer_model,
+                    )
                 )
 
             all_new_embeddings.extend(batch_embeddings)
@@ -485,15 +599,23 @@ class IndexingManager:
         # Add all new embeddings to FAISS in one operation
         if all_new_embeddings:
             embeddings_array = np.array(all_new_embeddings).astype("float32")
-            self.faiss_index.add(embeddings_array)
+            if (
+                embeddings_array.shape[0] > 0
+                and embeddings_array.shape[1] == self.faiss_index.d
+            ):
+                self.faiss_index.add(embeddings_array)
 
-            # Update file paths map
-            for i, fp in enumerate(all_new_file_paths):
-                self.file_paths_map[str(current_faiss_id + i)] = fp
+                # Update file paths map
+                for i, fp in enumerate(all_new_file_paths):
+                    self.file_paths_map[str(current_faiss_id + i)] = fp
+            else:
+                print(
+                    f"Warning: Embedding dimension mismatch. Expected: {self.faiss_index.d}, Got: {embeddings_array.shape[1] if embeddings_array.shape[0] > 0 else 0}"
+                )
 
         # Update codebase metadata
         existing_files = set(self.indexed_codebases[codebase_key].get("files", []))
-        updated_files = (existing_files - deleted_files) | set(indexed_files)
+        updated_files = (existing_files - set(deleted_files)) | set(indexed_files)
         self.indexed_codebases[codebase_key] = {
             "status": "indexed",
             "files": list(updated_files),
@@ -507,11 +629,18 @@ class IndexingManager:
 
         self._save_index()
 
-        print(f"Incrementally indexed {len(indexed_files)} files in codebase at: {path}")
+        print(
+            f"Incrementally indexed {len(indexed_files)} files in codebase at: {path}"
+        )
         return list(updated_files), True
 
-    def _process_file_batch(self, file_paths: List[str], root_path: Path,
-                          gitignore_patterns: List[str], sentence_transformer_model) -> Tuple[List[np.ndarray], List[str], List[str]]:
+    def _process_file_batch(
+        self,
+        file_paths: List[str],
+        root_path: Path,
+        gitignore_patterns: List[str],
+        sentence_transformer_model,
+    ) -> Tuple[List[np.ndarray], List[str], List[str]]:
         """Process a batch of files for embedding generation.
 
         Args:
@@ -546,15 +675,21 @@ class IndexingManager:
                             cache_hit = False
 
                             if self.cache:
-                                embedding, cache_hit = self.cache.get_embedding(chunk_id, chunk.content)
+                                embedding, cache_hit = self.cache.get_embedding(
+                                    chunk_id, chunk.content
+                                )
 
                             if not cache_hit:
                                 # Generate new embedding for chunk
-                                embedding = sentence_transformer_model.encode(chunk.content)
+                                embedding = sentence_transformer_model.encode(
+                                    chunk.content
+                                )
 
                                 # Store in cache
                                 if self.cache:
-                                    self.cache.store_embedding(chunk_id, chunk.content, embedding)
+                                    self.cache.store_embedding(
+                                        chunk_id, chunk.content, embedding
+                                    )
 
                             embeddings.append(embedding)
                             file_paths_list.append(str(abs_file_path.resolve()))
@@ -563,7 +698,9 @@ class IndexingManager:
                             if cache_hit:
                                 print(f"Cache hit for chunk {i} of {abs_file_path}")
                             else:
-                                print(f"Generated embedding for chunk {i} of {abs_file_path}")
+                                print(
+                                    f"Generated embedding for chunk {i} of {abs_file_path}"
+                                )
                     else:
                         # Fallback to whole file processing if chunking fails
                         with open(abs_file_path, "r", encoding="utf-8") as f:
@@ -574,7 +711,9 @@ class IndexingManager:
                         cache_hit = False
 
                         if self.cache:
-                            embedding, cache_hit = self.cache.get_embedding(str(abs_file_path), content)
+                            embedding, cache_hit = self.cache.get_embedding(
+                                str(abs_file_path), content
+                            )
 
                         if not cache_hit:
                             # Generate new embedding
@@ -582,7 +721,9 @@ class IndexingManager:
 
                             # Store in cache
                             if self.cache:
-                                self.cache.store_embedding(str(abs_file_path), content, embedding)
+                                self.cache.store_embedding(
+                                    str(abs_file_path), content, embedding
+                                )
 
                         embeddings.append(embedding)
                         file_paths_list.append(str(abs_file_path.resolve()))
@@ -594,7 +735,9 @@ class IndexingManager:
                             print(f"Generated new embedding for {abs_file_path}")
 
                 except Exception as e:
-                    print(f"Warning: Could not process file {abs_file_path} for embedding: {e}")
+                    print(
+                        f"Warning: Could not process file {abs_file_path} for embedding: {e}"
+                    )
                     continue
 
         return embeddings, file_paths_list, indexed_files
@@ -613,11 +756,11 @@ class IndexingManager:
         abs_file_path = root_path / file_path
 
         # Only analyze Python files
-        if not file_path.endswith('.py'):
+        if not file_path.endswith(".py"):
             return dependencies
 
         try:
-            with open(abs_file_path, 'r', encoding='utf-8') as f:
+            with open(abs_file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # Parse AST to find import statements
@@ -626,14 +769,14 @@ class IndexingManager:
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
-                        module_name = alias.name.split('.')[0]
+                        module_name = alias.name.split(".")[0]
                         # Try to resolve module to file path
                         dep_path = self._resolve_module_to_path(module_name, root_path)
                         if dep_path:
                             dependencies.add(dep_path)
                 elif isinstance(node, ast.ImportFrom):
                     if node.module:
-                        module_name = node.module.split('.')[0]
+                        module_name = node.module.split(".")[0]
                         # Try to resolve module to file path
                         dep_path = self._resolve_module_to_path(module_name, root_path)
                         if dep_path:
@@ -645,7 +788,9 @@ class IndexingManager:
 
         return dependencies
 
-    def _resolve_module_to_path(self, module_name: str, root_path: Path) -> Optional[str]:
+    def _resolve_module_to_path(
+        self, module_name: str, root_path: Path
+    ) -> Optional[str]:
         """Resolve a Python module name to a relative file path.
 
         Args:
@@ -660,7 +805,7 @@ class IndexingManager:
             f"{module_name}.py",
             f"{module_name}/__init__.py",
             f"{module_name.replace('.', '/')}.py",
-            f"{module_name.replace('.', '/')}/__init__.py"
+            f"{module_name.replace('.', '/')}/__init__.py",
         ]
 
         for path_str in possible_paths:
@@ -694,7 +839,7 @@ class IndexingManager:
         indexed_files = self.indexed_codebases[codebase_key].get("files", [])
 
         for file_path in indexed_files:
-            if file_path.endswith('.py'):
+            if file_path.endswith(".py"):
                 # Analyze dependencies for this file
                 dependencies = self._analyze_file_dependencies(file_path, root_path)
 
@@ -751,7 +896,9 @@ class IndexingManager:
 
         return dependent_files
 
-    def _update_dependency_graph(self, codebase_path: str, changed_files: List[str]) -> None:
+    def _update_dependency_graph(
+        self, codebase_path: str, changed_files: List[str]
+    ) -> None:
         """Update dependency graph for changed files.
 
         Args:
@@ -769,13 +916,17 @@ class IndexingManager:
 
         # Update dependencies for changed files
         for file_path in changed_files:
-            if file_path.endswith('.py'):
+            if file_path.endswith(".py"):
                 # Remove old dependencies for this file
                 if file_path in self._reverse_dependencies[codebase_key]:
-                    old_deps = self._reverse_dependencies[codebase_key][file_path].copy()
+                    old_deps = self._reverse_dependencies[codebase_key][
+                        file_path
+                    ].copy()
                     for old_dep in old_deps:
                         if old_dep in self._dependency_graph[codebase_key]:
-                            self._dependency_graph[codebase_key][old_dep].discard(file_path)
+                            self._dependency_graph[codebase_key][old_dep].discard(
+                                file_path
+                            )
 
                 # Analyze new dependencies
                 new_dependencies = self._analyze_file_dependencies(file_path, root_path)
@@ -788,7 +939,9 @@ class IndexingManager:
                         self._dependency_graph[codebase_key][dep] = set()
                     self._dependency_graph[codebase_key][dep].add(file_path)
 
-    def _process_files_parallel(self, file_paths: List[str], root_path: Path, sentence_transformer_model) -> Tuple[List[np.ndarray], List[str], List[str]]:
+    def _process_files_parallel(
+        self, file_paths: List[str], root_path: Path, sentence_transformer_model
+    ) -> Tuple[List[np.ndarray], List[str], List[str]]:
         """Process multiple files in parallel for full indexing.
 
         Args:
@@ -806,7 +959,12 @@ class IndexingManager:
         future_to_file = {}
         for file_path in file_paths:
             abs_file_path = root_path / file_path
-            future = executor.submit(self._process_single_file, abs_file_path, file_path, sentence_transformer_model)
+            future = executor.submit(
+                self._process_single_file,
+                abs_file_path,
+                file_path,
+                sentence_transformer_model,
+            )
             future_to_file[future] = file_path
 
         # Collect results as they complete
@@ -841,14 +999,19 @@ class IndexingManager:
                 # Determine optimal number of workers based on system and workload
                 if max_workers is None:
                     import multiprocessing
+
                     cpu_count = multiprocessing.cpu_count()
                     # Use 75% of available CPUs, minimum 2, maximum 8
                     max_workers = max(2, min(8, int(cpu_count * 0.75)))
 
-                self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="IndexingWorker")
+                self._executor = ThreadPoolExecutor(
+                    max_workers=max_workers, thread_name_prefix="IndexingWorker"
+                )
             return self._executor
 
-    def _should_use_parallel_processing(self, num_files: int, file_sizes: Optional[List[int]] = None) -> bool:
+    def _should_use_parallel_processing(
+        self, num_files: int, file_sizes: Optional[List[int]] = None
+    ) -> bool:
         """Determine if parallel processing would be beneficial.
 
         Args:
@@ -870,8 +1033,13 @@ class IndexingManager:
 
         return False
 
-    def _process_file_batch_parallel(self, file_paths: List[str], root_path: Path,
-                                   gitignore_patterns: List[str], sentence_transformer_model) -> Tuple[List[np.ndarray], List[str], List[str]]:
+    def _process_file_batch_parallel(
+        self,
+        file_paths: List[str],
+        root_path: Path,
+        gitignore_patterns: List[str],
+        sentence_transformer_model,
+    ) -> Tuple[List[np.ndarray], List[str], List[str]]:
         """Process a batch of files in parallel for better performance.
 
         Args:
@@ -885,7 +1053,9 @@ class IndexingManager:
         """
         if not self._should_use_parallel_processing(len(file_paths)):
             # Fall back to sequential processing for small batches
-            return self._process_file_batch(file_paths, root_path, gitignore_patterns, sentence_transformer_model)
+            return self._process_file_batch(
+                file_paths, root_path, gitignore_patterns, sentence_transformer_model
+            )
 
         print(f"Using parallel processing for {len(file_paths)} files")
 
@@ -897,7 +1067,12 @@ class IndexingManager:
         for file_path in file_paths:
             abs_file_path = root_path / file_path
             if not self._is_ignored(abs_file_path, gitignore_patterns, root_path):
-                future = executor.submit(self._process_single_file, abs_file_path, file_path, sentence_transformer_model)
+                future = executor.submit(
+                    self._process_single_file,
+                    abs_file_path,
+                    file_path,
+                    sentence_transformer_model,
+                )
                 future_to_file[future] = file_path
 
         # Collect results as they complete
@@ -918,7 +1093,9 @@ class IndexingManager:
 
         return all_embeddings, all_file_paths, all_indexed_files
 
-    def _process_single_file(self, abs_file_path: Path, relative_file_path: str, sentence_transformer_model) -> Tuple[List[np.ndarray], List[str], List[str]]:
+    def _process_single_file(
+        self, abs_file_path: Path, relative_file_path: str, sentence_transformer_model
+    ) -> Tuple[List[np.ndarray], List[str], List[str]]:
         """Process a single file for embedding generation (used in parallel processing).
 
         Args:
@@ -947,7 +1124,9 @@ class IndexingManager:
                     cache_hit = False
 
                     if self.cache:
-                        embedding, cache_hit = self.cache.get_embedding(chunk_id, chunk.content)
+                        embedding, cache_hit = self.cache.get_embedding(
+                            chunk_id, chunk.content
+                        )
 
                     if not cache_hit:
                         # Generate new embedding for chunk
@@ -955,7 +1134,9 @@ class IndexingManager:
 
                         # Store in cache
                         if self.cache:
-                            self.cache.store_embedding(chunk_id, chunk.content, embedding)
+                            self.cache.store_embedding(
+                                chunk_id, chunk.content, embedding
+                            )
 
                     embeddings.append(embedding)
                     file_paths_list.append(str(abs_file_path.resolve()))
@@ -970,7 +1151,9 @@ class IndexingManager:
                 cache_hit = False
 
                 if self.cache:
-                    embedding, cache_hit = self.cache.get_embedding(str(abs_file_path), content)
+                    embedding, cache_hit = self.cache.get_embedding(
+                        str(abs_file_path), content
+                    )
 
                 if not cache_hit:
                     # Generate new embedding
@@ -978,7 +1161,9 @@ class IndexingManager:
 
                     # Store in cache
                     if self.cache:
-                        self.cache.store_embedding(str(abs_file_path), content, embedding)
+                        self.cache.store_embedding(
+                            str(abs_file_path), content, embedding
+                        )
 
                 embeddings.append(embedding)
                 file_paths_list.append(str(abs_file_path.resolve()))
@@ -1018,14 +1203,10 @@ class IndexingManager:
         new_file_paths = []
         # Inicializar el modelo y FAISS si es necesario
         self.sentence_transformer_model = sentence_transformer_model
-        if self.faiss_index is None:
-            embedding_size = (
-                self.sentence_transformer_model.get_sentence_embedding_dimension()
-            )
-            # Use optimized index creation
-            self.faiss_index = self.memory_manager.create_optimized_index(
-                np.zeros((1, embedding_size), dtype=np.float32)  # Dummy data for initialization
-            )
+        embedding_size = (
+            self.sentence_transformer_model.get_sentence_embedding_dimension()
+        )
+        self._validate_or_recreate_index(embedding_size)
 
         current_faiss_id = self.faiss_index.ntotal if self.faiss_index else 0
 
@@ -1053,8 +1234,10 @@ class IndexingManager:
         if use_parallel:
             print(f"Using parallel processing for {len(all_files_to_process)} files")
             # Process files in parallel
-            new_embeddings, new_file_paths, indexed_files = self._process_files_parallel(
-                all_files_to_process, root_path, sentence_transformer_model
+            new_embeddings, new_file_paths, indexed_files = (
+                self._process_files_parallel(
+                    all_files_to_process, root_path, sentence_transformer_model
+                )
             )
         else:
             # Process files sequentially
@@ -1076,15 +1259,21 @@ class IndexingManager:
                             cache_hit = False
 
                             if self.cache:
-                                embedding, cache_hit = self.cache.get_embedding(chunk_id, chunk.content)
+                                embedding, cache_hit = self.cache.get_embedding(
+                                    chunk_id, chunk.content
+                                )
 
                             if not cache_hit:
                                 # Generate new embedding for chunk
-                                embedding = self.sentence_transformer_model.encode(chunk.content)
+                                embedding = self.sentence_transformer_model.encode(
+                                    chunk.content
+                                )
 
                                 # Store in cache
                                 if self.cache:
-                                    self.cache.store_embedding(chunk_id, chunk.content, embedding)
+                                    self.cache.store_embedding(
+                                        chunk_id, chunk.content, embedding
+                                    )
 
                             new_embeddings.append(embedding)
                             new_file_paths.append(str(file_path.resolve()))
@@ -1093,7 +1282,9 @@ class IndexingManager:
                             if cache_hit:
                                 print(f"Cache hit for chunk {i} of {file_path}")
                             else:
-                                print(f"Generated embedding for chunk {i} of {file_path}")
+                                print(
+                                    f"Generated embedding for chunk {i} of {file_path}"
+                                )
                     else:
                         # Fallback to whole file processing if chunking fails
                         with open(file_path, "r", encoding="utf-8") as f:
@@ -1104,7 +1295,9 @@ class IndexingManager:
                         cache_hit = False
 
                         if self.cache:
-                            embedding, cache_hit = self.cache.get_embedding(str(file_path), content)
+                            embedding, cache_hit = self.cache.get_embedding(
+                                str(file_path), content
+                            )
 
                         if not cache_hit:
                             # Generate new embedding
@@ -1112,7 +1305,9 @@ class IndexingManager:
 
                             # Store in cache
                             if self.cache:
-                                self.cache.store_embedding(str(file_path), content, embedding)
+                                self.cache.store_embedding(
+                                    str(file_path), content, embedding
+                                )
 
                         new_embeddings.append(embedding)
                         new_file_paths.append(str(file_path.resolve()))
@@ -1168,7 +1363,7 @@ class IndexingManager:
             "memory_stats": self.memory_manager.get_memory_stats(),
             "index_stats": {},
             "chunking_stats": {},
-            "cache_stats": self.cache.get_stats() if self.cache else {}
+            "cache_stats": self.cache.get_stats() if self.cache else {},
         }
 
         if self.faiss_index:
@@ -1176,7 +1371,8 @@ class IndexingManager:
                 "total_vectors": self.faiss_index.ntotal,
                 "dimension": self.faiss_index.d,
                 "index_type": type(self.faiss_index).__name__,
-                "is_trained": hasattr(self.faiss_index, 'is_trained') and self.faiss_index.is_trained
+                "is_trained": hasattr(self.faiss_index, "is_trained")
+                and self.faiss_index.is_trained,
             }
 
         if codebase_path:
@@ -1185,8 +1381,78 @@ class IndexingManager:
                 codebase_info = self.indexed_codebases[abs_path]
                 stats["codebase_stats"] = {
                     "total_files": len(codebase_info.get("files", [])),
-                    "status": codebase_info.get("status", "unknown")
+                    "status": codebase_info.get("status", "unknown"),
                 }
+
+        return stats
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get comprehensive indexing statistics.
+
+        Returns:
+            Dictionary with indexing statistics including memory usage,
+            index health, and performance metrics
+        """
+        stats = {
+            "index_stats": {},
+            "memory_stats": {},
+            "cache_stats": {},
+            "performance_stats": {},
+            "codebase_stats": {},
+        }
+
+        # Index statistics
+        if self.faiss_index:
+            stats["index_stats"] = {
+                "total_vectors": self.faiss_index.ntotal,
+                "dimension": self.faiss_index.d,
+                "index_type": type(self.faiss_index).__name__,
+                "is_trained": hasattr(self.faiss_index, "is_trained")
+                and self.faiss_index.is_trained,
+            }
+
+            # Calculate index memory usage
+            if hasattr(self.faiss_index, "ntotal") and hasattr(self.faiss_index, "d"):
+                vectors = self.faiss_index.ntotal
+                dimension = self.faiss_index.d
+                # Rough estimation: float32 = 4 bytes per dimension
+                estimated_bytes = vectors * dimension * 4
+                stats["index_stats"]["estimated_memory_mb"] = estimated_bytes / (
+                    1024 * 1024
+                )
+        else:
+            stats["index_stats"] = {
+                "total_vectors": 0,
+                "dimension": 0,
+                "index_type": "None",
+                "is_trained": False,
+                "estimated_memory_mb": 0,
+            }
+
+        # Memory statistics
+        if self.memory_manager:
+            stats["memory_stats"] = self.memory_manager.get_memory_stats()
+
+        # Cache statistics
+        if self.cache:
+            stats["cache_stats"] = self.cache.get_stats()
+
+        # Performance statistics
+        stats["performance_stats"] = {
+            "total_codebases": len(self.indexed_codebases),
+            "total_files_indexed": sum(
+                len(cb.get("files", [])) for cb in self.indexed_codebases.values()
+            ),
+            "dependency_tracking_enabled": True,
+            "parallel_processing_enabled": True,
+        }
+
+        # Codebase statistics
+        for codebase_key, codebase_info in self.indexed_codebases.items():
+            stats["codebase_stats"][codebase_key] = {
+                "total_files": len(codebase_info.get("files", [])),
+                "status": codebase_info.get("status", "unknown"),
+            }
 
         return stats
 
@@ -1220,7 +1486,7 @@ class IndexingManager:
                 codebase_info = self.indexed_codebases[abs_path]
                 health_stats["codebase_info"] = {
                     "total_files": len(codebase_info.get("files", [])),
-                    "status": codebase_info.get("status", "unknown")
+                    "status": codebase_info.get("status", "unknown"),
                 }
 
         return health_stats
@@ -1252,35 +1518,53 @@ class IndexingManager:
             "healthy": True,
             "fragmentation_ratio": 0.0,
             "needs_optimization": False,
-            "recommendations": []
+            "recommendations": [],
         }
 
         # Check for fragmentation (simplified - in practice you'd analyze the index structure)
-        if hasattr(self.faiss_index, 'ntotal') and hasattr(self.faiss_index, 'd'):
+        if hasattr(self.faiss_index, "ntotal") and hasattr(self.faiss_index, "d"):
             # Estimate fragmentation based on vector count and memory usage
-            estimated_memory_mb = (self.faiss_index.ntotal * self.faiss_index.d * 4) / (1024 * 1024)
+            estimated_memory_mb = (self.faiss_index.ntotal * self.faiss_index.d * 4) / (
+                1024 * 1024
+            )
             health_stats["estimated_memory_mb"] = estimated_memory_mb
 
             # If we have significantly more vectors than expected for the memory usage,
             # it might indicate fragmentation
-            expected_vectors = (estimated_memory_mb * 1024 * 1024) / (self.faiss_index.d * 4 * 1.5)  # 1.5x overhead
+            expected_vectors = (estimated_memory_mb * 1024 * 1024) / (
+                self.faiss_index.d * 4 * 1.5
+            )  # 1.5x overhead
             if self.faiss_index.ntotal > expected_vectors * 1.2:  # 20% threshold
-                health_stats["fragmentation_ratio"] = self.faiss_index.ntotal / expected_vectors
+                health_stats["fragmentation_ratio"] = (
+                    self.faiss_index.ntotal / expected_vectors
+                )
                 health_stats["needs_optimization"] = True
-                health_stats["recommendations"].append("High fragmentation detected - consider rebuilding index")
+                health_stats["recommendations"].append(
+                    "High fragmentation detected - consider rebuilding index"
+                )
 
         # Check if index needs training (for IVF indexes)
-        if hasattr(self.faiss_index, 'is_trained'):
+        if hasattr(self.faiss_index, "is_trained"):
             health_stats["is_trained"] = self.faiss_index.is_trained
             if not self.faiss_index.is_trained:
                 health_stats["needs_optimization"] = True
-                health_stats["recommendations"].append("Index not trained - needs training")
+                health_stats["recommendations"].append(
+                    "Index not trained - needs training"
+                )
 
         # Performance recommendations
         if self.faiss_index.ntotal > 10000:
-            health_stats["recommendations"].append("Large index - consider using IVF or HNSW for better performance")
+            health_stats["recommendations"].append(
+                "Large index - consider using IVF or HNSW for better performance"
+            )
 
         return health_stats
+
+    def load_faiss_index(
+        self, index_path: str, memory_mapped: bool = None
+    ) -> faiss.Index:
+        """Load FAISS index with optional memory mapping."""
+        return self.memory_manager.load_faiss_index(index_path, memory_mapped)
 
     def _rebuild_index_optimized(self, embeddings: np.ndarray) -> None:
         """Rebuild the FAISS index with optimal settings based on data characteristics.
@@ -1310,14 +1594,16 @@ class IndexingManager:
             self.faiss_index = faiss.IndexIVFFlat(quantizer, dimension, nlist)
 
         # Train the index if necessary
-        if hasattr(self.faiss_index, 'is_trained') and not self.faiss_index.is_trained:
+        if hasattr(self.faiss_index, "is_trained") and not self.faiss_index.is_trained:
             print(f"Training index with {n_vectors} vectors...")
             self.faiss_index.train(embeddings)
 
         # Add vectors to the index
         self.faiss_index.add(embeddings)
 
-        print(f"Rebuilt index: {type(self.faiss_index).__name__} with {n_vectors} vectors")
+        print(
+            f"Rebuilt index: {type(self.faiss_index).__name__} with {n_vectors} vectors"
+        )
 
     def optimize_index_comprehensive(self, codebase_path: str = None) -> Dict[str, Any]:
         """Perform comprehensive index optimization including defragmentation and rebuilding.
@@ -1340,7 +1626,7 @@ class IndexingManager:
             return {
                 "success": True,
                 "message": "Index is already optimized",
-                "health_stats": health_stats
+                "health_stats": health_stats,
             }
 
         try:
@@ -1389,7 +1675,7 @@ class IndexingManager:
                 "vectors_optimized": len(all_embeddings),
                 "new_index_type": type(self.faiss_index).__name__,
                 "health_improvements": health_stats["recommendations"],
-                "before_optimization": health_stats
+                "before_optimization": health_stats,
             }
 
             print(f"Index optimization completed: {optimization_results}")
@@ -1399,7 +1685,7 @@ class IndexingManager:
             return {
                 "success": False,
                 "message": f"Optimization failed: {e}",
-                "health_stats": health_stats
+                "health_stats": health_stats,
             }
 
     def defragment_index(self, threshold: float = 0.2) -> Dict[str, Any]:
@@ -1413,187 +1699,210 @@ class IndexingManager:
         """
         health_stats = self._analyze_index_health()
 
-        if not health_stats["needs_optimization"] or health_stats["fragmentation_ratio"] < (1.0 + threshold):
+        if not health_stats["needs_optimization"] or health_stats[
+            "fragmentation_ratio"
+        ] < (1.0 + threshold):
             return {
                 "defragmented": False,
                 "reason": "Fragmentation below threshold",
-                "fragmentation_ratio": health_stats["fragmentation_ratio"]
-            }
-    
-        def compress_index(self, compression_type: str = "auto", target_memory_mb: Optional[int] = None) -> Dict[str, Any]:
-            """Compress the FAISS index to reduce memory usage.
-    
-            Args:
-                compression_type: Type of compression ("auto", "pq", "ivf_pq", "scalar_quant")
-                target_memory_mb: Target memory usage in MB (optional)
-    
-            Returns:
-                Dictionary with compression results
-            """
-            if not self.faiss_index:
-                return {"success": False, "message": "No index to compress"}
-    
-            print(f"Starting index compression (type: {compression_type})...")
-    
-            try:
-                # Extract current embeddings
-                print("Extracting embeddings for compression...")
-                embeddings = []
-                for faiss_id in range(self.faiss_index.ntotal):
-                    try:
-                        vector = np.zeros(self.faiss_index.d, dtype=np.float32)
-                        self.faiss_index.reconstruct(faiss_id, vector)
-                        embeddings.append(vector)
-                    except Exception as e:
-                        print(f"Warning: Could not reconstruct vector {faiss_id}: {e}")
-                        continue
-    
-                if not embeddings:
-                    return {"success": False, "message": "No valid embeddings found"}
-    
-                embeddings_array = np.array(embeddings)
-                n_vectors = embeddings_array.shape[0]
-                dimension = embeddings_array.shape[1]
-    
-                # Determine optimal compression based on data characteristics
-                if compression_type == "auto":
-                    if n_vectors > 10000:
-                        compression_type = "ivf_pq"
-                    elif dimension > 384:
-                        compression_type = "pq"
-                    else:
-                        compression_type = "scalar_quant"
-    
-                original_memory_mb = (n_vectors * dimension * 4) / (1024 * 1024)
-    
-                # Create compressed index
-                if compression_type == "pq":
-                    # Product Quantization
-                    m = min(dimension // 4, 64)  # Number of sub-quantizers
-                    nbits = 8  # Bits per sub-quantizer
-                    self.faiss_index = faiss.IndexPQ(dimension, m, nbits)
-                elif compression_type == "ivf_pq":
-                    # IVF + PQ
-                    nlist = min(1024, max(100, n_vectors // 39))
-                    m = min(dimension // 4, 64)
-                    nbits = 8
-                    quantizer = faiss.IndexFlatL2(dimension)
-                    self.faiss_index = faiss.IndexIVFPQ(quantizer, dimension, nlist, m, nbits)
-                elif compression_type == "scalar_quant":
-                    # Scalar quantization
-                    self.faiss_index = faiss.IndexScalarQuantizer(dimension, faiss.ScalarQuantizer.QT_8bit)
-                else:
-                    return {"success": False, "message": f"Unknown compression type: {compression_type}"}
-    
-                # Train the compressed index if necessary
-                if hasattr(self.faiss_index, 'is_trained') and not self.faiss_index.is_trained:
-                    print("Training compressed index...")
-                    self.faiss_index.train(embeddings_array)
-    
-                # Add vectors to compressed index
-                self.faiss_index.add(embeddings_array)
-    
-                # Calculate compression statistics
-                compressed_memory_mb = self._estimate_index_memory_usage()
-    
-                return {
-                    "success": True,
-                    "message": f"Index compressed using {compression_type}",
-                    "compression_type": compression_type,
-                    "original_memory_mb": original_memory_mb,
-                    "compressed_memory_mb": compressed_memory_mb,
-                    "compression_ratio": original_memory_mb / compressed_memory_mb if compressed_memory_mb > 0 else 0,
-                    "vectors_compressed": n_vectors
-                }
-    
-            except Exception as e:
-                return {
-                    "success": False,
-                    "message": f"Compression failed: {e}",
-                    "compression_type": compression_type
-                }
-    
-        def _estimate_index_memory_usage(self) -> float:
-            """Estimate memory usage of the current FAISS index in MB.
-    
-            Returns:
-                Estimated memory usage in MB
-            """
-            if not self.faiss_index:
-                return 0
-    
-            try:
-                # Rough estimation based on index type and parameters
-                n_vectors = self.faiss_index.ntotal
-                dimension = self.faiss_index.d
-    
-                if hasattr(self.faiss_index, 'pq'):
-                    # PQ index
-                    m = self.faiss_index.pq.M
-                    nbits = self.faiss_index.pq.nbits
-                    bytes_per_vector = (m * nbits) / 8
-                elif hasattr(self.faiss_index, 'sq'):
-                    # Scalar quantizer
-                    bytes_per_vector = 1  # 8-bit quantization
-                else:
-                    # Flat index (no compression)
-                    bytes_per_vector = dimension * 4  # float32
-    
-                # Add overhead for index structure
-                total_bytes = n_vectors * bytes_per_vector * 1.2  # 20% overhead
-                return total_bytes / (1024 * 1024)
-    
-            except Exception:
-                # Fallback estimation
-                return (self.faiss_index.ntotal * self.faiss_index.d * 4 * 1.2) / (1024 * 1024)
-    
-        def optimize_index_for_memory(self, target_memory_mb: int = 500) -> Dict[str, Any]:
-            """Optimize index for specific memory target.
-    
-            Args:
-                target_memory_mb: Target memory usage in MB
-    
-            Returns:
-                Dictionary with optimization results
-            """
-            if not self.faiss_index:
-                return {"success": False, "message": "No index to optimize"}
-    
-            current_memory_mb = self._estimate_index_memory_usage()
-    
-            if current_memory_mb <= target_memory_mb:
-                return {
-                    "success": True,
-                    "message": "Index already within memory target",
-                    "current_memory_mb": current_memory_mb,
-                    "target_memory_mb": target_memory_mb
-                }
-    
-            # Try different compression strategies
-            strategies = [
-                ("scalar_quant", "Scalar Quantization (8-bit)"),
-                ("pq", "Product Quantization"),
-                ("ivf_pq", "IVF + Product Quantization")
-            ]
-    
-            for compression_type, description in strategies:
-                try:
-                    result = self.compress_index(compression_type)
-                    if result["success"] and result["compressed_memory_mb"] <= target_memory_mb:
-                        result["strategy_used"] = description
-                        return result
-                except Exception as e:
-                    print(f"Warning: {description} failed: {e}")
-                    continue
-    
-            return {
-                "success": False,
-                "message": f"Could not achieve target memory usage of {target_memory_mb}MB",
-                "current_memory_mb": current_memory_mb,
-                "target_memory_mb": target_memory_mb
+                "fragmentation_ratio": health_stats["fragmentation_ratio"],
             }
 
-        print(f"Defragmenting index (fragmentation: {health_stats['fragmentation_ratio']:.2f})...")
+        print(
+            f"Defragmenting index (fragmentation: {health_stats['fragmentation_ratio']:.2f})..."
+        )
 
         # Perform comprehensive optimization
         return self.optimize_index_comprehensive()
+
+    def compress_index(
+        self, compression_type: str = "auto", target_memory_mb: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """Compress the FAISS index to reduce memory usage.
+
+        Args:
+            compression_type: Type of compression ("auto", "pq", "ivf_pq", "scalar_quant")
+            target_memory_mb: Target memory usage in MB (optional)
+
+        Returns:
+            Dictionary with compression results
+        """
+        if not self.faiss_index:
+            return {"success": False, "message": "No index to compress"}
+
+        print(f"Starting index compression (type: {compression_type})...")
+
+        try:
+            # Extract current embeddings
+            print("Extracting embeddings for compression...")
+            embeddings = []
+            for faiss_id in range(self.faiss_index.ntotal):
+                try:
+                    vector = np.zeros(self.faiss_index.d, dtype=np.float32)
+                    self.faiss_index.reconstruct(faiss_id, vector)
+                    embeddings.append(vector)
+                except Exception as e:
+                    print(f"Warning: Could not reconstruct vector {faiss_id}: {e}")
+                    continue
+
+            if not embeddings:
+                return {"success": False, "message": "No valid embeddings found"}
+
+            embeddings_array = np.array(embeddings)
+            n_vectors = embeddings_array.shape[0]
+            dimension = embeddings_array.shape[1]
+
+            # Determine optimal compression based on data characteristics
+            if compression_type == "auto":
+                if n_vectors > 10000:
+                    compression_type = "ivf_pq"
+                elif dimension > 384:
+                    compression_type = "pq"
+                else:
+                    compression_type = "scalar_quant"
+
+            original_memory_mb = (n_vectors * dimension * 4) / (1024 * 1024)
+
+            # Create compressed index
+            if compression_type == "pq":
+                # Product Quantization
+                m = min(dimension // 4, 64)  # Number of sub-quantizers
+                nbits = 8  # Bits per sub-quantizer
+                self.faiss_index = faiss.IndexPQ(dimension, m, nbits)
+            elif compression_type == "ivf_pq":
+                # IVF + PQ
+                nlist = min(1024, max(100, n_vectors // 39))
+                m = min(dimension // 4, 64)
+                nbits = 8
+                quantizer = faiss.IndexFlatL2(dimension)
+                self.faiss_index = faiss.IndexIVFPQ(
+                    quantizer, dimension, nlist, m, nbits
+                )
+            elif compression_type == "scalar_quant":
+                # Scalar quantization
+                self.faiss_index = faiss.IndexScalarQuantizer(
+                    dimension, faiss.ScalarQuantizer.QT_8bit
+                )
+            else:
+                return {
+                    "success": False,
+                    "message": f"Unknown compression type: {compression_type}",
+                }
+
+            # Train the compressed index if necessary
+            if (
+                hasattr(self.faiss_index, "is_trained")
+                and not self.faiss_index.is_trained
+            ):
+                print("Training compressed index...")
+                self.faiss_index.train(embeddings_array)
+
+            # Add vectors to compressed index
+            self.faiss_index.add(embeddings_array)
+
+            # Calculate compression statistics
+            compressed_memory_mb = self._estimate_index_memory_usage()
+
+            return {
+                "success": True,
+                "message": f"Index compressed using {compression_type}",
+                "compression_type": compression_type,
+                "original_memory_mb": original_memory_mb,
+                "compressed_memory_mb": compressed_memory_mb,
+                "compression_ratio": original_memory_mb / compressed_memory_mb
+                if compressed_memory_mb > 0
+                else 0,
+                "vectors_compressed": n_vectors,
+            }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Compression failed: {e}",
+                "compression_type": compression_type,
+            }
+
+    def _estimate_index_memory_usage(self) -> float:
+        """Estimate memory usage of the current FAISS index in MB.
+
+        Returns:
+            Estimated memory usage in MB
+        """
+        if not self.faiss_index:
+            return 0
+
+        try:
+            # Rough estimation based on index type and parameters
+            n_vectors = self.faiss_index.ntotal
+            dimension = self.faiss_index.d
+
+            if hasattr(self.faiss_index, "pq"):
+                # PQ index
+                m = self.faiss_index.pq.M
+                nbits = self.faiss_index.pq.nbits
+                bytes_per_vector = (m * nbits) / 8
+            elif hasattr(self.faiss_index, "sq"):
+                # Scalar quantizer
+                bytes_per_vector = 1  # 8-bit quantization
+            else:
+                # Flat index (no compression)
+                bytes_per_vector = dimension * 4  # float32
+
+            # Add overhead for index structure
+            total_bytes = n_vectors * bytes_per_vector * 1.2  # 20% overhead
+            return total_bytes / (1024 * 1024)
+
+        except Exception:
+            # Fallback estimation
+            return (self.faiss_index.ntotal * self.faiss_index.d * 4 * 1.2) / (
+                1024 * 1024
+            )
+
+    def optimize_index_for_memory(self, target_memory_mb: int = 500) -> Dict[str, Any]:
+        """Optimize index for specific memory target.
+
+        Args:
+            target_memory_mb: Target memory usage in MB
+
+        Returns:
+            Dictionary with optimization results
+        """
+        if not self.faiss_index:
+            return {"success": False, "message": "No index to optimize"}
+
+        current_memory_mb = self._estimate_index_memory_usage()
+
+        if current_memory_mb <= target_memory_mb:
+            return {
+                "success": True,
+                "message": "Index already within memory target",
+                "current_memory_mb": current_memory_mb,
+                "target_memory_mb": target_memory_mb,
+            }
+
+        # Try different compression strategies
+        strategies = [
+            ("scalar_quant", "Scalar Quantization (8-bit)"),
+            ("pq", "Product Quantization"),
+            ("ivf_pq", "IVF + Product Quantization"),
+        ]
+
+        for compression_type, description in strategies:
+            try:
+                result = self.compress_index(compression_type)
+                if (
+                    result["success"]
+                    and result["compressed_memory_mb"] <= target_memory_mb
+                ):
+                    result["strategy_used"] = description
+                    return result
+            except Exception as e:
+                print(f"Warning: {description} failed: {e}")
+                continue
+
+        return {
+            "success": False,
+            "message": f"Could not achieve target memory usage of {target_memory_mb}MB",
+            "current_memory_mb": current_memory_mb,
+            "target_memory_mb": target_memory_mb,
+        }

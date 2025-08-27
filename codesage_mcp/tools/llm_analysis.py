@@ -12,7 +12,7 @@ Tools included:
 
 import ast
 from codesage_mcp.codebase_manager import codebase_manager
-from codesage_mcp.utils import create_error_response, tool_error_handler
+from codesage_mcp.utils import tool_error_handler
 
 
 @tool_error_handler
@@ -79,10 +79,8 @@ def semantic_search_codebase_tool(
     """Performs a semantic search within the indexed codebase to find code snippets
     semantically similar to the given query.
     """
-    search_results = (
-        codebase_manager.searching_manager.semantic_search_codebase(
-            query, codebase_manager.sentence_transformer_model, top_k
-        )
+    search_results = codebase_manager.searching_manager.semantic_search_codebase(
+        query, codebase_manager.sentence_transformer_model, top_k
     )
     if search_results:
         return {
@@ -107,10 +105,8 @@ def profile_code_performance_tool(
 ) -> dict:
     """Profiles the performance of a specific function or the entire file."""
     # Use the codebase manager's LLM analysis manager
-    profiling_results = (
-        codebase_manager.llm_analysis_manager.profile_code_performance(
-            file_path, function_name
-        )
+    profiling_results = codebase_manager.llm_analysis_manager.profile_code_performance(
+        file_path, function_name
     )
     return profiling_results
 
@@ -124,10 +120,7 @@ def suggest_code_improvements_tool(
 ) -> dict:
     """Analyzes a code section and suggests improvements by consulting external LLMs."""
     # Use the codebase manager's LLM analysis manager
-    analysis_results = (
-        codebase_manager.llm_analysis_manager.suggest_code_improvements(
-            file_path, start_line, end_line
-        )
+    analysis_results = codebase_manager.llm_analysis_manager.suggest_code_improvements(
+        file_path, start_line, end_line
     )
     return analysis_results
-

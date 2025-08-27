@@ -498,8 +498,10 @@ async def handle_jsonrpc_request(request: Request):
             except Exception as e:
                 logger.error(f"Error executing tool {tool_name}: {e}")
                 return JSONRPCResponse(
-                    error=create_error_response("TOOL_EXECUTION_ERROR", f"Error executing tool {tool_name}: {e}"),
-                    id=jsonrpc_request.id
+                    error=create_error_response(
+                        "TOOL_EXECUTION_ERROR", f"Error executing tool {tool_name}: {e}"
+                    ),
+                    id=jsonrpc_request.id,
                 )
         else:
             raise HTTPException(

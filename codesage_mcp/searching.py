@@ -14,12 +14,16 @@ Classes:
 
 import re
 import fnmatch
+import logging
 import numpy as np
 from pathlib import Path
 
 # Import caching system
 from .config import ENABLE_CACHING
 from .cache import get_cache_instance
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 
 class SearchingManager:
@@ -119,10 +123,10 @@ class SearchingManager:
                                 }
                             )
             except FileNotFoundError:
-                print(f"Warning: File not found during search: {file_path}. Skipping.")
+                logger.warning(f"File not found during search: {file_path}. Skipping.")
                 continue
             except Exception as e:
-                print(f"Error processing file {file_path}: {e}. Skipping.")
+                logger.error(f"Error processing file {file_path}: {e}. Skipping.")
                 continue
         return search_results
 
@@ -158,10 +162,12 @@ class SearchingManager:
         cache_hit = False
 
         if self.cache:
-            cached_results, cache_hit = self.cache.get_search_results(query, query_embedding, top_k)
+            cached_results, cache_hit = self.cache.get_search_results(
+                query, query_embedding, top_k
+            )
 
         if cache_hit and cached_results:
-            print(f"Cache hit for search query: '{query}'")
+            logger.debug(f"Cache hit for search query: '{query}'")
             return cached_results
 
         # Perform search
@@ -184,7 +190,7 @@ class SearchingManager:
         # Store results in cache
         if self.cache and search_results:
             self.cache.store_search_results(query, query_embedding, search_results)
-            print(f"Cached search results for query: '{query}'")
+            logger.debug(f"Cached search results for query: '{query}'")
 
         return search_results
 
@@ -306,7 +312,7 @@ class SearchingManager:
                             )
 
             except Exception as e:
-                print(f"Error processing file {file_path}: {e}")
+                logger.error(f"Error processing file {file_path}: {e}")
                 continue
 
         # Remove duplicates from the results list (since we're comparing

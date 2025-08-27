@@ -1,8 +1,7 @@
 """Configuration Tools Module for CodeSage MCP Server."""
 
 import os
-from codesage_mcp.codebase_manager import codebase_manager
-from codesage_mcp.utils import create_error_response, tool_error_handler, safe_read_file
+from codesage_mcp.utils import create_error_response, tool_error_handler
 from codesage_mcp.config import ENABLE_CACHING
 from codesage_mcp.cache import get_cache_instance
 
@@ -46,6 +45,7 @@ def configure_api_key_tool(llm_provider: str, api_key: str) -> dict:
 
     # Update the global variables in config module
     import codesage_mcp.config as config_module
+
     if env_var_name == "GROQ_API_KEY":
         config_module.GROQ_API_KEY = api_key.strip()
     elif env_var_name == "OPENROUTER_API_KEY":
@@ -69,7 +69,7 @@ def get_configuration_tool() -> dict:
         GROQ_API_KEY,
         OPENROUTER_API_KEY,
         GOOGLE_API_KEY,
-        get_configuration_status
+        get_configuration_status,
     )
 
     def mask_api_key(key: str) -> str:
@@ -99,7 +99,7 @@ def get_cache_statistics_tool() -> dict:
     if not ENABLE_CACHING:
         return {
             "message": "Caching is disabled in configuration.",
-            "caching_enabled": False
+            "caching_enabled": False,
         }
 
     try:
@@ -109,8 +109,10 @@ def get_cache_statistics_tool() -> dict:
         return {
             "message": "Cache statistics retrieved successfully.",
             "caching_enabled": True,
-            "statistics": stats
+            "statistics": stats,
         }
 
     except Exception as e:
-        return create_error_response("CACHE_ERROR", f"Failed to retrieve cache statistics: {e}")
+        return create_error_response(
+            "CACHE_ERROR", f"Failed to retrieve cache statistics: {e}"
+        )

@@ -19,17 +19,18 @@ Classes:
     FileContentCache: Specialized cache for file contents
 """
 
-import os
 import json
 import hashlib
 import time
 import threading
+import logging
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple, Set
+from typing import Dict, List, Any, Optional, Tuple
 from collections import OrderedDict, defaultdict
-from functools import lru_cache
 import numpy as np
-from datetime import datetime, timedelta
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class LRUCache:
@@ -83,7 +84,9 @@ class LRUCache:
             return {
                 "size": len(self.cache),
                 "max_size": self.max_size,
-                "utilization": len(self.cache) / self.max_size if self.max_size > 0 else 0
+                "utilization": len(self.cache) / self.max_size
+                if self.max_size > 0
+                else 0,
             }
 
 
@@ -112,7 +115,7 @@ class EmbeddingCache:
 
     def _hash_content(self, content: str) -> str:
         """Generate a hash of the file content."""
-        return hashlib.md5(content.encode('utf-8')).hexdigest()
+        return hashlib.md5(content.encode("utf-8")).hexdigest()
 
     def get_embedding(self, file_path: str, content: str) -> Optional[np.ndarray]:
         """Get cached embedding if available and valid."""
@@ -126,7 +129,9 @@ class EmbeddingCache:
 
         return None
 
-    def store_embedding(self, file_path: str, content: str, embedding: np.ndarray) -> None:
+    def store_embedding(
+        self, file_path: str, content: str, embedding: np.ndarray
+    ) -> None:
         """Store an embedding in the cache."""
         content_hash = self._hash_content(content)
         cache_key = self._get_cache_key(file_path, content_hash)
@@ -138,10 +143,9 @@ class EmbeddingCache:
         self.file_to_keys[file_path].add(cache_key)
 
         # Store file metadata for invalidation
-        self.file_metadata.put(file_path, {
-            "hash": content_hash,
-            "timestamp": time.time()
-        })
+        self.file_metadata.put(
+            file_path, {"hash": content_hash, "timestamp": time.time()}
+        )
 
     def invalidate_file(self, file_path: str) -> int:
         """Invalidate all cached embeddings for a file. Returns number of invalidated entries."""
@@ -171,7 +175,7 @@ class EmbeddingCache:
         """Load persistent cache from disk."""
         try:
             if self.cache_file.exists():
-                with open(self.cache_file, 'r') as f:
+                with open(self.cache_file, "r") as f:
                     data = json.load(f)
 
                 # Load file metadata
@@ -184,12 +188,14 @@ class EmbeddingCache:
 
             # Load embeddings if available
             if self.embeddings_file.exists():
-                embeddings_data = np.load(self.embeddings_file, allow_pickle=True).item()
+                embeddings_data = np.load(
+                    self.embeddings_file, allow_pickle=True
+                ).item()
                 for cache_key, embedding in embeddings_data.items():
                     self.embedding_cache.put(cache_key, embedding)
 
         except Exception as e:
-            print(f"Warning: Could not load persistent embedding cache: {e}")
+            logger.warning(f"Could not load persistent embedding cache: {e}")
 
     def _save_persistent_cache(self) -> None:
         """Save cache to disk for persistence."""
@@ -197,10 +203,10 @@ class EmbeddingCache:
             # Save metadata
             data = {
                 "file_metadata": dict(self.file_metadata.cache),
-                "file_to_keys": {k: list(v) for k, v in self.file_to_keys.items()}
+                "file_to_keys": {k: list(v) for k, v in self.file_to_keys.items()},
             }
 
-            with open(self.cache_file, 'w') as f:
+            with open(self.cache_file, "w") as f:
                 json.dump(data, f, indent=2)
 
             # Save embeddings
@@ -208,15 +214,19 @@ class EmbeddingCache:
             np.save(self.embeddings_file, embeddings_data)
 
         except Exception as e:
-            print(f"Warning: Could not save persistent embedding cache: {e}")
+            logger.warning(f"Could not save persistent embedding cache: {e}")
 
     def stats(self) -> Dict[str, Any]:
         """Get embedding cache statistics."""
         return {
             "embedding_cache": self.embedding_cache.stats(),
             "file_metadata_cache": self.file_metadata.stats(),
-            "files_tracked": len(self.file_to_keys)
+            "files_tracked": len(self.file_to_keys),
         }
+
+    def size(self) -> int:
+        """Get the current size of the embedding cache."""
+        return self.embedding_cache.size()
 
 
 class SearchResultCache:
@@ -231,7 +241,7 @@ class SearchResultCache:
 
     def _hash_query(self, query: str) -> str:
         """Generate a hash for a search query."""
-        return hashlib.md5(query.encode('utf-8')).hexdigest()
+        return hashlib.md5(query.encode("utf-8")).hexdigest()
 
     def _cosine_similarity(self, emb1: np.ndarray, emb2: np.ndarray) -> float:
         """Calculate cosine similarity between two embeddings."""
@@ -240,8 +250,9 @@ class SearchResultCache:
         norm2 = np.linalg.norm(emb2)
         return dot_product / (norm1 * norm2) if norm1 != 0 and norm2 != 0 else 0
 
-    def get_similar_results(self, query: str, query_embedding: np.ndarray,
-                           top_k: int = 5) -> Optional[List[Dict]]:
+    def get_similar_results(
+        self, query: str, query_embedding: np.ndarray, top_k: int = 5
+    ) -> Optional[List[Dict]]:
         """Get cached results for a similar query if available."""
         # Check for exact match first
         query_hash = self._hash_query(query)
@@ -252,13 +263,11 @@ class SearchResultCache:
         # Look for similar queries
         best_match = None
         best_similarity = 0
-        best_key = None
 
         for cached_key, cached_embedding in self.query_embeddings.cache.items():
             similarity = self._cosine_similarity(query_embedding, cached_embedding)
             if similarity > best_similarity and similarity >= self.similarity_threshold:
                 best_similarity = similarity
-                best_key = cached_key
                 best_match = self.cache.get(cached_key)
 
         if best_match is not None:
@@ -267,8 +276,9 @@ class SearchResultCache:
 
         return None
 
-    def store_results(self, query: str, query_embedding: np.ndarray,
-                     results: List[Dict]) -> None:
+    def store_results(
+        self, query: str, query_embedding: np.ndarray, results: List[Dict]
+    ) -> None:
         """Store search results in the cache."""
         query_hash = self._hash_query(query)
 
@@ -287,14 +297,16 @@ class SearchResultCache:
         return {
             "result_cache": self.cache.stats(),
             "query_embedding_cache": self.query_embeddings.stats(),
-            "similarity_threshold": self.similarity_threshold
+            "similarity_threshold": self.similarity_threshold,
         }
 
 
 class FileContentCache:
     """Specialized cache for file contents with memory-efficient storage."""
 
-    def __init__(self, max_size: int = 100, max_file_size: int = 1024*1024):  # 1MB default
+    def __init__(
+        self, max_size: int = 100, max_file_size: int = 1024 * 1024
+    ):  # 1MB default
         self.max_size = max_size
         self.max_file_size = max_file_size
         self.cache = LRUCache(max_size)
@@ -306,7 +318,7 @@ class FileContentCache:
 
     def store_content(self, file_path: str, content: str) -> bool:
         """Store file content in cache if it meets size requirements."""
-        content_size = len(content.encode('utf-8'))
+        content_size = len(content.encode("utf-8"))
 
         # Check if content is too large
         if content_size > self.max_file_size:
@@ -338,14 +350,16 @@ class FileContentCache:
             "total_cached_size_bytes": total_size,
             "total_cached_size_mb": total_size / (1024 * 1024),
             "max_file_size_bytes": self.max_file_size,
-            "max_file_size_mb": self.max_file_size / (1024 * 1024)
+            "max_file_size_mb": self.max_file_size / (1024 * 1024),
         }
 
 
 class IntelligentCache:
     """Main cache management class with monitoring and coordination capabilities."""
 
-    def __init__(self, cache_dir: str = ".codesage", config: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self, cache_dir: str = ".codesage", config: Optional[Dict[str, Any]] = None
+    ):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(exist_ok=True)
 
@@ -355,9 +369,9 @@ class IntelligentCache:
             "search_cache_size": 1000,
             "file_cache_size": 100,
             "similarity_threshold": 0.85,
-            "max_file_size": 1024*1024,  # 1MB
+            "max_file_size": 1024 * 1024,  # 1MB
             "enable_persistence": True,
-            "cache_warming_enabled": True
+            "cache_warming_enabled": True,
         }
 
         # Merge with provided config
@@ -365,18 +379,17 @@ class IntelligentCache:
 
         # Initialize specialized caches
         self.embedding_cache = EmbeddingCache(
-            max_size=self.config["embedding_cache_size"],
-            cache_dir=str(self.cache_dir)
+            max_size=self.config["embedding_cache_size"], cache_dir=str(self.cache_dir)
         )
 
         self.search_cache = SearchResultCache(
             max_size=self.config["search_cache_size"],
-            similarity_threshold=self.config["similarity_threshold"]
+            similarity_threshold=self.config["similarity_threshold"],
         )
 
         self.file_cache = FileContentCache(
             max_size=self.config["file_cache_size"],
-            max_file_size=self.config["max_file_size"]
+            max_file_size=self.config["max_file_size"],
         )
 
         # Statistics tracking
@@ -386,14 +399,16 @@ class IntelligentCache:
             "invalidations": defaultdict(int),
             "prefetch_hits": defaultdict(int),
             "prefetch_misses": defaultdict(int),
-            "start_time": time.time()
+            "start_time": time.time(),
         }
 
         # Usage pattern tracking for prefetching
         self.usage_patterns = {
             "file_access_sequence": [],  # Recent file access sequence
             "file_access_counts": defaultdict(int),  # Access frequency
-            "file_coaccess": defaultdict(lambda: defaultdict(int)),  # Files accessed together
+            "file_coaccess": defaultdict(
+                lambda: defaultdict(int)
+            ),  # Files accessed together
             "last_access_time": {},  # Last access time for each file
             "access_intervals": defaultdict(list),  # Time intervals between accesses
         }
@@ -404,7 +419,7 @@ class IntelligentCache:
             "max_prefetch_files": 10,
             "prefetch_threshold": 0.7,  # Similarity threshold for pattern matching
             "coaccess_threshold": 3,  # Minimum co-access count to establish pattern
-            "enable_pattern_learning": True
+            "enable_pattern_learning": True,
         }
 
         # Adaptive sizing configuration
@@ -413,10 +428,10 @@ class IntelligentCache:
             "min_cache_size": 100,
             "max_cache_size": 10000,
             "memory_threshold_high": 0.8,  # Reduce cache when memory usage > 80%
-            "memory_threshold_low": 0.3,   # Increase cache when memory usage < 30%
+            "memory_threshold_low": 0.3,  # Increase cache when memory usage < 30%
             "high_workload_threshold": 100,  # High workload = >100 accesses per minute
             "adjustment_interval": 300,  # Check every 5 minutes
-            "last_adjustment": time.time()
+            "last_adjustment": time.time(),
         }
 
         # Workload tracking
@@ -424,13 +439,15 @@ class IntelligentCache:
             "accesses_last_minute": 0,
             "accesses_last_hour": 0,
             "last_minute_start": time.time(),
-            "last_hour_start": time.time()
+            "last_hour_start": time.time(),
         }
 
         # Thread safety
         self.lock = threading.RLock()
 
-    def get_embedding(self, file_path: str, content: str) -> Tuple[Optional[np.ndarray], bool]:
+    def get_embedding(
+        self, file_path: str, content: str
+    ) -> Tuple[Optional[np.ndarray], bool]:
         """Get embedding from cache or return None if not cached. Returns (embedding, was_hit)."""
         with self.lock:
             embedding = self.embedding_cache.get_embedding(file_path, content)
@@ -442,16 +459,21 @@ class IntelligentCache:
                 self.stats["misses"]["embedding"] += 1
                 return None, False
 
-    def store_embedding(self, file_path: str, content: str, embedding: np.ndarray) -> None:
+    def store_embedding(
+        self, file_path: str, content: str, embedding: np.ndarray
+    ) -> None:
         """Store an embedding in the cache."""
         with self.lock:
             self.embedding_cache.store_embedding(file_path, content, embedding)
 
-    def get_search_results(self, query: str, query_embedding: np.ndarray,
-                           top_k: int = 5) -> Tuple[Optional[List[Dict]], bool]:
+    def get_search_results(
+        self, query: str, query_embedding: np.ndarray, top_k: int = 5
+    ) -> Tuple[Optional[List[Dict]], bool]:
         """Get similar search results from cache. Returns (results, was_hit)."""
         with self.lock:
-            results = self.search_cache.get_similar_results(query, query_embedding, top_k)
+            results = self.search_cache.get_similar_results(
+                query, query_embedding, top_k
+            )
             if results is not None:
                 self.stats["hits"]["search"] += 1
                 self.record_cache_access("search")
@@ -460,8 +482,9 @@ class IntelligentCache:
                 self.stats["misses"]["search"] += 1
                 return None, False
 
-    def store_search_results(self, query: str, query_embedding: np.ndarray,
-                           results: List[Dict]) -> None:
+    def store_search_results(
+        self, query: str, query_embedding: np.ndarray, results: List[Dict]
+    ) -> None:
         """Store search results in the cache."""
         with self.lock:
             self.search_cache.store_results(query, query_embedding, results)
@@ -484,7 +507,9 @@ class IntelligentCache:
         with self.lock:
             stored = self.file_cache.store_content(file_path, content)
             if not stored:
-                self.stats["misses"]["file"] += 1  # Count as miss if not stored due to size
+                self.stats["misses"]["file"] += (
+                    1  # Count as miss if not stored due to size
+                )
             return stored
 
     def invalidate_file(self, file_path: str) -> Dict[str, int]:
@@ -492,7 +517,7 @@ class IntelligentCache:
         with self.lock:
             invalidated = {
                 "embeddings": self.embedding_cache.invalidate_file(file_path),
-                "file_content": 1 if self.file_cache.invalidate_file(file_path) else 0
+                "file_content": 1 if self.file_cache.invalidate_file(file_path) else 0,
             }
 
             total_invalidated = sum(invalidated.values())
@@ -516,27 +541,48 @@ class IntelligentCache:
             # Calculate hit rates
             embedding_hits = self.stats["hits"]["embedding"]
             embedding_misses = self.stats["misses"]["embedding"]
-            embedding_hit_rate = embedding_hits / (embedding_hits + embedding_misses) if (embedding_hits + embedding_misses) > 0 else 0
+            embedding_hit_rate = (
+                embedding_hits / (embedding_hits + embedding_misses)
+                if (embedding_hits + embedding_misses) > 0
+                else 0
+            )
 
             search_hits = self.stats["hits"]["search"]
             search_misses = self.stats["misses"]["search"]
-            search_hit_rate = search_hits / (search_hits + search_misses) if (search_hits + search_misses) > 0 else 0
+            search_hit_rate = (
+                search_hits / (search_hits + search_misses)
+                if (search_hits + search_misses) > 0
+                else 0
+            )
 
             file_hits = self.stats["hits"]["file"]
             file_misses = self.stats["misses"]["file"]
-            file_hit_rate = file_hits / (file_hits + file_misses) if (file_hits + file_misses) > 0 else 0
+            file_hit_rate = (
+                file_hits / (file_hits + file_misses)
+                if (file_hits + file_misses) > 0
+                else 0
+            )
 
             # Calculate performance metrics
-            total_requests = embedding_hits + embedding_misses + search_hits + search_misses + file_hits + file_misses
+            total_requests = (
+                embedding_hits
+                + embedding_misses
+                + search_hits
+                + search_misses
+                + file_hits
+                + file_misses
+            )
             avg_request_time = uptime / max(total_requests, 1)  # Rough estimate
-    
+
             # Memory efficiency metrics
             memory_usage = self._get_memory_usage()
-            cache_efficiency = (embedding_hits + search_hits + file_hits) / max(total_requests, 1)
-    
+            cache_efficiency = (embedding_hits + search_hits + file_hits) / max(
+                total_requests, 1
+            )
+
             # Workload analysis
             workload_intensity = self.workload_stats["accesses_last_minute"]
-    
+
             return {
                 "uptime_seconds": uptime,
                 "uptime_hours": uptime / 3600,
@@ -546,48 +592,70 @@ class IntelligentCache:
                     "requests_per_second": total_requests / max(uptime, 1),
                     "memory_usage_percent": memory_usage * 100,
                     "cache_efficiency_percent": cache_efficiency * 100,
-                    "workload_intensity": workload_intensity
+                    "workload_intensity": workload_intensity,
                 },
                 "hit_rates": {
                     "embedding": embedding_hit_rate,
                     "search": search_hit_rate,
                     "file": file_hit_rate,
-                    "overall": (embedding_hits + search_hits + file_hits) /
-                               (embedding_hits + embedding_misses + search_hits + search_misses + file_hits + file_misses)
-                               if (embedding_hits + embedding_misses + search_hits + search_misses + file_hits + file_misses) > 0 else 0
+                    "overall": (embedding_hits + search_hits + file_hits)
+                    / (
+                        embedding_hits
+                        + embedding_misses
+                        + search_hits
+                        + search_misses
+                        + file_hits
+                        + file_misses
+                    )
+                    if (
+                        embedding_hits
+                        + embedding_misses
+                        + search_hits
+                        + search_misses
+                        + file_hits
+                        + file_misses
+                    )
+                    > 0
+                    else 0,
                 },
                 "hits": dict(self.stats["hits"]),
                 "misses": dict(self.stats["misses"]),
                 "invalidations": dict(self.stats["invalidations"]),
                 "prefetch_stats": {
                     "prefetch_hits": dict(self.stats.get("prefetch_hits", {})),
-                    "prefetch_misses": dict(self.stats.get("prefetch_misses", {}))
+                    "prefetch_misses": dict(self.stats.get("prefetch_misses", {})),
                 },
                 "usage_patterns": {
                     "most_accessed_files": sorted(
                         self.usage_patterns["file_access_counts"].items(),
                         key=lambda x: x[1],
-                        reverse=True
+                        reverse=True,
                     )[:10],
-                    "file_access_sequence_length": len(self.usage_patterns["file_access_sequence"]),
-                    "coaccess_patterns_count": len(self.usage_patterns["file_coaccess"])
+                    "file_access_sequence_length": len(
+                        self.usage_patterns["file_access_sequence"]
+                    ),
+                    "coaccess_patterns_count": len(
+                        self.usage_patterns["file_coaccess"]
+                    ),
                 },
                 "adaptive_sizing": {
                     "enabled": self.adaptive_config["enabled"],
-                    "last_adaptation": self.adaptive_config.get("last_adaptation", "never"),
+                    "last_adaptation": self.adaptive_config.get(
+                        "last_adaptation", "never"
+                    ),
                     "current_sizes": {
                         "embedding_cache": self.config["embedding_cache_size"],
                         "search_cache": self.config["search_cache_size"],
-                        "file_cache": self.config["file_cache_size"]
-                    }
+                        "file_cache": self.config["file_cache_size"],
+                    },
                 },
                 "caches": {
                     "embedding": self.embedding_cache.stats(),
                     "search": self.search_cache.stats(),
-                    "file": self.file_cache.stats()
+                    "file": self.file_cache.stats(),
                 },
                 "config": self.config,
-                "recommendations": self._generate_performance_recommendations()
+                "recommendations": self._generate_performance_recommendations(),
             }
 
     def save_persistent_cache(self) -> None:
@@ -601,11 +669,11 @@ class IntelligentCache:
 
                 # Save cache statistics
                 stats_file = self.cache_dir / "cache_stats.json"
-                with open(stats_file, 'w') as f:
+                with open(stats_file, "w") as f:
                     json.dump(self.get_comprehensive_stats(), f, indent=2, default=str)
 
             except Exception as e:
-                print(f"Warning: Could not save persistent cache: {e}")
+                logger.warning(f"Could not save persistent cache: {e}")
 
     def load_persistent_cache(self) -> None:
         """Load persistent cache data from disk."""
@@ -618,7 +686,7 @@ class IntelligentCache:
                 # Load and merge statistics if available
                 stats_file = self.cache_dir / "cache_stats.json"
                 if stats_file.exists():
-                    with open(stats_file, 'r') as f:
+                    with open(stats_file, "r") as f:
                         saved_stats = json.load(f)
 
                     # Merge saved statistics (don't overwrite current session stats)
@@ -629,9 +697,11 @@ class IntelligentCache:
                                     self.stats[key][subkey] = value
 
             except Exception as e:
-                print(f"Warning: Could not load persistent cache: {e}")
+                logger.warning(f"Could not load persistent cache: {e}")
 
-    def _calculate_file_priority_score(self, file_path: str, codebase_path: str) -> float:
+    def _calculate_file_priority_score(
+        self, file_path: str, codebase_path: str
+    ) -> float:
         """Calculate a priority score for a file based on ML-based heuristics.
 
         Args:
@@ -653,22 +723,22 @@ class IntelligentCache:
                 score += 1.0
 
             # Factor 2: File type priority
-            if file_path.endswith('.py'):
+            if file_path.endswith(".py"):
                 score += 3.0  # Python files are most important
-            elif file_path.endswith(('.js', '.ts', '.java', '.cpp', '.c', '.h')):
+            elif file_path.endswith((".js", ".ts", ".java", ".cpp", ".c", ".h")):
                 score += 2.5  # Other programming languages
-            elif file_path.endswith(('.md', '.txt', '.yml', '.yaml', '.json')):
+            elif file_path.endswith((".md", ".txt", ".yml", ".yaml", ".json")):
                 score += 1.5  # Documentation and config files
-            elif file_path.endswith(('.html', '.css')):
+            elif file_path.endswith((".html", ".css")):
                 score += 1.0  # Web files
 
             # Factor 3: Directory structure (files in root or src are more important)
             path_parts = Path(file_path).parts
             if len(path_parts) <= 2:
                 score += 1.5  # Root level files
-            elif 'src' in path_parts or 'source' in path_parts:
+            elif "src" in path_parts or "source" in path_parts:
                 score += 1.0  # Source directory files
-            elif 'test' in path_parts or 'tests' in path_parts:
+            elif "test" in path_parts or "tests" in path_parts:
                 score += 0.5  # Test files (less critical)
 
             # Factor 4: Historical access patterns (if available)
@@ -678,21 +748,26 @@ class IntelligentCache:
 
             # Factor 5: File name patterns (common entry points)
             file_name = Path(file_path).name.lower()
-            if any(keyword in file_name for keyword in ['main', 'app', 'index', 'init', 'config', 'setup']):
+            if any(
+                keyword in file_name
+                for keyword in ["main", "app", "index", "init", "config", "setup"]
+            ):
                 score += 1.0
 
             # Factor 6: Import relationships (files with many imports/exports are important)
-            if hasattr(self, '_dependency_graph'):
+            if hasattr(self, "_dependency_graph"):
                 # This would be set by the indexing manager
                 pass
 
-        except Exception as e:
+        except Exception:
             # If we can't analyze the file, give it a neutral score
             score = 1.0
 
         return score
 
-    def _prioritize_files_ml(self, codebase_path: str, max_files: int = 100) -> List[Tuple[str, float]]:
+    def _prioritize_files_ml(
+        self, codebase_path: str, max_files: int = 100
+    ) -> List[Tuple[str, float]]:
         """Prioritize files for cache warming using ML-based scoring.
 
         Args:
@@ -710,11 +785,23 @@ class IntelligentCache:
             for file_path in codebase_path.rglob("*"):
                 if file_path.is_file() and not file_path.is_symlink():
                     # Skip common non-text files
-                    if file_path.suffix.lower() in ['.pyc', '.pyo', '.class', '.jar', '.zip', '.tar', '.gz', '.bin', '.exe', '.dll', '.so']:
+                    if file_path.suffix.lower() in [
+                        ".pyc",
+                        ".pyo",
+                        ".class",
+                        ".jar",
+                        ".zip",
+                        ".tar",
+                        ".gz",
+                        ".bin",
+                        ".exe",
+                        ".dll",
+                        ".so",
+                    ]:
                         continue
 
                     # Skip hidden files and directories
-                    if any(part.startswith('.') for part in file_path.parts):
+                    if any(part.startswith(".") for part in file_path.parts):
                         continue
 
                     # Skip very large files (>1MB)
@@ -727,7 +814,9 @@ class IntelligentCache:
                     # Calculate relative path
                     try:
                         relative_path = str(file_path.relative_to(codebase_path))
-                        priority_score = self._calculate_file_priority_score(relative_path, str(codebase_path))
+                        priority_score = self._calculate_file_priority_score(
+                            relative_path, str(codebase_path)
+                        )
                         file_priorities.append((relative_path, priority_score))
                     except ValueError:
                         continue
@@ -739,11 +828,13 @@ class IntelligentCache:
             return file_priorities[:max_files]
 
         except Exception as e:
-            print(f"Warning: ML-based file prioritization failed: {e}")
+            logger.warning(f"ML-based file prioritization failed: {e}")
             # Fallback to simple prioritization
             return self._prioritize_files_simple(codebase_path, max_files)
 
-    def _prioritize_files_simple(self, codebase_path: str, max_files: int = 100) -> List[Tuple[str, float]]:
+    def _prioritize_files_simple(
+        self, codebase_path: str, max_files: int = 100
+    ) -> List[Tuple[str, float]]:
         """Simple fallback file prioritization based on basic heuristics.
 
         Args:
@@ -759,20 +850,20 @@ class IntelligentCache:
         try:
             # Prioritize Python files, then other common formats
             priority_patterns = [
-                ('*.py', 3.0),
-                ('*.js', 2.5),
-                ('*.ts', 2.5),
-                ('*.java', 2.5),
-                ('*.cpp', 2.5),
-                ('*.c', 2.5),
-                ('*.h', 2.5),
-                ('*.md', 1.5),
-                ('*.txt', 1.5),
-                ('*.yml', 1.5),
-                ('*.yaml', 1.5),
-                ('*.json', 1.5),
-                ('*.html', 1.0),
-                ('*.css', 1.0)
+                ("*.py", 3.0),
+                ("*.js", 2.5),
+                ("*.ts", 2.5),
+                ("*.java", 2.5),
+                ("*.cpp", 2.5),
+                ("*.c", 2.5),
+                ("*.h", 2.5),
+                ("*.md", 1.5),
+                ("*.txt", 1.5),
+                ("*.yml", 1.5),
+                ("*.yaml", 1.5),
+                ("*.json", 1.5),
+                ("*.html", 1.0),
+                ("*.css", 1.0),
             ]
 
             for pattern, base_score in priority_patterns:
@@ -787,11 +878,13 @@ class IntelligentCache:
                         continue
 
         except Exception as e:
-            print(f"Warning: Simple file prioritization failed: {e}")
+            logger.warning(f"Simple file prioritization failed: {e}")
 
         return file_priorities[:max_files]
 
-    def warm_cache(self, codebase_path: str, sentence_transformer_model) -> Dict[str, int]:
+    def warm_cache(
+        self, codebase_path: str, sentence_transformer_model
+    ) -> Dict[str, int]:
         """Warm up the cache with intelligently prioritized files. Returns warming statistics."""
         if not self.config["cache_warming_enabled"]:
             return {"files_warmed": 0, "embeddings_cached": 0}
@@ -803,11 +896,19 @@ class IntelligentCache:
         try:
             # Use ML-based prioritization if enabled
             if self.prefetch_config.get("enable_pattern_learning", True):
-                prioritized_files = self._prioritize_files_ml(codebase_path, max_files=50)
-                print(f"ML-based cache warming prioritized {len(prioritized_files)} files")
+                prioritized_files = self._prioritize_files_ml(
+                    codebase_path, max_files=50
+                )
+                logger.info(
+                    f"ML-based cache warming prioritized {len(prioritized_files)} files"
+                )
             else:
-                prioritized_files = self._prioritize_files_simple(codebase_path, max_files=50)
-                print(f"Simple cache warming prioritized {len(prioritized_files)} files")
+                prioritized_files = self._prioritize_files_simple(
+                    codebase_path, max_files=50
+                )
+                logger.info(
+                    f"Simple cache warming prioritized {len(prioritized_files)} files"
+                )
 
             # Warm cache in priority order
             for file_path, priority_score in prioritized_files:
@@ -817,13 +918,15 @@ class IntelligentCache:
                 abs_file_path = Path(codebase_path) / file_path
 
                 try:
-                    with open(abs_file_path, 'r', encoding='utf-8') as f:
+                    with open(abs_file_path, "r", encoding="utf-8") as f:
                         content = f.read()
 
                     # Cache file content
                     if self.store_file_content(file_path, content):
                         warmed_files += 1
-                        print(f"Warmed cache for {file_path} (priority: {priority_score:.2f})")
+                        logger.debug(
+                            f"Warmed cache for {file_path} (priority: {priority_score:.2f})"
+                        )
 
                     # Generate and cache embedding
                     embedding = sentence_transformer_model.encode(content)
@@ -831,16 +934,18 @@ class IntelligentCache:
                     cached_embeddings += 1
 
                 except Exception as e:
-                    print(f"Warning: Could not warm cache for {file_path}: {e}")
+                    logger.warning(f"Could not warm cache for {file_path}: {e}")
                     continue
 
         except Exception as e:
-            print(f"Warning: Cache warming failed: {e}")
+            logger.warning(f"Cache warming failed: {e}")
 
         return {
             "files_warmed": warmed_files,
             "embeddings_cached": cached_embeddings,
-            "prioritization_method": "ml" if self.prefetch_config.get("enable_pattern_learning", True) else "simple"
+            "prioritization_method": "ml"
+            if self.prefetch_config.get("enable_pattern_learning", True)
+            else "simple",
         }
 
     def _record_file_access(self, file_path: str) -> None:
@@ -880,7 +985,9 @@ class IntelligentCache:
             if prev_file != file_path:  # Don't count self-access
                 self.usage_patterns["file_coaccess"][prev_file][file_path] += 1
 
-    def predict_next_files(self, current_file: str, max_predictions: int = 5) -> List[str]:
+    def predict_next_files(
+        self, current_file: str, max_predictions: int = 5
+    ) -> List[str]:
         """Predict which files are likely to be accessed next based on usage patterns.
 
         Args:
@@ -900,9 +1007,7 @@ class IntelligentCache:
             coaccess_files = self.usage_patterns["file_coaccess"][current_file]
             # Sort by co-access frequency
             sorted_coaccess = sorted(
-                coaccess_files.items(),
-                key=lambda x: x[1],
-                reverse=True
+                coaccess_files.items(), key=lambda x: x[1], reverse=True
             )
 
             for file_path, count in sorted_coaccess:
@@ -916,7 +1021,7 @@ class IntelligentCache:
             frequent_files = sorted(
                 self.usage_patterns["file_access_counts"].items(),
                 key=lambda x: x[1],
-                reverse=True
+                reverse=True,
             )
 
             for file_path, count in frequent_files:
@@ -927,7 +1032,9 @@ class IntelligentCache:
 
         return predictions[:max_predictions]
 
-    def prefetch_files(self, file_paths: List[str], codebase_path: str, sentence_transformer_model) -> Dict[str, int]:
+    def prefetch_files(
+        self, file_paths: List[str], codebase_path: str, sentence_transformer_model
+    ) -> Dict[str, int]:
         """Prefetch files into cache based on predictions.
 
         Args:
@@ -944,7 +1051,7 @@ class IntelligentCache:
         prefetched = 0
         skipped = 0
 
-        for file_path in file_paths[:self.prefetch_config["max_prefetch_files"]]:
+        for file_path in file_paths[: self.prefetch_config["max_prefetch_files"]]:
             try:
                 abs_file_path = Path(codebase_path) / file_path
 
@@ -958,30 +1065,29 @@ class IntelligentCache:
                     continue
 
                 # Read and cache file content
-                with open(abs_file_path, 'r', encoding='utf-8') as f:
+                with open(abs_file_path, "r", encoding="utf-8") as f:
                     content = f.read()
 
                 if self.store_file_content(file_path, content):
                     prefetched += 1
-                    print(f"Prefetched file: {file_path}")
+                    logger.debug(f"Prefetched file: {file_path}")
 
                     # Also prefetch embedding if model is available
                     try:
                         embedding = sentence_transformer_model.encode(content)
                         self.store_embedding(file_path, content, embedding)
                     except Exception as e:
-                        print(f"Warning: Could not prefetch embedding for {file_path}: {e}")
+                        logger.warning(
+                            f"Could not prefetch embedding for {file_path}: {e}"
+                        )
                 else:
                     skipped += 1
 
             except Exception as e:
-                print(f"Warning: Could not prefetch {file_path}: {e}")
+                logger.warning(f"Could not prefetch {file_path}: {e}")
                 skipped += 1
 
-        return {
-            "prefetched": prefetched,
-            "skipped": skipped
-        }
+        return {"prefetched": prefetched, "skipped": skipped}
 
     def _update_workload_stats(self) -> None:
         """Update workload statistics for adaptive sizing."""
@@ -1001,13 +1107,14 @@ class IntelligentCache:
         """Get current memory usage as a fraction (0.0 to 1.0)."""
         try:
             import psutil
+
             return psutil.virtual_memory().percent / 100.0
         except ImportError:
             # Fallback: estimate based on cache sizes
             total_cached_items = (
-                self.embedding_cache.size() +
-                self.search_cache.cache.size() +
-                self.file_cache.cache.size()
+                self.embedding_cache.size()
+                + self.search_cache.cache.size()
+                + self.file_cache.cache.size()
             )
             # Rough estimate: assume 1MB per 100 items
             estimated_mb = total_cached_items / 100
@@ -1049,20 +1156,32 @@ class IntelligentCache:
         # Calculate new sizes
         new_sizes = {
             "embedding_cache_size": int(
-                max(self.adaptive_config["min_cache_size"],
-                    min(self.adaptive_config["max_cache_size"],
-                        base_embedding_size * memory_factor * workload_factor))
+                max(
+                    self.adaptive_config["min_cache_size"],
+                    min(
+                        self.adaptive_config["max_cache_size"],
+                        base_embedding_size * memory_factor * workload_factor,
+                    ),
+                )
             ),
             "search_cache_size": int(
-                max(self.adaptive_config["min_cache_size"] // 10,
-                    min(self.adaptive_config["max_cache_size"] // 10,
-                        base_search_size * memory_factor * workload_factor))
+                max(
+                    self.adaptive_config["min_cache_size"] // 10,
+                    min(
+                        self.adaptive_config["max_cache_size"] // 10,
+                        base_search_size * memory_factor * workload_factor,
+                    ),
+                )
             ),
             "file_cache_size": int(
-                max(self.adaptive_config["min_cache_size"] // 10,
-                    min(self.adaptive_config["max_cache_size"] // 10,
-                        base_file_size * memory_factor * workload_factor))
-            )
+                max(
+                    self.adaptive_config["min_cache_size"] // 10,
+                    min(
+                        self.adaptive_config["max_cache_size"] // 10,
+                        base_file_size * memory_factor * workload_factor,
+                    ),
+                )
+            ),
         }
 
         return new_sizes
@@ -1079,7 +1198,10 @@ class IntelligentCache:
         current_time = time.time()
 
         # Check if enough time has passed since last adjustment
-        if current_time - self.adaptive_config["last_adjustment"] < self.adaptive_config["adjustment_interval"]:
+        if (
+            current_time - self.adaptive_config["last_adjustment"]
+            < self.adaptive_config["adjustment_interval"]
+        ):
             return {"adapted": False, "reason": "too soon since last adjustment"}
 
         # Update workload stats
@@ -1093,9 +1215,9 @@ class IntelligentCache:
 
         # Check if any sizes need adjustment
         needs_adjustment = (
-            optimal_sizes["embedding_cache_size"] != self.config["embedding_cache_size"] or
-            optimal_sizes["search_cache_size"] != self.config["search_cache_size"] or
-            optimal_sizes["file_cache_size"] != self.config["file_cache_size"]
+            optimal_sizes["embedding_cache_size"] != self.config["embedding_cache_size"]
+            or optimal_sizes["search_cache_size"] != self.config["search_cache_size"]
+            or optimal_sizes["file_cache_size"] != self.config["file_cache_size"]
         )
 
         if not needs_adjustment:
@@ -1105,7 +1227,7 @@ class IntelligentCache:
         old_sizes = {
             "embedding_cache_size": self.config["embedding_cache_size"],
             "search_cache_size": self.config["search_cache_size"],
-            "file_cache_size": self.config["file_cache_size"]
+            "file_cache_size": self.config["file_cache_size"],
         }
 
         self.config.update(optimal_sizes)
@@ -1114,19 +1236,19 @@ class IntelligentCache:
         if optimal_sizes["embedding_cache_size"] != old_sizes["embedding_cache_size"]:
             self.embedding_cache = EmbeddingCache(
                 max_size=optimal_sizes["embedding_cache_size"],
-                cache_dir=str(self.cache_dir)
+                cache_dir=str(self.cache_dir),
             )
 
         if optimal_sizes["search_cache_size"] != old_sizes["search_cache_size"]:
             self.search_cache = SearchResultCache(
                 max_size=optimal_sizes["search_cache_size"],
-                similarity_threshold=self.config["similarity_threshold"]
+                similarity_threshold=self.config["similarity_threshold"],
             )
 
         if optimal_sizes["file_cache_size"] != old_sizes["file_cache_size"]:
             self.file_cache = FileContentCache(
                 max_size=optimal_sizes["file_cache_size"],
-                max_file_size=self.config["max_file_size"]
+                max_file_size=self.config["max_file_size"],
             )
 
         self.adaptive_config["last_adjustment"] = current_time
@@ -1136,7 +1258,7 @@ class IntelligentCache:
             "old_sizes": old_sizes,
             "new_sizes": optimal_sizes,
             "memory_usage": self._get_memory_usage(),
-            "workload_intensity": self.workload_stats["accesses_last_minute"]
+            "workload_intensity": self.workload_stats["accesses_last_minute"],
         }
 
     def record_cache_access(self, cache_type: str) -> None:
@@ -1153,11 +1275,13 @@ class IntelligentCache:
             try:
                 adaptation_result = self.adapt_cache_sizes()
                 if adaptation_result["adapted"]:
-                    print(f"Adaptive cache sizing: {adaptation_result}")
+                    logger.info(f"Adaptive cache sizing: {adaptation_result}")
             except Exception as e:
-                print(f"Warning: Adaptive cache sizing failed: {e}")
+                logger.warning(f"Adaptive cache sizing failed: {e}")
 
-    def smart_prefetch(self, current_file: str, codebase_path: str, sentence_transformer_model) -> Dict[str, int]:
+    def smart_prefetch(
+        self, current_file: str, codebase_path: str, sentence_transformer_model
+    ) -> Dict[str, int]:
         """Perform smart prefetching based on usage patterns.
 
         Args:
@@ -1175,8 +1299,12 @@ class IntelligentCache:
         predicted_files = self.predict_next_files(current_file)
 
         if predicted_files:
-            print(f"Smart prefetching {len(predicted_files)} files based on usage patterns")
-            return self.prefetch_files(predicted_files, codebase_path, sentence_transformer_model)
+            logger.info(
+                f"Smart prefetching {len(predicted_files)} files based on usage patterns"
+            )
+            return self.prefetch_files(
+                predicted_files, codebase_path, sentence_transformer_model
+            )
 
         return {"prefetched": 0, "skipped": 0}
 
@@ -1191,57 +1319,97 @@ class IntelligentCache:
         # Analyze hit rates
         embedding_hits = self.stats["hits"]["embedding"]
         embedding_misses = self.stats["misses"]["embedding"]
-        embedding_hit_rate = embedding_hits / (embedding_hits + embedding_misses) if (embedding_hits + embedding_misses) > 0 else 0
+        embedding_hit_rate = (
+            embedding_hits / (embedding_hits + embedding_misses)
+            if (embedding_hits + embedding_misses) > 0
+            else 0
+        )
 
         search_hits = self.stats["hits"]["search"]
         search_misses = self.stats["misses"]["search"]
-        search_hit_rate = search_hits / (search_hits + search_misses) if (search_hits + search_misses) > 0 else 0
+        search_hit_rate = (
+            search_hits / (search_hits + search_misses)
+            if (search_hits + search_misses) > 0
+            else 0
+        )
 
         file_hits = self.stats["hits"]["file"]
         file_misses = self.stats["misses"]["file"]
-        file_hit_rate = file_hits / (file_hits + file_misses) if (file_hits + file_misses) > 0 else 0
+        file_hit_rate = (
+            file_hits / (file_hits + file_misses)
+            if (file_hits + file_misses) > 0
+            else 0
+        )
 
         # Cache efficiency recommendations
         if embedding_hit_rate < 0.5:
-            recommendations.append("Embedding cache hit rate is low - consider increasing embedding_cache_size")
+            recommendations.append(
+                "Embedding cache hit rate is low - consider increasing embedding_cache_size"
+            )
         if search_hit_rate < 0.3:
-            recommendations.append("Search cache hit rate is low - consider increasing search_cache_size")
+            recommendations.append(
+                "Search cache hit rate is low - consider increasing search_cache_size"
+            )
         if file_hit_rate < 0.6:
-            recommendations.append("File cache hit rate is low - consider increasing file_cache_size")
+            recommendations.append(
+                "File cache hit rate is low - consider increasing file_cache_size"
+            )
 
         # Memory usage recommendations
         memory_usage = self._get_memory_usage()
         if memory_usage > 0.8:
-            recommendations.append("High memory usage detected - consider reducing cache sizes or enabling adaptive sizing")
+            recommendations.append(
+                "High memory usage detected - consider reducing cache sizes or enabling adaptive sizing"
+            )
         elif memory_usage < 0.3:
-            recommendations.append("Low memory usage - cache sizes could potentially be increased")
+            recommendations.append(
+                "Low memory usage - cache sizes could potentially be increased"
+            )
 
         # Workload-based recommendations
         workload_intensity = self.workload_stats["accesses_last_minute"]
         if workload_intensity > 200:
-            recommendations.append("High workload detected - consider increasing cache sizes for better performance")
+            recommendations.append(
+                "High workload detected - consider increasing cache sizes for better performance"
+            )
         elif workload_intensity < 10:
-            recommendations.append("Low workload detected - cache sizes could potentially be reduced to save memory")
+            recommendations.append(
+                "Low workload detected - cache sizes could potentially be reduced to save memory"
+            )
 
         # Pattern learning recommendations
         if len(self.usage_patterns["file_coaccess"]) > 50:
-            recommendations.append("Strong file co-access patterns detected - prefetching should be highly effective")
+            recommendations.append(
+                "Strong file co-access patterns detected - prefetching should be highly effective"
+            )
         elif len(self.usage_patterns["file_coaccess"]) < 5:
-            recommendations.append("Limited co-access patterns - consider collecting more usage data for better prefetching")
+            recommendations.append(
+                "Limited co-access patterns - consider collecting more usage data for better prefetching"
+            )
 
         # Adaptive sizing recommendations
         if not self.adaptive_config["enabled"]:
-            recommendations.append("Consider enabling adaptive cache sizing for automatic performance optimization")
+            recommendations.append(
+                "Consider enabling adaptive cache sizing for automatic performance optimization"
+            )
 
         # Prefetching recommendations
         prefetch_hits = sum(self.stats.get("prefetch_hits", {}).values())
         prefetch_misses = sum(self.stats.get("prefetch_misses", {}).values())
         if prefetch_hits > prefetch_misses * 2:
-            recommendations.append("Prefetching is highly effective - consider increasing max_prefetch_files")
+            recommendations.append(
+                "Prefetching is highly effective - consider increasing max_prefetch_files"
+            )
         elif prefetch_misses > prefetch_hits * 2:
-            recommendations.append("Prefetching hit rate is low - consider adjusting prefetching parameters")
+            recommendations.append(
+                "Prefetching hit rate is low - consider adjusting prefetching parameters"
+            )
 
         return recommendations
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get comprehensive cache statistics (alias for get_comprehensive_stats)."""
+        return self.get_comprehensive_stats()
 
     def analyze_cache_efficiency(self) -> Dict[str, Any]:
         """Perform comprehensive cache efficiency analysis.
@@ -1256,7 +1424,7 @@ class IntelligentCache:
             "memory_analysis": {},
             "usage_patterns": {},
             "recommendations": [],
-            "optimization_opportunities": []
+            "optimization_opportunities": [],
         }
 
         # Overall efficiency metrics
@@ -1268,15 +1436,17 @@ class IntelligentCache:
             "total_requests": total_requests,
             "total_hits": total_hits,
             "total_misses": total_misses,
-            "overall_hit_rate": total_hits / total_requests if total_requests > 0 else 0,
-            "cache_effectiveness": self._calculate_cache_effectiveness()
+            "overall_hit_rate": total_hits / total_requests
+            if total_requests > 0
+            else 0,
+            "cache_effectiveness": self._calculate_cache_effectiveness(),
         }
 
         # Cache breakdown analysis
         analysis["cache_breakdown"] = {
             "embedding_cache": self._analyze_single_cache("embedding"),
             "search_cache": self._analyze_single_cache("search"),
-            "file_cache": self._analyze_single_cache("file")
+            "file_cache": self._analyze_single_cache("file"),
         }
 
         # Temporal analysis
@@ -1292,7 +1462,9 @@ class IntelligentCache:
         analysis["recommendations"] = self._generate_detailed_recommendations(analysis)
 
         # Identify optimization opportunities
-        analysis["optimization_opportunities"] = self._identify_optimization_opportunities(analysis)
+        analysis["optimization_opportunities"] = (
+            self._identify_optimization_opportunities(analysis)
+        )
 
         return analysis
 
@@ -1314,23 +1486,31 @@ class IntelligentCache:
             "misses": misses,
             "total_requests": total,
             "hit_rate": hits / total if total > 0 else 0,
-            "efficiency_score": self._calculate_cache_efficiency_score(cache_type)
+            "efficiency_score": self._calculate_cache_efficiency_score(cache_type),
         }
 
         # Cache-specific metrics
         if cache_type == "embedding":
             cache_analysis["cache_size"] = self.embedding_cache.size()
             cache_analysis["max_size"] = self.embedding_cache.max_size
-            cache_analysis["utilization"] = self.embedding_cache.size() / self.embedding_cache.max_size
+            cache_analysis["utilization"] = (
+                self.embedding_cache.size() / self.embedding_cache.max_size
+            )
         elif cache_type == "search":
             cache_analysis["cache_size"] = self.search_cache.cache.size()
             cache_analysis["max_size"] = self.search_cache.max_size
-            cache_analysis["utilization"] = self.search_cache.cache.size() / self.search_cache.max_size
+            cache_analysis["utilization"] = (
+                self.search_cache.cache.size() / self.search_cache.max_size
+            )
         elif cache_type == "file":
             cache_analysis["cache_size"] = self.file_cache.cache.size()
             cache_analysis["max_size"] = self.file_cache.max_size
-            cache_analysis["utilization"] = self.file_cache.cache.size() / self.file_cache.max_size
-            cache_analysis["total_cached_size_mb"] = self.file_cache.stats()["total_cached_size_mb"]
+            cache_analysis["utilization"] = (
+                self.file_cache.cache.size() / self.file_cache.max_size
+            )
+            cache_analysis["total_cached_size_mb"] = self.file_cache.stats()[
+                "total_cached_size_mb"
+            ]
 
         return cache_analysis
 
@@ -1348,7 +1528,11 @@ class IntelligentCache:
         # Hit rate component
         total_hits = sum(self.stats["hits"].values())
         total_misses = sum(self.stats["misses"].values())
-        hit_rate_score = total_hits / (total_hits + total_misses) if (total_hits + total_misses) > 0 else 0
+        hit_rate_score = (
+            total_hits / (total_hits + total_misses)
+            if (total_hits + total_misses) > 0
+            else 0
+        )
 
         # Memory efficiency component
         memory_usage = self._get_memory_usage()
@@ -1357,12 +1541,16 @@ class IntelligentCache:
         # Prefetch efficiency component
         prefetch_hits = sum(self.stats.get("prefetch_hits", {}).values())
         prefetch_misses = sum(self.stats.get("prefetch_misses", {}).values())
-        prefetch_efficiency = prefetch_hits / (prefetch_hits + prefetch_misses) if (prefetch_hits + prefetch_misses) > 0 else 0.5
+        prefetch_efficiency = (
+            prefetch_hits / (prefetch_hits + prefetch_misses)
+            if (prefetch_hits + prefetch_misses) > 0
+            else 0.5
+        )
 
         return (
-            hit_rate_weight * hit_rate_score +
-            memory_efficiency_weight * memory_efficiency +
-            prefetch_efficiency_weight * prefetch_efficiency
+            hit_rate_weight * hit_rate_score
+            + memory_efficiency_weight * memory_efficiency
+            + prefetch_efficiency_weight * prefetch_efficiency
         )
 
     def _calculate_cache_efficiency_score(self, cache_type: str) -> float:
@@ -1405,17 +1593,19 @@ class IntelligentCache:
         return {
             "access_frequency": {
                 "per_minute": self.workload_stats["accesses_last_minute"],
-                "per_hour": self.workload_stats["accesses_last_hour"]
+                "per_hour": self.workload_stats["accesses_last_hour"],
             },
             "peak_usage_times": self._identify_peak_usage_times(),
             "access_patterns": {
                 "most_frequent_files": sorted(
                     self.usage_patterns["file_access_counts"].items(),
                     key=lambda x: x[1],
-                    reverse=True
+                    reverse=True,
                 )[:5],
-                "recent_access_sequence": self.usage_patterns["file_access_sequence"][-10:]
-            }
+                "recent_access_sequence": self.usage_patterns["file_access_sequence"][
+                    -10:
+                ],
+            },
         }
 
     def _analyze_memory_efficiency(self) -> Dict[str, Any]:
@@ -1431,10 +1621,10 @@ class IntelligentCache:
             "cache_memory_breakdown": {
                 "embedding_cache_mb": self._estimate_cache_memory_usage("embedding"),
                 "search_cache_mb": self._estimate_cache_memory_usage("search"),
-                "file_cache_mb": self._estimate_cache_memory_usage("file")
+                "file_cache_mb": self._estimate_cache_memory_usage("file"),
             },
             "memory_efficiency_score": self._calculate_memory_efficiency_score(),
-            "wasted_memory_mb": self._calculate_wasted_memory()
+            "wasted_memory_mb": self._calculate_wasted_memory(),
         }
 
     def _analyze_usage_patterns(self) -> Dict[str, Any]:
@@ -1447,21 +1637,21 @@ class IntelligentCache:
             "coaccess_patterns": {
                 "total_patterns": len(self.usage_patterns["file_coaccess"]),
                 "strong_patterns": self._identify_strong_coaccess_patterns(),
-                "pattern_strength_distribution": self._calculate_pattern_strength_distribution()
+                "pattern_strength_distribution": self._calculate_pattern_strength_distribution(),
             },
             "access_frequency": {
                 "unique_files_accessed": len(self.usage_patterns["file_access_counts"]),
                 "most_accessed_files": sorted(
                     self.usage_patterns["file_access_counts"].items(),
                     key=lambda x: x[1],
-                    reverse=True
+                    reverse=True,
                 )[:10],
-                "access_concentration": self._calculate_access_concentration()
+                "access_concentration": self._calculate_access_concentration(),
             },
             "temporal_patterns": {
                 "access_intervals": self._analyze_access_intervals(),
-                "predictability_score": self._calculate_predictability_score()
-            }
+                "predictability_score": self._calculate_predictability_score(),
+            },
         }
 
     def _generate_detailed_recommendations(self, analysis: Dict[str, Any]) -> List[str]:
@@ -1478,9 +1668,13 @@ class IntelligentCache:
         # Hit rate based recommendations
         overall_hit_rate = analysis["overall_efficiency"]["overall_hit_rate"]
         if overall_hit_rate < 0.5:
-            recommendations.append("Overall cache hit rate is low - consider increasing cache sizes")
+            recommendations.append(
+                "Overall cache hit rate is low - consider increasing cache sizes"
+            )
         elif overall_hit_rate > 0.8:
-            recommendations.append("Excellent cache hit rate - current configuration is optimal")
+            recommendations.append(
+                "Excellent cache hit rate - current configuration is optimal"
+            )
 
         # Cache-specific recommendations
         for cache_type, cache_analysis in analysis["cache_breakdown"].items():
@@ -1488,27 +1682,43 @@ class IntelligentCache:
             utilization = cache_analysis["utilization"]
 
             if hit_rate < 0.5:
-                recommendations.append(f"{cache_type} cache hit rate is low - consider increasing {cache_type}_cache_size")
+                recommendations.append(
+                    f"{cache_type} cache hit rate is low - consider increasing {cache_type}_cache_size"
+                )
             elif utilization > 0.9:
-                recommendations.append(f"{cache_type} cache is nearly full - consider increasing {cache_type}_cache_size")
+                recommendations.append(
+                    f"{cache_type} cache is nearly full - consider increasing {cache_type}_cache_size"
+                )
 
         # Memory-based recommendations
         memory_usage = analysis["memory_analysis"]["current_memory_usage_percent"]
         if memory_usage > 85:
-            recommendations.append("High memory usage - consider reducing cache sizes or enabling adaptive sizing")
+            recommendations.append(
+                "High memory usage - consider reducing cache sizes or enabling adaptive sizing"
+            )
         elif memory_usage < 30:
-            recommendations.append("Low memory usage - cache sizes could be increased for better performance")
+            recommendations.append(
+                "Low memory usage - cache sizes could be increased for better performance"
+            )
 
         # Pattern-based recommendations
-        coaccess_patterns = analysis["usage_patterns"]["coaccess_patterns"]["total_patterns"]
+        coaccess_patterns = analysis["usage_patterns"]["coaccess_patterns"][
+            "total_patterns"
+        ]
         if coaccess_patterns > 20:
-            recommendations.append("Strong co-access patterns detected - prefetching should be very effective")
+            recommendations.append(
+                "Strong co-access patterns detected - prefetching should be very effective"
+            )
         elif coaccess_patterns < 5:
-            recommendations.append("Limited usage patterns - collect more data for better optimization")
+            recommendations.append(
+                "Limited usage patterns - collect more data for better optimization"
+            )
 
         return recommendations
 
-    def _identify_optimization_opportunities(self, analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _identify_optimization_opportunities(
+        self, analysis: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
         """Identify specific optimization opportunities.
 
         Args:
@@ -1525,31 +1735,40 @@ class IntelligentCache:
             utilization = cache_analysis["utilization"]
 
             if hit_rate < 0.6 and utilization < 0.5:
-                opportunities.append({
-                    "type": "cache_size_reduction",
-                    "cache": cache_type,
-                    "description": f"Consider reducing {cache_type}_cache_size to save memory",
-                    "potential_savings_mb": cache_analysis.get("cache_size", 0) * 0.5,
-                    "impact": "low"
-                })
+                opportunities.append(
+                    {
+                        "type": "cache_size_reduction",
+                        "cache": cache_type,
+                        "description": f"Consider reducing {cache_type}_cache_size to save memory",
+                        "potential_savings_mb": cache_analysis.get("cache_size", 0)
+                        * 0.5,
+                        "impact": "low",
+                    }
+                )
             elif hit_rate > 0.8 and utilization > 0.8:
-                opportunities.append({
-                    "type": "cache_size_increase",
-                    "cache": cache_type,
-                    "description": f"Consider increasing {cache_type}_cache_size for better performance",
-                    "potential_benefit": "higher_hit_rate",
-                    "impact": "medium"
-                })
+                opportunities.append(
+                    {
+                        "type": "cache_size_increase",
+                        "cache": cache_type,
+                        "description": f"Consider increasing {cache_type}_cache_size for better performance",
+                        "potential_benefit": "higher_hit_rate",
+                        "impact": "medium",
+                    }
+                )
 
         # Prefetching opportunities
-        prefetch_efficiency = analysis["overall_efficiency"].get("prefetch_efficiency", 0)
+        prefetch_efficiency = analysis["overall_efficiency"].get(
+            "prefetch_efficiency", 0
+        )
         if prefetch_efficiency > 0.7:
-            opportunities.append({
-                "type": "prefetch_optimization",
-                "description": "Prefetching is highly effective - consider increasing max_prefetch_files",
-                "potential_benefit": "reduced_latency",
-                "impact": "high"
-            })
+            opportunities.append(
+                {
+                    "type": "prefetch_optimization",
+                    "description": "Prefetching is highly effective - consider increasing max_prefetch_files",
+                    "potential_benefit": "reduced_latency",
+                    "impact": "high",
+                }
+            )
 
         return opportunities
 
@@ -1583,7 +1802,9 @@ class IntelligentCache:
             Memory efficiency score (0.0 to 1.0)
         """
         memory_usage = self._get_memory_usage()
-        hit_rate = sum(self.stats["hits"].values()) / max(sum(self.stats["hits"].values()) + sum(self.stats["misses"].values()), 1)
+        hit_rate = sum(self.stats["hits"].values()) / max(
+            sum(self.stats["hits"].values()) + sum(self.stats["misses"].values()), 1
+        )
 
         # Higher hit rate justifies higher memory usage
         optimal_memory = hit_rate * 0.8  # Optimal memory is proportional to hit rate
@@ -1597,12 +1818,6 @@ class IntelligentCache:
         Returns:
             Wasted memory in MB
         """
-        total_cache_memory = (
-            self._estimate_cache_memory_usage("embedding") +
-            self._estimate_cache_memory_usage("search") +
-            self._estimate_cache_memory_usage("file")
-        )
-
         # Estimate wasted memory as memory used by low-hit-rate caches
         wasted = 0.0
         for cache_type in ["embedding", "search", "file"]:
@@ -1671,7 +1886,9 @@ class IntelligentCache:
             return 0.0
 
         # Calculate Gini coefficient-like concentration
-        sorted_counts = sorted(self.usage_patterns["file_access_counts"].values(), reverse=True)
+        sorted_counts = sorted(
+            self.usage_patterns["file_access_counts"].values(), reverse=True
+        )
         cumulative = 0
         for i, count in enumerate(sorted_counts):
             cumulative += count
@@ -1702,8 +1919,10 @@ class IntelligentCache:
 
         # Calculate predictability (inverse of coefficient of variation)
         if mean_interval > 0:
-            variance = sum((x - mean_interval) ** 2 for x in all_intervals) / len(all_intervals)
-            std_dev = variance ** 0.5
+            variance = sum((x - mean_interval) ** 2 for x in all_intervals) / len(
+                all_intervals
+            )
+            std_dev = variance**0.5
             predictability = 1.0 / (1.0 + std_dev / mean_interval)
         else:
             predictability = 0.0
@@ -1711,7 +1930,7 @@ class IntelligentCache:
         return {
             "mean_interval": mean_interval,
             "median_interval": median_interval,
-            "predictability": predictability
+            "predictability": predictability,
         }
 
     def _calculate_predictability_score(self) -> float:
@@ -1726,15 +1945,18 @@ class IntelligentCache:
         # Calculate based on strength and number of co-access patterns
         total_patterns = len(self.usage_patterns["file_coaccess"])
         strong_patterns = sum(
-            1 for coaccess_files in self.usage_patterns["file_coaccess"].values()
+            1
+            for coaccess_files in self.usage_patterns["file_coaccess"].values()
             for count in coaccess_files.values()
             if count >= self.prefetch_config["coaccess_threshold"]
         )
 
         pattern_strength = strong_patterns / max(total_patterns, 1)
-        pattern_coverage = total_patterns / max(len(self.usage_patterns["file_access_counts"]), 1)
+        pattern_coverage = total_patterns / max(
+            len(self.usage_patterns["file_access_counts"]), 1
+        )
 
-        return (pattern_strength * 0.6 + pattern_coverage * 0.4)
+        return pattern_strength * 0.6 + pattern_coverage * 0.4
 
 
 # Global cache instance
