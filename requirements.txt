@@ -11,3 +11,5 @@ faiss-cpu
 radon
 stdlib_list
 pre-commit
+psutil
+tiktoken

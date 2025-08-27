@@ -3,6 +3,8 @@
 import os
 from codesage_mcp.codebase_manager import codebase_manager
 from codesage_mcp.utils import create_error_response, tool_error_handler, safe_read_file
+from codesage_mcp.config import ENABLE_CACHING
+from codesage_mcp.cache import get_cache_instance
 
 
 def configure_api_key_tool(llm_provider: str, api_key: str) -> dict:
@@ -89,3 +91,26 @@ def get_configuration_tool() -> dict:
         },
         "status": config_status,
     }
+
+
+@tool_error_handler
+def get_cache_statistics_tool() -> dict:
+    """Returns comprehensive statistics about the intelligent caching system."""
+    if not ENABLE_CACHING:
+        return {
+            "message": "Caching is disabled in configuration.",
+            "caching_enabled": False
+        }
+
+    try:
+        cache = get_cache_instance()
+        stats = cache.get_comprehensive_stats()
+
+        return {
+            "message": "Cache statistics retrieved successfully.",
+            "caching_enabled": True,
+            "statistics": stats
+        }
+
+    except Exception as e:
+        return create_error_response("CACHE_ERROR", f"Failed to retrieve cache statistics: {e}")

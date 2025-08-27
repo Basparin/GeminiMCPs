@@ -45,6 +45,7 @@ from codesage_mcp.tools import (
     parse_llm_response_tool,  # Import the new LLM response parsing tool
     generate_llm_api_wrapper_tool,  # Import the new LLM API wrapper generation tool
     generate_boilerplate_tool,  # Import the new boilerplate generation tool
+    get_cache_statistics_tool,  # Import the new cache statistics tool
 )
 from codesage_mcp.utils import create_error_response
 
@@ -401,6 +402,15 @@ def get_all_tools_definitions_as_object():
             },
             "type": "function",
         },
+        "get_cache_statistics": {
+            "name": "get_cache_statistics",
+            "description": (
+                "Returns comprehensive statistics about the intelligent caching system, "
+                "including hit rates, cache sizes, and performance metrics."
+            ),
+            "inputSchema": {"type": "object", "properties": {}, "required": []},
+            "type": "function",
+        },
     }
 
 
@@ -427,6 +437,7 @@ TOOL_FUNCTIONS = {
     "parse_llm_response": parse_llm_response_tool,  # Register the new LLM response parsing tool
     "generate_llm_api_wrapper": generate_llm_api_wrapper_tool,  # Register the new LLM API wrapper generation tool
     "generate_boilerplate": generate_boilerplate_tool,  # Register the new boilerplate generation tool
+    "get_cache_statistics": get_cache_statistics_tool,  # Register the new cache statistics tool
 }
 
 

@@ -6,6 +6,18 @@ url = "http://127.0.0.1:8000/mcp"
 
 
 def main():
+    """Main function to analyze the CodeSage MCP codebase.
+    
+    This function orchestrates the self-analysis process by:
+    1. Indexing the codebase
+    2. Performing codebase improvements analysis
+    3. Generating suggestions for improvements
+    4. Creating a comprehensive report of findings
+    
+    The function uses the MCP tools to analyze the codebase and generate
+    actionable insights for improving code quality, documentation, and
+    overall maintainability.
+    """
     # Step 1: Index the codebase
     print("Indexing the codebase...")
     index_payload = {

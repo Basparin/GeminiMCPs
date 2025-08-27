@@ -28,6 +28,8 @@ from .config import (
     GROQ_API_KEY,
     OPENROUTER_API_KEY,
     GOOGLE_API_KEY,
+    ENABLE_INCREMENTAL_INDEXING,
+    FORCE_FULL_REINDEX,
     validate_configuration,
     get_configuration_status
 )
@@ -37,6 +39,9 @@ from .indexing import IndexingManager
 from .searching import SearchingManager
 from .llm_analysis import LLMAnalysisManager
 from .utils import safe_read_file
+from .config import ENABLE_CACHING
+from .cache import get_cache_instance
+from .memory_manager import get_memory_manager
 
 
 def _is_module_installed(module_name: str) -> bool:
@@ -206,11 +211,16 @@ class CodebaseManager:
         # Inicializar el gestor de búsqueda
         self.searching_manager = SearchingManager(self.indexing_manager)
 
+        # Inicializar memory manager
+        self.memory_manager = get_memory_manager()
+
         # Acceder a los atributos relevantes a través del indexing_manager
         # para compatibilidad con el código existente que los usa directamente.
         # Se usan propiedades para mantener la sincronización.
 
-        self.sentence_transformer_model = SentenceTransformer("all-MiniLM-L6-v2")
+        # Model will be loaded on-demand instead of permanently
+        self._sentence_transformer_model = None
+        self._model_name = "all-MiniLM-L6-v2"
 
         # Initialize API clients with proper error handling
         self.groq_client = None
@@ -251,6 +261,17 @@ class CodebaseManager:
         self.llm_analysis_manager = LLMAnalysisManager(
             self.groq_client, self.openrouter_client, self.google_ai_client
         )
+
+        # Initialize cache if enabled
+        self.cache = get_cache_instance() if ENABLE_CACHING else None
+
+    @property
+    def sentence_transformer_model(self):
+        """Get the sentence transformer model, loading it on-demand if needed."""
+        if self._sentence_transformer_model is None:
+            print(f"Loading sentence transformer model: {self._model_name}")
+            self._sentence_transformer_model = self.memory_manager.load_model(self._model_name)
+        return self._sentence_transformer_model
 
     # --- Properties to maintain compatibility with legacy code ---
     # These properties delegate to the indexing_manager to ensure
@@ -295,7 +316,7 @@ class CodebaseManager:
     def read_code_file(self, file_path: str) -> str:
         """Reads and returns the content of a specified code file.
 
-        This method is a simple wrapper around standard file I/O.
+        This method uses intelligent caching to improve performance for frequently accessed files.
 
         Args:
             file_path (str): Path to the file to read.
@@ -306,27 +327,93 @@ class CodebaseManager:
         Raises:
             FileNotFoundError: If the file does not exist.
         """
-        return safe_read_file(file_path)
+        # Check cache first
+        if self.cache:
+            cached_content, cache_hit = self.cache.get_file_content(file_path)
+            if cache_hit:
+                print(f"Cache hit for file: {file_path}")
+                return cached_content
 
-    def index_codebase(self, path: str) -> list[str]:
+        # Read from disk
+        content = safe_read_file(file_path)
+
+        # Store in cache for future use
+        if self.cache:
+            self.cache.store_file_content(file_path, content)
+            print(f"Cached file content for: {file_path}")
+
+            # Trigger smart prefetching based on usage patterns
+            try:
+                prefetch_stats = self.cache.smart_prefetch(file_path, self.indexing_manager.indexed_codebases, self.sentence_transformer_model)
+                if prefetch_stats["prefetched"] > 0:
+                    print(f"Smart prefetching completed: {prefetch_stats['prefetched']} files prefetched")
+            except Exception as e:
+                print(f"Warning: Smart prefetching failed: {e}")
+
+        return content
+
+    def index_codebase(self, path: str, force_full: bool = None) -> list[str]:
         """Indexes a given codebase path for analysis, respecting .gitignore rules.
 
         This method delegates the actual indexing logic to the IndexingManager.
+        Supports both incremental and full indexing based on configuration.
 
         Args:
             path (str): Path to the codebase directory to index.
+            force_full (bool, optional): Force full re-indexing. If None, uses config setting.
 
         Returns:
             list[str]: List of indexed file paths relative to the codebase root.
         """
-        # Delegar la indexación al nuevo IndexingManager
-        indexed_files = self.indexing_manager.index_codebase(
-            path, self.sentence_transformer_model
-        )
+        # Determine if we should use incremental indexing
+        use_incremental = ENABLE_INCREMENTAL_INDEXING and not (force_full if force_full is not None else FORCE_FULL_REINDEX)
+
+        if use_incremental and hasattr(self.indexing_manager, 'index_codebase_incremental'):
+            # Use incremental indexing
+            indexed_files, was_incremental = self.indexing_manager.index_codebase_incremental(
+                path, self.sentence_transformer_model, force_full=force_full if force_full is not None else FORCE_FULL_REINDEX
+            )
+            if was_incremental:
+                print(f"Used incremental indexing for {path}")
+            else:
+                print(f"Used full indexing for {path}")
+        else:
+            # Use traditional full indexing
+            indexed_files = self.indexing_manager.index_codebase(
+                path, self.sentence_transformer_model
+            )
+            print(f"Used full indexing for {path}")
+
         # Actualizar las referencias locales para compatibilidad con el código existente
         self.indexed_codebases = self.indexing_manager.indexed_codebases
         self.file_paths_map = self.indexing_manager.file_paths_map
+
+        # Warm the cache with commonly accessed files
+        if self.cache and path:
+            try:
+                warming_stats = self.cache.warm_cache(path, self.sentence_transformer_model)
+                if warming_stats["files_warmed"] > 0 or warming_stats["embeddings_cached"] > 0:
+                    print(f"Cache warming completed: {warming_stats['files_warmed']} files warmed, "
+                          f"{warming_stats['embeddings_cached']} embeddings cached")
+            except Exception as e:
+                print(f"Warning: Cache warming failed: {e}")
+
         return indexed_files
+
+    def force_full_reindex(self, path: str) -> list[str]:
+        """Force a full re-indexing of a codebase, bypassing incremental indexing.
+
+        This method is useful when you want to ensure a complete rebuild of the index,
+        for example after major changes to the codebase structure or when incremental
+        indexing might have inconsistencies.
+
+        Args:
+            path (str): Path to the codebase directory to re-index.
+
+        Returns:
+            list[str]: List of indexed file paths relative to the codebase root.
+        """
+        return self.index_codebase(path, force_full=True)
 
     def get_file_structure(self, codebase_path: str, file_path: str) -> list[str]:
         """Provides a high-level overview of a file's structure within a given codebase.
@@ -497,6 +584,31 @@ class CodebaseManager:
             "third_party_dependencies_by_file": {
                 k: sorted(list(v)) for k, v in third_party_dependencies.items()
             },
+        }
+
+    def get_memory_stats(self) -> dict:
+        """Get current memory usage statistics.
+
+        Returns:
+            dict: Memory statistics including usage, limits, and cache information.
+        """
+        return self.memory_manager.get_memory_stats()
+
+    def cleanup_memory(self) -> dict:
+        """Perform memory cleanup and return statistics.
+
+        Returns:
+            dict: Cleanup results and memory statistics.
+        """
+        before_stats = self.memory_manager.get_memory_stats()
+        self.memory_manager.cleanup()
+        after_stats = self.memory_manager.get_memory_stats()
+
+        return {
+            "cleanup_performed": True,
+            "memory_freed_mb": before_stats['rss_mb'] - after_stats['rss_mb'],
+            "before_cleanup": before_stats,
+            "after_cleanup": after_stats
         }
 
 

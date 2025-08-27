@@ -17,6 +17,10 @@ import fnmatch
 import numpy as np
 from pathlib import Path
 
+# Import caching system
+from .config import ENABLE_CACHING
+from .cache import get_cache_instance
+
 
 class SearchingManager:
     """Manages codebase search and similarity analysis.
@@ -35,6 +39,8 @@ class SearchingManager:
             indexing_manager: An instance of IndexingManager to access indexed data.
         """
         self.indexing_manager = indexing_manager
+        # Initialize cache if enabled
+        self.cache = get_cache_instance() if ENABLE_CACHING else None
 
     def search_codebase(
         self,
@@ -146,12 +152,21 @@ class SearchingManager:
         if faiss_index is None or faiss_index.ntotal == 0:
             return []  # No index or no embeddings
 
+        # Check cache for similar queries first
         query_embedding = sentence_transformer_model.encode(query)
-        # Reshape for FAISS: FAISS expects a 2D array, even for a single query
-        query_embedding = np.array([query_embedding]).astype("float32")
+        cached_results = None
+        cache_hit = False
+
+        if self.cache:
+            cached_results, cache_hit = self.cache.get_search_results(query, query_embedding, top_k)
+
+        if cache_hit and cached_results:
+            print(f"Cache hit for search query: '{query}'")
+            return cached_results
 
         # Perform search
-        distances, indices = faiss_index.search(query_embedding, top_k)
+        query_embedding_reshaped = np.array([query_embedding]).astype("float32")
+        distances, indices = faiss_index.search(query_embedding_reshaped, top_k)
 
         search_results = []
         for i, dist in zip(indices[0], distances[0]):
@@ -165,6 +180,12 @@ class SearchingManager:
                         "score": float(dist),  # Convert numpy float to Python float
                     }
                 )
+
+        # Store results in cache
+        if self.cache and search_results:
+            self.cache.store_search_results(query, query_embedding, search_results)
+            print(f"Cached search results for query: '{query}'")
+
         return search_results
 
     def find_duplicate_code(

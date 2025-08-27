@@ -680,6 +680,197 @@ if __name__ == "__main__":
         os.unlink(temp_file_path)
 
 
+# --- New Tests for Incremental Indexing ---
+
+
+def test_incremental_indexing_basic(temp_codebase):
+    """Test basic incremental indexing functionality."""
+    from codesage_mcp.indexing import IndexingManager
+    from sentence_transformers import SentenceTransformer
+    import time
+
+    indexing_manager = IndexingManager()
+    indexing_manager.index_dir = temp_codebase / ".codesage"
+    indexing_manager.index_file = indexing_manager.index_dir / "codebase_index.json"
+    indexing_manager.metadata_file = indexing_manager.index_dir / "codebase_metadata.json"
+    indexing_manager._initialize_index()
+
+    sentence_transformer_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    # Initial full indexing
+    indexed_files = indexing_manager.index_codebase(str(temp_codebase), sentence_transformer_model)
+    assert "file1.py" in indexed_files
+    assert len(indexed_files) == 1  # Only file1.py should be indexed
+
+    # Verify metadata was created
+    assert indexing_manager.metadata_file.exists()
+    with open(indexing_manager.metadata_file, "r") as f:
+        metadata = json.load(f)
+    assert str(temp_codebase.resolve()) in metadata
+    assert "file1.py" in metadata[str(temp_codebase.resolve())]
+
+    # Modify file1.py to trigger incremental indexing
+    file1_path = temp_codebase / "file1.py"
+    original_content = file1_path.read_text()
+    modified_content = original_content + '\n\n# Modified content\nprint("modified")'
+    file1_path.write_text(modified_content)
+
+    # Wait a bit to ensure modification time difference
+    time.sleep(0.1)
+
+    # Test incremental indexing
+    incremental_files, was_incremental = indexing_manager.index_codebase_incremental(
+        str(temp_codebase), sentence_transformer_model
+    )
+
+    assert was_incremental == True
+    assert "file1.py" in incremental_files
+    assert len(incremental_files) == 1  # Only modified file should be re-indexed
+
+
+def test_incremental_indexing_add_file(temp_codebase):
+    """Test incremental indexing when a new file is added."""
+    from codesage_mcp.indexing import IndexingManager
+    from sentence_transformers import SentenceTransformer
+
+    indexing_manager = IndexingManager()
+    indexing_manager.index_dir = temp_codebase / ".codesage"
+    indexing_manager.index_file = indexing_manager.index_dir / "codebase_index.json"
+    indexing_manager.metadata_file = indexing_manager.index_dir / "codebase_metadata.json"
+    indexing_manager._initialize_index()
+
+    sentence_transformer_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    # Initial full indexing
+    indexed_files = indexing_manager.index_codebase(str(temp_codebase), sentence_transformer_model)
+    initial_count = len(indexed_files)
+
+    # Add a new file
+    new_file = temp_codebase / "new_file.py"
+    new_file.write_text('print("new file content")')
+
+    # Test incremental indexing
+    incremental_files, was_incremental = indexing_manager.index_codebase_incremental(
+        str(temp_codebase), sentence_transformer_model
+    )
+
+    assert was_incremental == True
+    assert "new_file.py" in incremental_files
+    assert len(incremental_files) == initial_count + 1  # One more file
+
+
+def test_incremental_indexing_delete_file(temp_codebase):
+    """Test incremental indexing when a file is deleted."""
+    from codesage_mcp.indexing import IndexingManager
+    from sentence_transformers import SentenceTransformer
+
+    indexing_manager = IndexingManager()
+    indexing_manager.index_dir = temp_codebase / ".codesage"
+    indexing_manager.index_file = indexing_manager.index_dir / "codebase_index.json"
+    indexing_manager.metadata_file = indexing_manager.index_dir / "codebase_metadata.json"
+    indexing_manager._initialize_index()
+
+    sentence_transformer_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    # Add another file to the test codebase
+    extra_file = temp_codebase / "extra.py"
+    extra_file.write_text('print("extra file")')
+
+    # Initial full indexing
+    indexed_files = indexing_manager.index_codebase(str(temp_codebase), sentence_transformer_model)
+    initial_count = len(indexed_files)
+    assert "extra.py" in indexed_files
+
+    # Delete the extra file
+    extra_file.unlink()
+
+    # Test incremental indexing
+    incremental_files, was_incremental = indexing_manager.index_codebase_incremental(
+        str(temp_codebase), sentence_transformer_model
+    )
+
+    assert was_incremental == True
+    assert "extra.py" not in incremental_files
+    assert len(incremental_files) == initial_count - 1  # One less file
+
+
+def test_incremental_indexing_no_changes(temp_codebase):
+    """Test incremental indexing when no changes are detected."""
+    from codesage_mcp.indexing import IndexingManager
+    from sentence_transformers import SentenceTransformer
+
+    indexing_manager = IndexingManager()
+    indexing_manager.index_dir = temp_codebase / ".codesage"
+    indexing_manager.index_file = indexing_manager.index_dir / "codebase_index.json"
+    indexing_manager.metadata_file = indexing_manager.index_dir / "codebase_metadata.json"
+    indexing_manager._initialize_index()
+
+    sentence_transformer_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    # Initial full indexing
+    indexed_files = indexing_manager.index_codebase(str(temp_codebase), sentence_transformer_model)
+    initial_files = set(indexed_files)
+
+    # Test incremental indexing without making changes
+    incremental_files, was_incremental = indexing_manager.index_codebase_incremental(
+        str(temp_codebase), sentence_transformer_model
+    )
+
+    assert was_incremental == True
+    assert set(incremental_files) == initial_files  # Same files returned
+
+
+def test_force_full_reindex(temp_codebase):
+    """Test forcing full re-indexing."""
+    from codesage_mcp.indexing import IndexingManager
+    from sentence_transformers import SentenceTransformer
+
+    indexing_manager = IndexingManager()
+    indexing_manager.index_dir = temp_codebase / ".codesage"
+    indexing_manager.index_file = indexing_manager.index_dir / "codebase_index.json"
+    indexing_manager.metadata_file = indexing_manager.index_dir / "codebase_metadata.json"
+    indexing_manager._initialize_index()
+
+    sentence_transformer_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    # Initial full indexing
+    indexing_manager.index_codebase(str(temp_codebase), sentence_transformer_model)
+
+    # Test forcing full re-indexing
+    incremental_files, was_incremental = indexing_manager.index_codebase_incremental(
+        str(temp_codebase), sentence_transformer_model, force_full=True
+    )
+
+    assert was_incremental == False  # Should be False because we forced full indexing
+
+
+def test_codebase_manager_incremental_integration(temp_codebase):
+    """Test that CodebaseManager properly integrates incremental indexing."""
+    from codesage_mcp.codebase_manager import CodebaseManager
+    from unittest.mock import patch
+
+    manager = CodebaseManager()
+
+    # Mock the ENABLE_INCREMENTAL_INDEXING to True
+    with patch('codesage_mcp.codebase_manager.ENABLE_INCREMENTAL_INDEXING', True), \
+         patch('codesage_mcp.codebase_manager.FORCE_FULL_REINDEX', False):
+
+        # First indexing should be full
+        indexed_files = manager.index_codebase(str(temp_codebase))
+        assert len(indexed_files) > 0
+
+        # Second indexing should be incremental (no changes)
+        indexed_files2 = manager.index_codebase(str(temp_codebase))
+        assert len(indexed_files2) > 0
+
+    # Test force full reindex
+    with patch('codesage_mcp.codebase_manager.ENABLE_INCREMENTAL_INDEXING', True), \
+         patch('codesage_mcp.codebase_manager.FORCE_FULL_REINDEX', False):
+
+        indexed_files3 = manager.force_full_reindex(str(temp_codebase))
+        assert len(indexed_files3) > 0
+
+
 def test_profile_code_performance_tool_not_found():
     """Test the profile_code_performance_tool function with a non-existent file."""
     from codesage_mcp.tools import profile_code_performance_tool
