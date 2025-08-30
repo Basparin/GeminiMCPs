@@ -216,6 +216,114 @@ try:
 except (ValueError, AttributeError):
     ENABLE_MEMORY_MONITORING = True  # Default to enabled
 
+# Self-optimization feature flags
+try:
+    ENABLE_AUTO_PERFORMANCE_TUNING = (
+        get_optional_env_var("ENABLE_AUTO_PERFORMANCE_TUNING").lower() == "true"
+    )
+except (ValueError, AttributeError):
+    ENABLE_AUTO_PERFORMANCE_TUNING = True  # Default to enabled
+
+try:
+    ENABLE_ADAPTIVE_CACHE_MANAGEMENT = (
+        get_optional_env_var("ENABLE_ADAPTIVE_CACHE_MANAGEMENT").lower() == "true"
+    )
+except (ValueError, AttributeError):
+    ENABLE_ADAPTIVE_CACHE_MANAGEMENT = True  # Default to enabled
+
+try:
+    ENABLE_WORKLOAD_PATTERN_RECOGNITION = (
+        get_optional_env_var("ENABLE_WORKLOAD_PATTERN_RECOGNITION").lower() == "true"
+    )
+except (ValueError, AttributeError):
+    ENABLE_WORKLOAD_PATTERN_RECOGNITION = True  # Default to enabled
+
+# Load connection pool configuration
+try:
+    HTTP_CONNECTION_POOL_SIZE = int(get_optional_env_var("HTTP_CONNECTION_POOL_SIZE") or "10")
+except (ValueError, AttributeError):
+    HTTP_CONNECTION_POOL_SIZE = 10  # Default connection pool size
+
+try:
+    HTTP_MAX_KEEPALIVE_CONNECTIONS = int(get_optional_env_var("HTTP_MAX_KEEPALIVE_CONNECTIONS") or "5")
+except (ValueError, AttributeError):
+    HTTP_MAX_KEEPALIVE_CONNECTIONS = 5  # Default max keepalive connections
+
+# Progressive timeout configuration based on operation types
+try:
+    # Fast operations (cache hits, simple reads) - 100-500ms
+    FAST_OPERATION_TIMEOUT = float(get_optional_env_var("FAST_OPERATION_TIMEOUT") or "0.5")
+except (ValueError, AttributeError):
+    FAST_OPERATION_TIMEOUT = 0.5  # 500ms for fast operations
+
+try:
+    # Medium operations (searches, file operations) - 1-2 seconds
+    MEDIUM_OPERATION_TIMEOUT = float(get_optional_env_var("MEDIUM_OPERATION_TIMEOUT") or "2.0")
+except (ValueError, AttributeError):
+    MEDIUM_OPERATION_TIMEOUT = 2.0  # 2 seconds for medium operations
+
+try:
+    # Slow operations (LLM analysis, complex computations) - 5-10 seconds
+    SLOW_OPERATION_TIMEOUT = float(get_optional_env_var("SLOW_OPERATION_TIMEOUT") or "10.0")
+except (ValueError, AttributeError):
+    SLOW_OPERATION_TIMEOUT = 10.0  # 10 seconds for slow operations
+
+try:
+    # Very slow operations (large indexing, batch operations) - 30-60 seconds
+    VERY_SLOW_OPERATION_TIMEOUT = float(get_optional_env_var("VERY_SLOW_OPERATION_TIMEOUT") or "60.0")
+except (ValueError, AttributeError):
+    VERY_SLOW_OPERATION_TIMEOUT = 60.0  # 60 seconds for very slow operations
+
+# Legacy timeout for backward compatibility (deprecated - use operation-specific timeouts)
+try:
+    HTTP_REQUEST_TIMEOUT = int(get_optional_env_var("HTTP_REQUEST_TIMEOUT") or "30")
+except (ValueError, AttributeError):
+    HTTP_REQUEST_TIMEOUT = 30  # Default request timeout in seconds (deprecated)
+
+try:
+    HTTP_MAX_RETRIES = int(get_optional_env_var("HTTP_MAX_RETRIES") or "3")
+except (ValueError, AttributeError):
+    HTTP_MAX_RETRIES = 3  # Default max retries
+
+try:
+    HTTP_RETRY_BACKOFF_FACTOR = float(get_optional_env_var("HTTP_RETRY_BACKOFF_FACTOR") or "0.5")
+except (ValueError, AttributeError):
+    HTTP_RETRY_BACKOFF_FACTOR = 0.5  # Default backoff factor
+
+# Circuit breaker configuration
+try:
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD = int(get_optional_env_var("CIRCUIT_BREAKER_FAILURE_THRESHOLD") or "10")
+except (ValueError, AttributeError):
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD = 10  # Failures before opening circuit
+
+try:
+    CIRCUIT_BREAKER_RECOVERY_TIMEOUT = int(get_optional_env_var("CIRCUIT_BREAKER_RECOVERY_TIMEOUT") or "60")
+except (ValueError, AttributeError):
+    CIRCUIT_BREAKER_RECOVERY_TIMEOUT = 60  # Seconds to wait before attempting recovery
+
+try:
+    CIRCUIT_BREAKER_SUCCESS_THRESHOLD = int(get_optional_env_var("CIRCUIT_BREAKER_SUCCESS_THRESHOLD") or "3")
+except (ValueError, AttributeError):
+    CIRCUIT_BREAKER_SUCCESS_THRESHOLD = 3  # Successes needed to close circuit
+
+# Adaptive timeout configuration
+try:
+    ADAPTIVE_TIMEOUT_ENABLED = get_optional_env_var("ADAPTIVE_TIMEOUT_ENABLED").lower() == "true"
+except (ValueError, AttributeError):
+    ADAPTIVE_TIMEOUT_ENABLED = True  # Enable adaptive timeouts by default
+
+try:
+    ADAPTIVE_TIMEOUT_LOAD_FACTOR = float(get_optional_env_var("ADAPTIVE_TIMEOUT_LOAD_FACTOR") or "1.5")
+except (ValueError, AttributeError):
+    ADAPTIVE_TIMEOUT_LOAD_FACTOR = 1.5  # Multiply timeout by load factor under high load
+
+try:
+    ENABLE_CONNECTION_POOL_MONITORING = (
+        get_optional_env_var("ENABLE_CONNECTION_POOL_MONITORING").lower() == "true"
+    )
+except (ValueError, AttributeError):
+    ENABLE_CONNECTION_POOL_MONITORING = True  # Default to enabled
+
 
 def validate_configuration() -> list[str]:
     """Validate the current configuration and return any issues found.
@@ -278,5 +386,26 @@ def get_configuration_status() -> dict:
             "model_quantization_enabled": ENABLE_MODEL_QUANTIZATION,
             "chunk_size_tokens": CHUNK_SIZE_TOKENS,
             "memory_monitoring_enabled": ENABLE_MEMORY_MONITORING,
+        },
+        "connection_config": {
+            "connection_pool_size": HTTP_CONNECTION_POOL_SIZE,
+            "max_keepalive_connections": HTTP_MAX_KEEPALIVE_CONNECTIONS,
+            "request_timeout_seconds": HTTP_REQUEST_TIMEOUT,  # Deprecated - use operation-specific timeouts
+            "max_retries": HTTP_MAX_RETRIES,
+            "retry_backoff_factor": HTTP_RETRY_BACKOFF_FACTOR,
+            "connection_pool_monitoring_enabled": ENABLE_CONNECTION_POOL_MONITORING,
+        },
+        "timeout_config": {
+            "fast_operation_timeout": FAST_OPERATION_TIMEOUT,
+            "medium_operation_timeout": MEDIUM_OPERATION_TIMEOUT,
+            "slow_operation_timeout": SLOW_OPERATION_TIMEOUT,
+            "very_slow_operation_timeout": VERY_SLOW_OPERATION_TIMEOUT,
+            "adaptive_timeout_enabled": ADAPTIVE_TIMEOUT_ENABLED,
+            "adaptive_timeout_load_factor": ADAPTIVE_TIMEOUT_LOAD_FACTOR,
+        },
+        "circuit_breaker_config": {
+            "failure_threshold": CIRCUIT_BREAKER_FAILURE_THRESHOLD,
+            "recovery_timeout": CIRCUIT_BREAKER_RECOVERY_TIMEOUT,
+            "success_threshold": CIRCUIT_BREAKER_SUCCESS_THRESHOLD,
         },
     }

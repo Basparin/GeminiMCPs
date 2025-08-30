@@ -1,0 +1,153 @@
+{
+  "dashboard": {
+    "title": "CodeSage MCP Performance Analysis",
+    "tags": ["codesage", "mcp", "performance"],
+    "timezone": "UTC",
+    "panels": [
+      {
+        "title": "Performance Score Trend",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "codesage_mcp_performance_score",
+            "legendFormat": "Performance Score"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "min": 0,
+            "max": 100
+          }
+        }
+      },
+      {
+        "title": "Response Time Distribution",
+        "type": "heatmap",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(codesage_mcp_response_time_ms_bucket[5m])",
+            "legendFormat": "{{le}}"
+          }
+        ]
+      },
+      {
+        "title": "Throughput vs Latency",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "codesage_mcp_requests_per_second",
+            "legendFormat": "Throughput (RPS)",
+            "yAxes": {
+              "unit": "reqps"
+            }
+          },
+          {
+            "expr": "codesage_mcp_response_time_ms",
+            "legendFormat": "Response Time (ms)",
+            "yAxes": {
+              "unit": "ms"
+            }
+          }
+        ]
+      },
+      {
+        "title": "Cache Effectiveness",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "codesage_mcp_cache_hit_rate",
+            "legendFormat": "Cache Hit Rate %"
+          }
+        ]
+      },
+      {
+        "title": "Memory Pressure Analysis",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "codesage_mcp_memory_usage_percent",
+            "legendFormat": "Memory Usage %"
+          },
+          {
+            "expr": "rate(process_gc_collections_total[5m])",
+            "legendFormat": "GC Collections/sec"
+          }
+        ]
+      },
+      {
+        "title": "Connection Pool Efficiency",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "codesage_mcp_connection_pool_active_connections",
+            "legendFormat": "Active Connections"
+          },
+          {
+            "expr": "codesage_mcp_connection_pool_max_connections",
+            "legendFormat": "Max Connections"
+          }
+        ]
+      },
+      {
+        "title": "LLM Provider Performance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24},
+        "targets": [
+          {
+            "expr": "rate(codesage_mcp_groq_requests_total[5m])",
+            "legendFormat": "Groq RPS"
+          },
+          {
+            "expr": "rate(codesage_mcp_openrouter_requests_total[5m])",
+            "legendFormat": "OpenRouter RPS"
+          },
+          {
+            "expr": "rate(codesage_mcp_google_requests_total[5m])",
+            "legendFormat": "Google AI RPS"
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "timepicker": {
+      "refresh_intervals": ["10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+    },
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": []
+    },
+    "editable": true,
+    "gnetId": null,
+    "graphTooltip": 1,
+    "id": null,
+    "links": [],
+    "schemaVersion": 27,
+    "style": "dark",
+    "tags": ["codesage", "mcp", "performance"],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "CodeSage MCP Performance Analysis",
+    "uid": "codesage-performance-analysis",
+    "version": 1
+  }
+}

@@ -98,12 +98,19 @@ def list_undocumented_functions_tool(file_path: str) -> dict:
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 # Check if the function has a docstring
-                if not (
-                    node.body
-                    and isinstance(node.body[0], ast.Expr)
-                    and isinstance(node.body[0].value, ast.Constant)
-                    and isinstance(node.body[0].value.value, str)
-                ):
+                has_docstring = False
+                try:
+                    if (node.body and len(node.body) > 0 and
+                        isinstance(node.body[0], ast.Expr) and
+                        hasattr(node.body[0], 'value') and
+                        isinstance(node.body[0].value, ast.Constant) and
+                        isinstance(node.body[0].value.value, str)):
+                        has_docstring = True
+                except (AttributeError, IndexError, TypeError):
+                    # Handle malformed AST nodes gracefully
+                    has_docstring = False
+
+                if not has_docstring:
                     undocumented_functions.append(
                         {"name": node.name, "line_number": node.lineno}
                     )
@@ -386,12 +393,19 @@ def _count_undocumented_functions(file_path: str) -> int:
             if isinstance(node, ast.FunctionDef):
                 function_count += 1
                 # Check if the function has a docstring
-                if (
-                    node.body
-                    and isinstance(node.body[0], ast.Expr)
-                    and isinstance(node.body[0].value, ast.Constant)
-                    and isinstance(node.body[0].value.value, str)
-                ):
+                has_docstring = False
+                try:
+                    if (node.body and len(node.body) > 0 and
+                        isinstance(node.body[0], ast.Expr) and
+                        hasattr(node.body[0], 'value') and
+                        isinstance(node.body[0].value, ast.Constant) and
+                        isinstance(node.body[0].value.value, str)):
+                        has_docstring = True
+                except (AttributeError, IndexError, TypeError):
+                    # Handle malformed AST nodes gracefully
+                    has_docstring = False
+
+                if has_docstring:
                     documented_function_count += 1
 
         # Return undocumented functions count

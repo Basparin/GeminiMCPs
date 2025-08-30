@@ -1,0 +1,311 @@
+groups:
+  - name: codesage_performance_alerts
+    rules:
+      # System Health Alerts
+      - alert: CodeSageServiceDown
+        expr: up{job="codesage-mcp"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: codesage-mcp
+        annotations:
+          summary: "CodeSage MCP service is down"
+          description: "CodeSage MCP service has been down for more than 1 minute"
+          runbook_url: "docs/operational_runbook.md#service-down"
+
+      # Performance Alerts
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(codesage_mcp_response_time_ms_bucket[5m])) > 100
+        for: 5m
+        labels:
+          severity: warning
+          service: codesage-mcp
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}ms (threshold: 100ms)"
+          runbook_url: "docs/operational_runbook.md#high-response-time"
+
+      - alert: CriticalResponseTime
+        expr: histogram_quantile(0.95, rate(codesage_mcp_response_time_ms_bucket[5m])) > 200
+        for: 2m
+        labels:
+          severity: critical
+          service: codesage-mcp
+        annotations:
+          summary: "Critical response time detected"
+          description: "95th percentile response time is {{ $value }}ms (threshold: 200ms)"
+          runbook_url: "docs/operational_runbook.md#critical-response-time"
+
+      - alert: LowThroughput
+        expr: codesage_mcp_requests_per_second < 10
+        for: 10m
+        labels:
+          severity: warning
+          service: codesage-mcp
+        annotations:
+          summary: "Low throughput detected"
+          description: "Request throughput dropped to {{ $value }} RPS (threshold: 10 RPS)"
+          runbook_url: "docs/operational_runbook.md#low-throughput"
+
+      # Error Rate Alerts
+      - alert: HighErrorRate
+        expr: (rate(codesage_mcp_errors_total[5m]) / rate(codesage_mcp_requests_total[5m])) * 100 > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: codesage-mcp
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }}% (threshold: 5%)"
+          runbook_url: "docs/operational_runbook.md#high-error-rate"
+
+      - alert: CriticalErrorRate
+        expr: (rate(codesage_mcp_errors_total[5m]) / rate(codesage_mcp_requests_total[5m])) * 100 > 10
+        for: 2m
+        labels:
+          severity: critical
+          service: codesage-mcp
+        annotations:
+          summary: "Critical error rate detected"
+          description: "Error rate is {{ $value }}% (threshold: 10%)"
+          runbook_url: "docs/operational_runbook.md#critical-error-rate"
+
+      # Resource Usage Alerts
+      - alert: HighMemoryUsage
+        expr: codesage_mcp_memory_usage_percent > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: codesage-mcp
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}% (threshold: 85%)"
+          runbook_url: "docs/operational_runbook.md#high-memory-usage"
+
+      - alert: CriticalMemoryUsage
+        expr: codesage_mcp_memory_usage_percent > 95
+        for: 2m
+        labels:
+          severity: critical
+          service: codesage-mcp
+        annotations:
+          summary: "Critical memory usage detected"
+          description: "Memory usage is {{ $value }}% (threshold: 95%)"
+          runbook_url: "docs/operational_runbook.md#critical-memory-usage"
+
+      - alert: HighCPUUsage
+        expr: codesage_mcp_cpu_usage_percent > 90
+        for: 5m
+        labels:
+          severity: warning
+          service: codesage-mcp
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}% (threshold: 90%)"
+          runbook_url: "docs/operational_runbook.md#high-cpu-usage"
+
+      # Cache Performance Alerts
+      - alert: LowCacheHitRate
+        expr: codesage_mcp_cache_hit_rate < 70
+        for: 10m
+        labels:
+          severity: warning
+          service: codesage-mcp
+        annotations:
+          summary: "Low cache hit rate detected"
+          description: "Cache hit rate is {{ $value }}% (threshold: 70%)"
+          runbook_url: "docs/operational_runbook.md#low-cache-hit-rate"
+
+      - alert: CriticalCacheHitRate
+        expr: codesage_mcp_cache_hit_rate < 50
+        for: 5m
+        labels:
+          severity: critical
+          service: codesage-mcp
+        annotations:
+          summary: "Critical cache hit rate detected"
+          description: "Cache hit rate is {{ $value }}% (threshold: 50%)"
+          runbook_url: "docs/operational_runbook.md#critical-cache-hit-rate"
+
+      # Self-Optimization Effectiveness Alerts
+      - alert: LowSelfOptimizationEffectiveness
+        expr: codesage_mcp_self_optimization_effectiveness_score < 60
+        for: 15m
+        labels:
+          severity: warning
+          service: codesage-mcp
+        annotations:
+          summary: "Low self-optimization effectiveness"
+          description: "Self-optimization effectiveness is {{ $value }}% (threshold: 60%)"
+          runbook_url: "docs/operational_runbook.md#low-optimization-effectiveness"
+
+      - alert: CriticalSelfOptimizationEffectiveness
+        expr: codesage_mcp_self_optimization_effectiveness_score < 40
+        for: 10m
+        labels:
+          severity: critical
+          service: codesage-mcp
+        annotations:
+          summary: "Critical self-optimization effectiveness"
+          description: "Self-optimization effectiveness is {{ $value }}% (threshold: 40%)"
+          runbook_url: "docs/operational_runbook.md#critical-optimization-effectiveness"
+
+      # Performance Score Alerts
+      - alert: LowPerformanceScore
+        expr: codesage_mcp_performance_score < 70
+        for: 10m
+        labels:
+          severity: warning
+          service: codesage-mcp
+        annotations:
+          summary: "Low performance score detected"
+          description: "Performance score is {{ $value }} (threshold: 70)"
+          runbook_url: "docs/operational_runbook.md#low-performance-score"
+
+      - alert: CriticalPerformanceScore
+        expr: codesage_mcp_performance_score < 50
+        for: 5m
+        labels:
+          severity: critical
+          service: codesage-mcp
+        annotations:
+          summary: "Critical performance score detected"
+          description: "Performance score is {{ $value }} (threshold: 50)"
+          runbook_url: "docs/operational_runbook.md#critical-performance-score"
+
+      # User Experience Alerts
+      - alert: LowUserSatisfaction
+        expr: codesage_mcp_user_satisfaction_score < 3.5
+        for: 30m
+        labels:
+          severity: warning
+          service: codesage-mcp
+        annotations:
+          summary: "Low user satisfaction detected"
+          description: "User satisfaction score is {{ $value }}/5 (threshold: 3.5/5)"
+          runbook_url: "docs/operational_runbook.md#low-user-satisfaction"
+
+      - alert: CriticalUserSatisfaction
+        expr: codesage_mcp_user_satisfaction_score < 2.5
+        for: 15m
+        labels:
+          severity: critical
+          service: codesage-mcp
+        annotations:
+          summary: "Critical user satisfaction detected"
+          description: "User satisfaction score is {{ $value }}/5 (threshold: 2.5/5)"
+          runbook_url: "docs/operational_runbook.md#critical-user-satisfaction"
+
+      # Connection Pool Alerts
+      - alert: ConnectionPoolExhausted
+        expr: codesage_mcp_connection_pool_active_connections >= codesage_mcp_connection_pool_max_connections
+        for: 2m
+        labels:
+          severity: critical
+          service: codesage-mcp
+        annotations:
+          summary: "Connection pool exhausted"
+          description: "All {{ $value }} connections in pool are active"
+          runbook_url: "docs/operational_runbook.md#connection-pool-exhausted"
+
+      # Rate Limiting Alerts
+      - alert: RateLimitExceeded
+        expr: codesage_mcp_groq_rate_limited == 1 or codesage_mcp_openrouter_rate_limited == 1 or codesage_mcp_google_rate_limited == 1
+        for: 1m
+        labels:
+          severity: warning
+          service: codesage-mcp
+        annotations:
+          summary: "Rate limiting active"
+          description: "One or more LLM providers are currently rate limited"
+          runbook_url: "docs/operational_runbook.md#rate-limiting-active"
+
+      # Uptime and Availability
+      - alert: ServiceRestartDetected
+        expr: increase(codesage_mcp_uptime_seconds[1h]) < 3600
+        for: 1m
+        labels:
+          severity: info
+          service: codesage-mcp
+        annotations:
+          summary: "Service restart detected"
+          description: "CodeSage MCP service has been restarted"
+          runbook_url: "docs/operational_runbook.md#service-restart"
+
+  - name: codesage_predictive_alerts
+    rules:
+      # Predictive Maintenance Alerts
+      - alert: PredictivePerformanceDegradation
+        expr: codesage_mcp_performance_trend_slope < -0.1
+        for: 30m
+        labels:
+          severity: warning
+          service: codesage-mcp
+          type: predictive
+        annotations:
+          summary: "Predictive: Performance degradation expected"
+          description: "Performance trending downward with slope {{ $value }}"
+          runbook_url: "docs/operational_runbook.md#predictive-performance-degradation"
+
+      - alert: PredictiveResourceExhaustion
+        expr: predict_linear(codesage_mcp_memory_usage_percent[1h], 3600) > 90
+        for: 15m
+        labels:
+          severity: warning
+          service: codesage-mcp
+          type: predictive
+        annotations:
+          summary: "Predictive: Memory exhaustion expected"
+          description: "Memory usage predicted to reach {{ $value }}% within 1 hour"
+          runbook_url: "docs/operational_runbook.md#predictive-memory-exhaustion"
+
+      - alert: PredictiveHighErrorRate
+        expr: predict_linear((rate(codesage_mcp_errors_total[5m]) / rate(codesage_mcp_requests_total[5m])) * 100 [1h], 3600) > 8
+        for: 20m
+        labels:
+          severity: warning
+          service: codesage-mcp
+          type: predictive
+        annotations:
+          summary: "Predictive: High error rate expected"
+          description: "Error rate predicted to reach {{ $value }}% within 1 hour"
+          runbook_url: "docs/operational_runbook.md#predictive-high-error-rate"
+
+  - name: codesage_anomaly_alerts
+    rules:
+      # Anomaly Detection Alerts
+      - alert: PerformanceAnomalyDetected
+        expr: abs(codesage_mcp_performance_anomaly_score) > 2.5
+        for: 5m
+        labels:
+          severity: warning
+          service: codesage-mcp
+          type: anomaly
+        annotations:
+          summary: "Performance anomaly detected"
+          description: "Performance anomaly score: {{ $value }} (threshold: 2.5)"
+          runbook_url: "docs/operational_runbook.md#performance-anomaly"
+
+      - alert: TrafficAnomalyDetected
+        expr: abs(codesage_mcp_traffic_anomaly_score) > 3.0
+        for: 3m
+        labels:
+          severity: warning
+          service: codesage-mcp
+          type: anomaly
+        annotations:
+          summary: "Traffic anomaly detected"
+          description: "Traffic anomaly score: {{ $value }} (threshold: 3.0)"
+          runbook_url: "docs/operational_runbook.md#traffic-anomaly"
+
+      - alert: ErrorSpikeAnomaly
+        expr: abs(codesage_mcp_error_spike_anomaly_score) > 2.0
+        for: 2m
+        labels:
+          severity: critical
+          service: codesage-mcp
+          type: anomaly
+        annotations:
+          summary: "Error spike anomaly detected"
+          description: "Error spike anomaly score: {{ $value }} (threshold: 2.0)"
+          runbook_url: "docs/operational_runbook.md#error-spike-anomaly"

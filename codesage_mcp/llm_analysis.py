@@ -24,8 +24,21 @@ import importlib.util
 import ast
 import inspect
 import re  # New import
+import time
+import asyncio
+import logging
+from typing import Optional, Tuple
 from codesage_mcp.utils import _count_todo_fixme_comments, safe_read_file  # New import
 import json  # New import
+from codesage_mcp.config import (
+    HTTP_REQUEST_TIMEOUT,
+    HTTP_MAX_RETRIES,
+    HTTP_RETRY_BACKOFF_FACTOR,
+    HTTP_CONNECTION_POOL_SIZE,
+)
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 
 class LLMAnalysisManager:
@@ -47,6 +60,122 @@ class LLMAnalysisManager:
         self.groq_client = groq_client
         self.openrouter_client = openrouter_client
         self.google_ai_client = google_ai_client
+
+        # Initialize semaphores for concurrent request management
+        self._semaphores = {
+            "groq": asyncio.Semaphore(HTTP_CONNECTION_POOL_SIZE // 3 or 1),
+            "openrouter": asyncio.Semaphore(HTTP_CONNECTION_POOL_SIZE // 3 or 1),
+            "google": asyncio.Semaphore(HTTP_CONNECTION_POOL_SIZE // 3 or 1),
+        }
+
+        # Rate limiting tracking
+        self._last_request_times = {
+            "groq": {},
+            "openrouter": {},
+            "google": {},
+        }
+
+        # Request counters for monitoring
+        self._request_counts = {
+            "groq": 0,
+            "openrouter": 0,
+            "google": 0,
+        }
+
+    def _get_provider_name(self, llm_model: str) -> str:
+        """Get the provider name from the LLM model identifier."""
+        if llm_model.startswith("openrouter/"):
+            return "openrouter"
+        elif llm_model.startswith("llama3") or llm_model.startswith("mixtral"):
+            return "groq"
+        elif llm_model.startswith("google/"):
+            return "google"
+        else:
+            return "unknown"
+
+    def _check_rate_limit(self, provider: str) -> bool:
+        """
+        Check if the request should be rate limited.
+
+        Args:
+            provider: The LLM provider name
+
+        Returns:
+            bool: True if request should proceed, False if rate limited
+        """
+        current_time = time.time()
+        provider_times = self._last_request_times[provider]
+
+        # Simple rate limiting: max 10 requests per minute per provider
+        max_requests_per_minute = 10
+        time_window = 60
+
+        # Clean old entries
+        cutoff_time = current_time - time_window
+        provider_times = {
+            model: req_time
+            for model, req_time in provider_times.items()
+            if req_time > cutoff_time
+        }
+        self._last_request_times[provider] = provider_times
+
+        # Check if we're within rate limits
+        if len(provider_times) >= max_requests_per_minute:
+            return False
+
+        return True
+
+    def _record_request(self, provider: str, model: str):
+        """Record a request for rate limiting purposes."""
+        current_time = time.time()
+        self._last_request_times[provider][model] = current_time
+        self._request_counts[provider] += 1
+
+    def get_connection_pool_stats(self) -> dict:
+        """
+        Get connection pool statistics for monitoring.
+
+        Returns:
+            dict: Connection pool statistics
+        """
+        stats = {
+            "connection_pool": {
+                "max_connections": HTTP_CONNECTION_POOL_SIZE,
+                "timeout_seconds": HTTP_REQUEST_TIMEOUT,
+                "max_retries": HTTP_MAX_RETRIES,
+                "retry_backoff_factor": HTTP_RETRY_BACKOFF_FACTOR,
+            },
+            "providers": {},
+            "rate_limiting": {},
+        }
+
+        # Provider-specific stats
+        for provider in ["groq", "openrouter", "google"]:
+            semaphore = self._semaphores[provider]
+            provider_times = self._last_request_times[provider]
+
+            # Calculate requests per minute
+            current_time = time.time()
+            recent_requests = sum(
+                1 for req_time in provider_times.values()
+                if current_time - req_time < 60
+            )
+
+            stats["providers"][provider] = {
+                "active_connections": semaphore._value if hasattr(semaphore, '_value') else 0,
+                "total_requests": self._request_counts[provider],
+                "requests_per_minute": recent_requests,
+                "models_used": list(provider_times.keys()),
+            }
+
+            # Rate limiting stats
+            stats["rate_limiting"][provider] = {
+                "current_window_requests": len(provider_times),
+                "rate_limit_threshold": 10,  # requests per minute
+                "is_rate_limited": len(provider_times) >= 10,
+            }
+
+        return stats
 
     def _summarize_with_llm(self, code_snippet: str, llm_model: str) -> str:
         """
@@ -118,11 +247,104 @@ class LLMAnalysisManager:
         # Use the unified LLM summarization method
         return self._summarize_with_llm(code_snippet, llm_model)
 
+    async def _retry_llm_call(self, llm_call_func, provider: str, model: str, *args, **kwargs) -> tuple[str, str]:
+        """
+        Retry LLM API calls with exponential backoff and rate limiting for connection resilience.
+
+        Args:
+            llm_call_func: The LLM API call function to retry
+            provider: The LLM provider name
+            model: The model name
+            *args: Positional arguments for the LLM call
+            **kwargs: Keyword arguments for the LLM call
+
+        Returns:
+            tuple[str, str]: (response_content, error_message)
+        """
+        # Check rate limiting first
+        if not self._check_rate_limit(provider):
+            return None, f"Rate limit exceeded for {provider}. Please try again later."
+
+        last_exception = None
+
+        async with self._semaphores[provider]:
+            for attempt in range(HTTP_MAX_RETRIES + 1):
+                try:
+                    # Record the request
+                    self._record_request(provider, model)
+
+                    # Make the API call
+                    result = await llm_call_func(*args, **kwargs)
+                    return result
+                except Exception as e:
+                    last_exception = e
+
+                    # Check if this is a retryable error
+                    if self._is_retryable_error(e):
+                        if attempt < HTTP_MAX_RETRIES:
+                            # Calculate backoff delay with jitter
+                            delay = HTTP_RETRY_BACKOFF_FACTOR * (2 ** attempt)
+                            delay = min(delay, 60)  # Cap at 60 seconds
+
+                            logger.warning(f"LLM API call failed (attempt {attempt + 1}/{HTTP_MAX_RETRIES + 1}): {e}. Retrying in {delay:.2f}s...")
+                            await asyncio.sleep(delay)
+                            continue
+
+                    # Not retryable or max retries reached
+                    break
+
+        # All retries failed
+        error_response = self._handle_llm_error(last_exception, "LLM call with retries")
+        return None, error_response["error"]["message"]
+
+    def _is_retryable_error(self, exception: Exception) -> bool:
+        """
+        Determine if an exception is retryable based on error type and message.
+
+        Args:
+            exception: The exception to check
+
+        Returns:
+            bool: True if the error is retryable
+        """
+        error_message = str(exception).lower()
+        error_type = type(exception).__name__
+
+        # Network and connection errors
+        retryable_errors = [
+            "connectionreseterror",
+            "connectionabortederror",
+            "connectionrefusederror",
+            "timeouterror",
+            "readtimeout",
+            "connecttimeout",
+            "connectionpool",
+            "connection reset by peer",
+            "connection timed out",
+            "connection refused",
+            "connection aborted",
+            "network is unreachable",
+            "temporary failure in name resolution",
+            "badstatusline",
+            "remotely closed",
+        ]
+
+        # Rate limiting
+        if "rate limit" in error_message or "429" in error_message:
+            return True
+
+        # Check error type
+        if any(error_type.lower().endswith(retryable) for retryable in ["error", "exception"]):
+            if any(keyword in error_message for keyword in retryable_errors):
+                return True
+
+        return False
+
     def _get_llm_response(
         self, prompt: str, llm_model: str, system_message: str = None
     ) -> tuple[str, str]:
         """
-        Helper to get LLM response from various providers using standardized patterns.
+        Helper to get LLM response from various providers using standardized patterns with retry logic.
 
         Args:
             prompt: The user prompt to send to the LLM
@@ -135,40 +357,62 @@ class LLMAnalysisManager:
         if system_message is None:
             system_message = self._build_system_prompt()
 
+        provider = self._get_provider_name(llm_model)
+
+        async def _call_openrouter():
+            if not self.openrouter_client:
+                raise ValueError("Error: OPENROUTER_API_KEY not configured.")
+
+            chat_completion = await asyncio.to_thread(
+                self.openrouter_client.chat.completions.create,
+                model=llm_model.replace("openrouter/", "", 1),
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt},
+                ],
+                timeout=HTTP_REQUEST_TIMEOUT,
+            )
+            return chat_completion.choices[0].message.content, None
+
+        async def _call_groq():
+            if not self.groq_client:
+                raise ValueError("Error: GROQ_API_KEY not configured.")
+
+            chat_completion = await asyncio.to_thread(
+                self.groq_client.chat.completions.create,
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": prompt},
+                ],
+                model=llm_model,
+                timeout=HTTP_REQUEST_TIMEOUT,
+            )
+            return chat_completion.choices[0].message.content, None
+
+        async def _call_google():
+            if not self.google_ai_client:
+                raise ValueError("Error: GOOGLE_API_KEY not configured.")
+
+            response = await asyncio.to_thread(
+                self.google_ai_client.generate_content,
+                prompt
+            )
+            return response.text, None
+
         try:
+            # Create event loop if needed
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
             if llm_model.startswith("openrouter/"):
-                if not self.openrouter_client:
-                    return None, "Error: OPENROUTER_API_KEY not configured."
-
-                chat_completion = self.openrouter_client.chat.completions.create(
-                    model=llm_model.replace("openrouter/", "", 1),
-                    messages=[
-                        {"role": "system", "content": system_message},
-                        {"role": "user", "content": prompt},
-                    ],
-                )
-                return chat_completion.choices[0].message.content, None
-
+                return loop.run_until_complete(self._retry_llm_call(_call_openrouter, provider, llm_model))
             elif llm_model.startswith("llama3") or llm_model.startswith("mixtral"):
-                if not self.groq_client:
-                    return None, "Error: GROQ_API_KEY not configured."
-
-                chat_completion = self.groq_client.chat.completions.create(
-                    messages=[
-                        {"role": "system", "content": system_message},
-                        {"role": "user", "content": prompt},
-                    ],
-                    model=llm_model,
-                )
-                return chat_completion.choices[0].message.content, None
-
+                return loop.run_until_complete(self._retry_llm_call(_call_groq, provider, llm_model))
             elif llm_model.startswith("google/"):
-                if not self.google_ai_client:
-                    return None, "Error: GOOGLE_API_KEY not configured."
-
-                response = self.google_ai_client.generate_content(prompt)
-                return response.text, None
-
+                return loop.run_until_complete(self._retry_llm_call(_call_google, provider, llm_model))
             else:
                 return None, f"LLM model '{llm_model}' not supported yet."
 

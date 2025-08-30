@@ -60,7 +60,7 @@
    2   "mcpServers": [
    3     {
    4       "name": "codesage",
-   5       "httpUrl": "http://127.0.0.1:8000",
+   5       "httpUrl": "http://127.0.0.1:8000/mcp",
    6       "trust": true
    7     }
    8   ]

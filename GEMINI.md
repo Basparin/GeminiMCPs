@@ -60,7 +60,7 @@ Add the following entry to the `mcpServers` array in your `settings.json`:
   "mcpServers": [
     {
       "name": "codesage",
-      "httpUrl": "http://127.0.0.1:8000",
+      "httpUrl": "http://127.0.0.1:8000/mcp",
       "trust": true
     }
   ]

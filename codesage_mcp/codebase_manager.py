@@ -19,6 +19,7 @@ import logging
 from groq import Groq
 from openai import OpenAI
 import google.generativeai as genai
+import httpx
 import ast
 from collections import defaultdict  # New import
 
@@ -33,6 +34,11 @@ from .config import (
     GOOGLE_API_KEY,
     ENABLE_INCREMENTAL_INDEXING,
     FORCE_FULL_REINDEX,
+    HTTP_CONNECTION_POOL_SIZE,
+    HTTP_MAX_KEEPALIVE_CONNECTIONS,
+    HTTP_REQUEST_TIMEOUT,
+    HTTP_MAX_RETRIES,
+    HTTP_RETRY_BACKOFF_FACTOR,
     get_configuration_status,
 )
 
@@ -354,9 +360,10 @@ class CodebaseManager:
 
             # Trigger smart prefetching based on usage patterns
             try:
+                codebase_path = str(Path(file_path).parent)
                 prefetch_stats = self.cache.smart_prefetch(
                     file_path,
-                    self.indexing_manager.indexed_codebases,
+                    codebase_path,
                     self.sentence_transformer_model,
                 )
                 if prefetch_stats["prefetched"] > 0:
@@ -647,3 +654,8 @@ class CodebaseManager:
 
 # Create a global instance of the CodebaseManager
 codebase_manager = CodebaseManager()
+
+
+def get_llm_analysis_manager():
+    """Get the LLM analysis manager instance for metrics collection."""
+    return codebase_manager.llm_analysis_manager

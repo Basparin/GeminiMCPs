@@ -1,0 +1,185 @@
+{
+  "dashboard": {
+    "title": "CodeSage MCP User Experience",
+    "tags": ["codesage", "mcp", "ux", "users"],
+    "timezone": "UTC",
+    "panels": [
+      {
+        "title": "User Satisfaction Score",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "codesage_mcp_user_satisfaction_score",
+            "legendFormat": "Avg Satisfaction"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "min": 1,
+            "max": 5,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "red"},
+                {"value": 3, "color": "orange"},
+                {"value": 4, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "User Feedback Volume",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(codesage_mcp_user_feedback_total[1h])",
+            "legendFormat": "Feedback/hour"
+          }
+        ]
+      },
+      {
+        "title": "Feedback by Type",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "targets": [
+          {
+            "expr": "codesage_mcp_feedback_bug_report_total",
+            "legendFormat": "Bug Reports"
+          },
+          {
+            "expr": "codesage_mcp_feedback_feature_request_total",
+            "legendFormat": "Feature Requests"
+          },
+          {
+            "expr": "codesage_mcp_feedback_performance_issue_total",
+            "legendFormat": "Performance Issues"
+          },
+          {
+            "expr": "codesage_mcp_feedback_usability_feedback_total",
+            "legendFormat": "Usability Feedback"
+          }
+        ]
+      },
+      {
+        "title": "Response Time vs User Satisfaction",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "targets": [
+          {
+            "expr": "codesage_mcp_response_time_ms",
+            "legendFormat": "Response Time (ms)"
+          },
+          {
+            "expr": "codesage_mcp_user_satisfaction_score * 100",
+            "legendFormat": "Satisfaction Score (scaled)"
+          }
+        ]
+      },
+      {
+        "title": "Error Rate vs User Satisfaction",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "(rate(codesage_mcp_errors_total[5m]) / rate(codesage_mcp_requests_total[5m])) * 100",
+            "legendFormat": "Error Rate %"
+          },
+          {
+            "expr": "codesage_mcp_user_satisfaction_score",
+            "legendFormat": "User Satisfaction"
+          }
+        ]
+      },
+      {
+        "title": "Tool Usage Patterns",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(codesage_mcp_tool_usage_total[1h])",
+            "legendFormat": "{{tool_name}}"
+          }
+        ]
+      },
+      {
+        "title": "User Engagement Metrics",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+        "targets": [
+          {
+            "expr": "rate(codesage_mcp_user_sessions_total[5m])",
+            "legendFormat": "Active Sessions"
+          },
+          {
+            "expr": "codesage_mcp_avg_session_duration_minutes",
+            "legendFormat": "Avg Session Duration (min)"
+          }
+        ]
+      },
+      {
+        "title": "Performance vs Satisfaction Correlation",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 12, "x": 12, "y": 20},
+        "targets": [
+          {
+            "expr": "codesage_mcp_performance_satisfaction_correlation",
+            "legendFormat": "Correlation Coefficient"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "min": -1,
+            "max": 1,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "red"},
+                {"value": -0.3, "color": "orange"},
+                {"value": 0.3, "color": "green"}
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "refresh": "1m",
+    "timepicker": {
+      "refresh_intervals": ["30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+    },
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": []
+    },
+    "editable": true,
+    "gnetId": null,
+    "graphTooltip": 1,
+    "id": null,
+    "links": [],
+    "schemaVersion": 27,
+    "style": "dark",
+    "tags": ["codesage", "mcp", "ux", "users"],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-24h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "CodeSage MCP User Experience",
+    "uid": "codesage-user-experience",
+    "version": 1
+  }
+}

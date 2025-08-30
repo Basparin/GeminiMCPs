@@ -15,3 +15,14 @@ from .codebase_analysis import *
 from .llm_analysis import *
 from .code_generation import *
 from .configuration import *
+from .performance_monitoring import *
+from .user_feedback_tools import *
+from .trend_analysis_tools import *
+from .cache_analysis_tools import *
+from .memory_pattern_tools import *
+from .adaptive_cache_tools import *
+from .workload_adaptive_memory_tools import *
+from .intelligent_prefetch_tools import *
+from .auto_performance_tuning_tools import *
+from .workload_pattern_recognition_tools import *
+from .continuous_improvement import *

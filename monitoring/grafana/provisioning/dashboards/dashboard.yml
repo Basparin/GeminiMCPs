@@ -1,7 +1,7 @@
 apiVersion: 1
 
 providers:
-  - name: 'CodeSage MCP Dashboard'
+  - name: 'CodeSage MCP Dashboards'
     type: file
     disableDeletion: false
     updateIntervalSeconds: 10

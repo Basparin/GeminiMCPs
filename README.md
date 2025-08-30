@@ -224,7 +224,7 @@ Add to your Gemini CLI `settings.json`:
   "mcpServers": [
     {
       "name": "codesage",
-      "httpUrl": "http://127.0.0.1:8000",
+      "httpUrl": "http://127.0.0.1:8000/mcp",
       "trust": true
     }
   ]

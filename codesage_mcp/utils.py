@@ -59,22 +59,59 @@ def _count_todo_fixme_comments(lines: list[str]) -> list[dict]:
 
 
 def create_error_response(error_code: str, message: str) -> dict:
-    """Create a standardized error response dictionary.
+    """Create a standardized error response dictionary with numeric error codes.
 
     Args:
-        error_code: The error code identifier
+        error_code: The error code identifier (string)
         message: The error message
 
     Returns:
-        dict: Standardized error response
+        dict: Standardized error response with numeric code
     """
-    return {"error": {"code": error_code, "message": message}}
+    # Map string error codes to numeric codes (JSON-RPC 2.0 specification)
+    error_code_mapping = {
+        "INVALID_REQUEST": -32600,
+        "METHOD_NOT_FOUND": -32601,
+        "INVALID_PARAMS": -32602,
+        "INTERNAL_ERROR": -32603,
+        "SERVER_ERROR": -32000,
+        "TOOL_NOT_FOUND": -32001,
+        "TOOL_EXECUTION_ERROR": -32002,
+        "FILE_NOT_FOUND": -32003,
+        "INVALID_INPUT": -32004,
+        "PERMISSION_DENIED": -32005,
+        "CACHE_ERROR": -32006,
+        "PROFILING_ERROR": -32007,
+        "ANALYSIS_ERROR": -32008,
+        "TEST_GENERATION_ERROR": -32009,
+        "DOCUMENTATION_ERROR": -32010,
+        "TODO_FIXME_RESOLUTION_ERROR": -32011,
+        "TOOL_ERROR": -32012,
+    }
+
+    # Convert string code to numeric code, defaulting to INTERNAL_ERROR if unknown
+    numeric_code = error_code_mapping.get(error_code, -32603)
+
+    return {"code": numeric_code, "message": message}
+
+
+def create_numeric_error_response(error_code: int, message: str) -> dict:
+    """Create a numeric error response dictionary for Gemini CLI compatibility.
+
+    Args:
+        error_code: The numeric error code
+        message: The error message
+
+    Returns:
+        dict: Numeric error response
+    """
+    return {"code": error_code, "message": message}
 
 
 def tool_error_handler(func):
     """Decorator for tool functions to provide standardized error handling.
 
-    Catches common exceptions and returns standardized error responses.
+    Catches common exceptions and returns standardized error responses with numeric codes.
     """
 
     @wraps(func)

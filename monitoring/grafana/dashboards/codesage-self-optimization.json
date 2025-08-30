@@ -1,0 +1,195 @@
+{
+  "dashboard": {
+    "title": "CodeSage MCP Self-Optimization",
+    "tags": ["codesage", "mcp", "optimization", "ai"],
+    "timezone": "UTC",
+    "panels": [
+      {
+        "title": "Self-Optimization Effectiveness Score",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "codesage_mcp_self_optimization_effectiveness_score",
+            "legendFormat": "Optimization Effectiveness"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "red"},
+                {"value": 60, "color": "orange"},
+                {"value": 80, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Active Optimizations",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "codesage_mcp_active_optimizations_count",
+            "legendFormat": "Active Optimizations"
+          }
+        ]
+      },
+      {
+        "title": "Performance Tuning Effectiveness",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "targets": [
+          {
+            "expr": "codesage_mcp_performance_tuning_improvement_percent",
+            "legendFormat": "Tuning Improvement %"
+          },
+          {
+            "expr": "codesage_mcp_auto_tuning_success_rate",
+            "legendFormat": "Tuning Success Rate %"
+          }
+        ]
+      },
+      {
+        "title": "Cache Adaptation Metrics",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "targets": [
+          {
+            "expr": "rate(codesage_mcp_cache_adaptations_total[5m])",
+            "legendFormat": "Cache Adaptations/min"
+          },
+          {
+            "expr": "codesage_mcp_cache_adaptation_effectiveness_score",
+            "legendFormat": "Adaptation Effectiveness"
+          }
+        ]
+      },
+      {
+        "title": "Memory Optimization Events",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(codesage_mcp_memory_optimizations_total[5m])",
+            "legendFormat": "Memory Optimizations/min"
+          },
+          {
+            "expr": "codesage_mcp_memory_optimization_savings_mb",
+            "legendFormat": "Memory Savings (MB)"
+          }
+        ]
+      },
+      {
+        "title": "Workload Pattern Recognition",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(codesage_mcp_pattern_recognition_events_total[5m])",
+            "legendFormat": "Pattern Events/min"
+          },
+          {
+            "expr": "codesage_mcp_pattern_recognition_accuracy",
+            "legendFormat": "Pattern Accuracy %"
+          }
+        ]
+      },
+      {
+        "title": "Intelligent Prefetching",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+        "targets": [
+          {
+            "expr": "rate(codesage_mcp_prefetch_hits_total[5m])",
+            "legendFormat": "Prefetch Hits/min"
+          },
+          {
+            "expr": "codesage_mcp_prefetch_accuracy_percent",
+            "legendFormat": "Prefetch Accuracy %"
+          },
+          {
+            "expr": "codesage_mcp_prefetch_performance_gain_ms",
+            "legendFormat": "Performance Gain (ms)"
+          }
+        ]
+      },
+      {
+        "title": "Optimization ROI",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 12, "x": 12, "y": 20},
+        "targets": [
+          {
+            "expr": "codesage_mcp_optimization_roi_multiplier",
+            "legendFormat": "Optimization ROI"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "min": 0,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "red"},
+                {"value": 1.5, "color": "orange"},
+                {"value": 2.0, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Optimization Recommendations",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "codesage_mcp_pending_optimization_recommendations",
+            "legendFormat": "Pending Recommendations"
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-12h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "timepicker": {
+      "refresh_intervals": ["15s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+    },
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": []
+    },
+    "editable": true,
+    "gnetId": null,
+    "graphTooltip": 1,
+    "id": null,
+    "links": [],
+    "schemaVersion": 27,
+    "style": "dark",
+    "tags": ["codesage", "mcp", "optimization", "ai"],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-12h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "CodeSage MCP Self-Optimization",
+    "uid": "codesage-self-optimization",
+    "version": 1
+  }
+}

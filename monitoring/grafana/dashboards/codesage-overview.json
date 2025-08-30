@@ -1,46 +1,250 @@
 {
   "dashboard": {
     "title": "CodeSage MCP Server Overview",
-    "tags": ["codesage", "mcp"],
+    "tags": ["codesage", "mcp", "production"],
     "timezone": "UTC",
     "panels": [
       {
-        "title": "Request Rate",
-        "type": "graph",
+        "title": "System Health Overview",
+        "type": "stat",
+        "gridPos": {"h": 3, "w": 24, "x": 0, "y": 0},
         "targets": [
           {
-            "expr": "rate(http_requests_total[5m])",
-            "legendFormat": "Requests per second"
+            "expr": "up{job=\"codesage-mcp\"}",
+            "legendFormat": "Service Status"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "0": {"text": "DOWN", "color": "red"},
+                  "1": {"text": "UP", "color": "green"}
+                },
+                "type": "value"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "title": "Response Time (ms)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 3},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(codesage_mcp_response_time_ms_bucket[5m]))",
+            "legendFormat": "P95 Response Time"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(codesage_mcp_response_time_ms_bucket[5m]))",
+            "legendFormat": "P50 Response Time"
           }
         ]
       },
       {
-        "title": "Response Time",
+        "title": "Request Rate & Errors",
         "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 3},
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
-            "legendFormat": "95th percentile"
+            "expr": "rate(codesage_mcp_requests_total[5m])",
+            "legendFormat": "Requests/sec"
+          },
+          {
+            "expr": "rate(codesage_mcp_errors_total[5m])",
+            "legendFormat": "Errors/sec"
           }
         ]
       },
       {
-        "title": "Memory Usage",
+        "title": "Resource Utilization",
         "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 0, "y": 11},
         "targets": [
           {
-            "expr": "process_resident_memory_bytes / 1024 / 1024",
-            "legendFormat": "Memory (MB)"
+            "expr": "codesage_mcp_memory_usage_percent",
+            "legendFormat": "Memory %"
+          },
+          {
+            "expr": "codesage_mcp_cpu_usage_percent",
+            "legendFormat": "CPU %"
           }
         ]
       },
       {
-        "title": "Cache Hit Rate",
+        "title": "Cache Performance",
         "type": "graph",
+        "gridPos": {"h": 8, "w": 8, "x": 8, "y": 11},
         "targets": [
           {
-            "expr": "rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) * 100",
-            "legendFormat": "Cache hit rate (%)"
+            "expr": "codesage_mcp_cache_hit_rate",
+            "legendFormat": "Cache Hit Rate %"
+          }
+        ]
+      },
+      {
+        "title": "Error Rate %",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 8, "x": 16, "y": 11},
+        "targets": [
+          {
+            "expr": "(rate(codesage_mcp_errors_total[5m]) / rate(codesage_mcp_requests_total[5m])) * 100",
+            "legendFormat": "Error Rate %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 1, "color": "orange"},
+                {"value": 5, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Connection Pool Status",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 19},
+        "targets": [
+          {
+            "expr": "codesage_mcp_connection_pool_max_connections",
+            "legendFormat": "Max Connections"
+          },
+          {
+            "expr": "codesage_mcp_connection_pool_timeout_seconds",
+            "legendFormat": "Timeout (s)"
+          }
+        ]
+      },
+      {
+        "title": "LLM Provider Metrics",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 19},
+        "targets": [
+          {
+            "expr": "codesage_mcp_groq_requests_total",
+            "legendFormat": "Groq Requests"
+          },
+          {
+            "expr": "codesage_mcp_openrouter_requests_total",
+            "legendFormat": "OpenRouter Requests"
+          },
+          {
+            "expr": "codesage_mcp_google_requests_total",
+            "legendFormat": "Google AI Requests"
+          }
+        ]
+      },
+      {
+        "title": "Performance Score",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 27},
+        "targets": [
+          {
+            "expr": "codesage_mcp_performance_score",
+            "legendFormat": "Performance Score"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "none",
+            "min": 0,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "red"},
+                {"value": 50, "color": "orange"},
+                {"value": 80, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Active Alerts",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 27},
+        "targets": [
+          {
+            "expr": "codesage_mcp_active_alerts",
+            "legendFormat": "Active Alerts"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": null, "color": "green"},
+                {"value": 1, "color": "orange"},
+                {"value": 3, "color": "red"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "title": "Uptime",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 27},
+        "targets": [
+          {
+            "expr": "codesage_mcp_uptime_seconds / 3600",
+            "legendFormat": "Uptime (hours)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "h"
+          }
+        }
+      },
+      {
+        "title": "Throughput (RPS)",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 27},
+        "targets": [
+          {
+            "expr": "codesage_mcp_requests_per_second",
+            "legendFormat": "Requests/sec"
+          }
+        ]
+      },
+      {
+        "title": "Rate Limiting Status",
+        "type": "table",
+        "gridPos": {"h": 6, "w": 12, "x": 0, "y": 31},
+        "targets": [
+          {
+            "expr": "codesage_mcp_groq_rate_limited",
+            "legendFormat": "Groq Rate Limited"
+          },
+          {
+            "expr": "codesage_mcp_openrouter_rate_limited",
+            "legendFormat": "OpenRouter Rate Limited"
+          },
+          {
+            "expr": "codesage_mcp_google_rate_limited",
+            "legendFormat": "Google AI Rate Limited"
+          }
+        ]
+      },
+      {
+        "title": "Top Error Patterns",
+        "type": "logs",
+        "gridPos": {"h": 6, "w": 12, "x": 12, "y": 31},
+        "targets": [
+          {
+            "expr": "{job=\"codesage-mcp\"} |= \"ERROR\"",
+            "legendFormat": "Error Logs"
           }
         ]
       }
@@ -49,6 +253,46 @@
       "from": "now-1h",
       "to": "now"
     },
-    "refresh": "5s"
+    "refresh": "5s",
+    "timepicker": {
+      "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h", "2h", "1d"]
+    },
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": "-- Grafana --",
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "editable": true,
+    "gnetId": null,
+    "graphTooltip": 0,
+    "id": null,
+    "links": [],
+    "panels": [],
+    "schemaVersion": 27,
+    "style": "dark",
+    "tags": ["codesage", "mcp", "production"],
+    "templating": {
+      "list": []
+    },
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "CodeSage MCP Server Overview",
+    "uid": "codesage-mcp-overview",
+    "version": 1
   }
 }
