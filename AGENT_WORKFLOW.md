@@ -30,23 +30,34 @@ To enable Qwen-Coder-CLI and Gemini-CLI to work in parallel without conflicts:
 
 ### 2. Orchestration Workflow with External LLMs
 
-When collaborating with external LLMs (like Grok or Qwen) for implementation tasks, my role shifts to orchestration and task elaboration. I will follow this structured workflow:
+#### Understanding External LLM Capabilities (Grok via Kilocode)
+
+For this workflow, we assume the external LLM (e.g., Grok from xAI) is operating through an environment like the Kilocode VS Code extension. This setup grants the LLM powerful capabilities for autonomous code development:
+
+*   **Grok (from xAI):** A family of Large Language Models designed for insightful problem-solving. Grok provides an API and SDKs, enabling programmatic interaction and integration into development workflows. It is capable of complex code analysis and generation.
+*   **Kilocode VS Code Extension:** An open-source AI coding agent that integrates AI assistance directly into VS Code. Kilocode provides the LLM with a suite of "Core Tools" that enable direct interaction with the development environment:
+    *   **File System Access:** Can read and write files, and modify existing code.
+    *   **Terminal Execution:** Can execute terminal commands (e.g., run tests, linters, build commands).
+    *   **Codebase Search:** Can search the codebase for patterns and information.
+    *   **Autonomous Iteration:** Kilocode's framework allows the integrated LLM to perform tasks, analyze results, and iterate on its own, making it suitable for self-correcting loops like test-fixing.
+
+This means that when I elaborate a task for an external LLM, it is expected to leverage these capabilities to autonomously perform the necessary steps, including reading files, making changes, running verification commands, and iterating until the task is complete or a blocker is encountered.
 
 #### 2.1 Task Elaboration and Delegation
 
 *   **Identify Next Task:** Based on the prioritized `todo.md` and overall project goals, I will identify the next task to be delegated.
-*   **Elaborate Task for External LLM:** I will break down the task into clear, actionable steps and provide all necessary context for the external LLM (e.g., Grok, Qwen). This elaboration will include:
+*   **Elaborate Task for External LLM:** I will break down the task into clear, actionable steps and provide all necessary context for the external LLM (e.g., Grok, Qwen). This elaboration will focus on the *high-level objective* and *expected outcome*, assuming the external LLM will handle the detailed execution autonomously. This elaboration will include:
     *   **Goal:** The specific objective of the task.
     *   **Context:** Relevant background information, current state, and any known issues.
-    *   **Specific Steps:** Detailed, step-by-step instructions for the external LLM to follow.
-    *   **Expected Output:** The format in which the external LLM should provide its results (e.g., `replace` tool calls, full file content, analysis reports).
-    *   **Verification Instructions:** How the external LLM's work will be verified (e.g., running tests, manual review).
-*   **Delegate to User:** I will provide these elaborated instructions to the human user, who will then pass them to the external LLM.
+    *   **Specific Steps (High-Level):** Guidance on the approach or sub-goals for the external LLM.
+    *   **Expected Output:** The final state or deliverable from the external LLM (e.g., all tests passing, a specific feature implemented).
+*   **Delegate to External LLM (via User):** I will provide these elaborated instructions to the human user, who will then pass them to the external LLM.
 
 #### 2.2 Execution and Verification Loop
 
-*   **User Applies LLM Output:** The human user will apply the code changes or perform actions proposed by the external LLM.
-*   **My Verification:** After the user applies the changes, I will perform the necessary verification steps. This typically involves:
+*   **External LLM Autonomous Execution:** The external LLM will autonomously perform the delegated task, leveraging its tools to read/write files, execute commands, and iterate on its own.
+*   **My Monitoring and Verification:** I will monitor the external LLM's progress and perform verification steps as needed. This typically involves:
+    *   **Reviewing External LLM's Output:** Analyzing the external LLM's reports or final state.
     *   **Running Tests:** Executing `venv/bin/pytest` to check for regressions and validate new functionality.
     *   **Linting/Type-Checking:** Running project-specific linting and type-checking commands.
     *   **Code Review (Automated):** If tools are available, perform automated code quality checks.
