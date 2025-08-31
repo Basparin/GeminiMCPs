@@ -4,6 +4,9 @@ uvloop
 httptools
 python-dotenv
 pytest
+pytest-asyncio
+pytest-benchmark
+memory-profiler
 groq
 openai
 ruff
@@ -15,3 +18,7 @@ stdlib_list
 pre-commit
 psutil
 tiktoken
+
+structlog
+
+python-json-logger

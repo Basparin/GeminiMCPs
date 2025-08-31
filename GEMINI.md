@@ -1,4 +1,11 @@
 # Project: CodeSage MCP Server
+*Last Updated: 2025-08-31*
+
+## Executive Summary
+[Brief summary of the document's purpose and key takeaways.]
+
+## Definitions
+[Glossary of key terms used in this document.]
 
 ## Project Overview
 The CodeSage Model Context Protocol (MCP) Server is a high-performance, production-ready platform designed to revolutionize code analysis and search capabilities. It functions as an intermediary, enabling the Gemini CLI to interact with larger codebases and integrate with various Large Language Models (LLMs) for specialized tasks.
@@ -30,8 +37,8 @@ The server is a FastAPI application that exposes a JSON-RPC endpoint (`/mcp`). T
     ```
 2.  **Install dependencies into the virtual environment:**
     ```bash
-    python3 -m venv venv
-    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    python3 -m venv venv # On Windows: python -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate; On macOS: source venv/bin/activate
     pip install -r requirements.txt
     ```
     For performance optimization, it's recommended to run:
@@ -41,22 +48,22 @@ The server is a FastAPI application that exposes a JSON-RPC endpoint (`/mcp`). T
     ```
 
 ### Running the Server
-You can run the CodeSage MCP server either directly using `uvicorn` or via Docker Compose.
+You can run the CodeSage MCP Server either directly using `uvicorn` or via Docker Compose.
 
 #### Running Directly (using uvicorn)
-To start the CodeSage MCP server in development mode:
+To start the CodeSage MCP Server in development mode:
 ```bash
 uvicorn codesage_mcp.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 Alternatively, you can use the `start_server.sh` script:
 ```bash
-./start_server.sh
+./start_server.sh # On Windows, you might need to use `bash start_server.sh` if Git Bash is installed.
 ```
 
 #### Running with Docker Compose (Recommended for Production)
 Ensure you have Docker and Docker Compose installed. From the project root directory, run:
 ```bash
-docker compose -f docker-compose.prod.yml up -d
+docker compose up -d
 ```
 This will build the Docker image (if not already built) and start the server in a container. The server will be accessible at `http://localhost:8000`.
 
@@ -64,7 +71,7 @@ This will build the Docker image (if not already built) and start the server in 
 Before running the server, you need to create a `.env` file in the project root. You can copy the `.env.example` file to get started and then edit it to add your API keys and performance settings:
 
 ```bash
-cp .env.example .env
+cp .env.example .env # On Windows, you can use `copy .env.example .env`
 ```
 
 Example `.env` content:
@@ -87,7 +94,7 @@ CODESAGE_METRICS_PORT=9090
 ```
 
 ### Configuring Gemini CLI
-To enable the Gemini CLI to utilize the CodeSage MCP server, you need to add its configuration to your Gemini CLI `settings.json` file. This file is typically located at `~/.config/gemini-cli/settings.json` on Linux/macOS or `%APPDATA%\gemini-cli\settings.json` on Windows.
+To enable the Gemini CLI to utilize the CodeSage MCP Server, you need to add its configuration to your Gemini CLI `settings.json` file. This file is typically located at `~/.config/gemini-cli/settings.json` on Linux/macOS or `%APPDATA%\gemini-cli\settings.json` on Windows.
 
 Add the following entry to the `mcpServers` array in your `settings.json`:
 ```json
@@ -101,12 +108,12 @@ Add the following entry to the `mcpServers` array in your `settings.json`:
   ]
 }
 ```
-After adding this configuration, restart your Gemini CLI session for the changes to take effect. You should then be able to discover and use the tools exposed by the CodeSage MCP server.
+After adding this configuration, restart your Gemini CLI session for the changes to take effect. You should then be able to discover and use the tools exposed by the CodeSage MCP Server.
 
 ## Development Conventions
 
 **Tooling:**
-The project leverages `fastapi` for API development, `uvicorn` for serving the application, `python-dotenv` for secure management of environment variables, `groq`, `openai`, and `google-generativeai` for LLM integration, `pytest` for testing, and `ruff` for linting and formatting.
+The project leverages the key technologies listed in the "Project Overview" section, along with `ruff` for linting and formatting.
 
 **Pre-commit Hooks:**
 The project uses pre-commit hooks to enforce code quality and consistency. The hooks are defined in the `.pre-commit-config.yaml` file and include checks for large files, trailing whitespace, private keys, `ruff` for linting and formatting, a custom hook to automatically generate the `docs/tools_reference.md` file, and a custom hook to run the `pytest` test suite.

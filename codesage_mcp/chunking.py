@@ -16,6 +16,9 @@ from dataclasses import dataclass
 
 from .config import CHUNK_SIZE_TOKENS
 
+# Import custom exceptions
+from .exceptions import BaseMCPError
+
 # Set up logger
 logger = logging.getLogger(__name__)
 
@@ -40,8 +43,9 @@ class DocumentChunker:
         # Use tiktoken for accurate token counting
         try:
             self.encoding = tiktoken.get_encoding("cl100k_base")  # GPT-4 encoding
-        except:
+        except Exception as encoding_error:
             # Fallback to approximate token counting
+            logger.warning(f"Could not load tiktoken encoding, using fallback: {encoding_error}")
             self.encoding = None
 
     def count_tokens(self, text: str) -> int:

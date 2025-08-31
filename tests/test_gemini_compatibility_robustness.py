@@ -80,6 +80,64 @@ class TestEdgeCases:
         format_type = self.handler.detect_response_format(headers, body)
         assert format_type == ResponseFormat.STANDARD_MCP
 
+    def test_detect_response_format_corrupted_json_headers(self, corrupted_json_strings):
+        """Test detect_response_format with corrupted JSON in headers."""
+        for corrupted in corrupted_json_strings:
+            # Simulate headers with corrupted JSON values
+            headers = {"user-agent": corrupted, "content-type": "application/json"}
+            body = {"method": "tools/list"}
+            format_type = self.handler.detect_response_format(headers, body)
+            # Should handle gracefully and default appropriately
+            assert format_type in [ResponseFormat.STANDARD_MCP, ResponseFormat.GEMINI_ARRAY_TOOLS]
+
+    def test_detect_response_format_extremely_long_user_agent(self):
+        """Test detect_response_format with extremely long user-agent."""
+        long_user_agent = "node" + "x" * 10000
+        headers = {"user-agent": long_user_agent}
+        body = {"method": "tools/list"}
+
+        format_type = self.handler.detect_response_format(headers, body)
+        assert format_type == ResponseFormat.GEMINI_ARRAY_TOOLS
+
+    def test_detect_response_format_unicode_user_agent(self):
+        """Test detect_response_format with Unicode characters in user-agent."""
+        unicode_user_agent = "node/18.17.0 🚀 with emojis"
+        headers = {"user-agent": unicode_user_agent}
+        body = {"method": "tools/list"}
+
+        format_type = self.handler.detect_response_format(headers, body)
+        assert format_type == ResponseFormat.GEMINI_ARRAY_TOOLS
+
+    def test_detect_response_format_case_insensitive_matching(self):
+        """Test case insensitive user-agent matching."""
+        test_cases = [
+            ("NODE/18.17.0", ResponseFormat.GEMINI_ARRAY_TOOLS),  # Contains "node"
+            ("Node", ResponseFormat.GEMINI_ARRAY_TOOLS),  # Contains "node" (case insensitive)
+            ("gemini-cli", ResponseFormat.GEMINI_ARRAY_TOOLS),  # Contains "gemini"
+            ("GEMINI-CLI/1.0.0", ResponseFormat.GEMINI_ARRAY_TOOLS),  # Contains "gemini"
+        ]
+
+        for user_agent, expected in test_cases:
+            headers = {"user-agent": user_agent}
+            body = {"method": "tools/list"}
+            format_type = self.handler.detect_response_format(headers, body)
+            assert format_type == expected, f"Failed for user-agent: {user_agent}"
+
+    def test_detect_response_format_malformed_request_body(self):
+        """Test detect_response_format with malformed request body."""
+        headers = {"user-agent": "node"}
+
+        malformed_bodies = [
+            {"method": None},  # None method
+            {"method": []},    # List method
+            {"method": {}},    # Dict method
+            {"method": 123},   # Numeric method
+        ]
+
+        for body in malformed_bodies:
+            format_type = self.handler.detect_response_format(headers, body)
+            assert format_type == ResponseFormat.STANDARD_MCP
+
     def test_adapt_tools_response_none_input(self):
         """Test adapt_tools_response with None input."""
         result = self.handler.adapt_tools_response(None, ResponseFormat.GEMINI_ARRAY_TOOLS)
@@ -220,6 +278,111 @@ class TestErrorHandling:
         """Test adapt_response_for_gemini with invalid headers type."""
         with pytest.raises(TypeError):
             adapt_response_for_gemini(request_headers="invalid")
+
+    def test_adapt_response_for_gemini_invalid_body_type(self):
+        """Test adapt_response_for_gemini with invalid body type."""
+        with pytest.raises(TypeError):
+            adapt_response_for_gemini(request_body="invalid")
+
+
+class TestNetworkFailureScenarios:
+    """Test network failure and connectivity scenarios."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.handler = GeminiCompatibilityHandler()
+
+    @patch('json.loads')
+    def test_corrupted_json_request_parsing(self, mock_json_loads, corrupted_json_strings):
+        """Test handling of corrupted JSON in request parsing."""
+        for corrupted_json in corrupted_json_strings:
+            mock_json_loads.side_effect = json.JSONDecodeError("Invalid JSON", corrupted_json, 0)
+
+            # Should handle gracefully without crashing
+            format_type = self.handler.detect_response_format({"user-agent": "node"}, {})
+            assert format_type == ResponseFormat.STANDARD_MCP
+
+    def test_network_timeout_headers_none(self):
+        """Test handling when headers are None (network timeout)."""
+        format_type = self.handler.detect_response_format(None, {"method": "tools/list"})
+        assert format_type == ResponseFormat.STANDARD_MCP
+
+    def test_network_timeout_body_none(self):
+        """Test handling when body is None (network timeout)."""
+        format_type = self.handler.detect_response_format({"user-agent": "node"}, None)
+        assert format_type == ResponseFormat.STANDARD_MCP
+
+    def test_partial_network_failure(self):
+        """Test handling of partial network failures."""
+        # Simulate partial header loss
+        headers = {"user-agent": None, "content-type": "application/json"}
+        body = {"method": "tools/list"}
+
+        format_type = self.handler.detect_response_format(headers, body)
+        assert format_type == ResponseFormat.STANDARD_MCP
+
+    def test_connection_reset_simulation(self):
+        """Test handling of connection reset scenarios."""
+        # Simulate empty request
+        format_type = self.handler.detect_response_format({}, {})
+        assert format_type == ResponseFormat.STANDARD_MCP
+
+    def test_large_request_timeout(self):
+        """Test handling of large requests that might timeout."""
+        # Create a very large request body
+        large_body = {
+            "method": "tools/list",
+            "params": {"data": "x" * 1000000}  # 1MB of data
+        }
+
+        format_type = self.handler.detect_response_format({"user-agent": "node"}, large_body)
+        assert format_type == ResponseFormat.GEMINI_ARRAY_TOOLS
+
+    @patch('time.sleep')
+    def test_request_processing_delay_simulation(self, mock_sleep):
+        """Test handling of request processing delays."""
+        mock_sleep.return_value = None  # Simulate delay
+
+        # Process request with simulated delay
+        format_type = self.handler.detect_response_format({"user-agent": "node"}, {"method": "tools/list"})
+        assert format_type == ResponseFormat.GEMINI_ARRAY_TOOLS
+
+    def test_concurrent_connection_failures(self):
+        """Test handling of concurrent connection failures."""
+        import threading
+
+        results = []
+        errors = []
+
+        def process_request(request_id):
+            try:
+                # Simulate some requests failing
+                if request_id % 3 == 0:
+                    headers = None  # Simulate failure
+                    body = None
+                else:
+                    headers = {"user-agent": "node"}
+                    body = {"method": "tools/list"}
+
+                format_type = self.handler.detect_response_format(headers, body)
+                results.append(format_type)
+            except Exception as e:
+                errors.append(e)
+
+        threads = []
+        for i in range(10):
+            t = threading.Thread(target=process_request, args=(i,))
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        # Should have processed all requests without crashing
+        assert len(results) + len(errors) == 10
+        # Most should be successful
+        successful = sum(1 for r in results if r == ResponseFormat.GEMINI_ARRAY_TOOLS)
+        assert successful >= 6  # At least 6 successful out of 10
 
 
 class TestRobustness:

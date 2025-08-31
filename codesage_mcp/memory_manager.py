@@ -36,6 +36,9 @@ from .config import (
     ENABLE_MEMORY_MONITORING,
 )
 
+# Import custom exceptions
+from .exceptions import BaseMCPError
+
 
 class ModelCache:
     """Handles model loading and caching with TTL support."""
@@ -334,8 +337,8 @@ class MemoryManager:
         """Cleanup on destruction."""
         try:
             self.cleanup()
-        except:
-            pass
+        except Exception as cleanup_error:
+            logger.warning(f"Failed to cleanup memory manager on destruction: {cleanup_error}")
 
 
 # Global memory manager instance

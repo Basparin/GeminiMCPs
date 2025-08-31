@@ -16,7 +16,6 @@ It also integrates with various Large Language Models (LLMs) like Groq, OpenRout
 for specialized tasks like code analysis and summarization.
 """
 
-import logging
 import json
 import time
 from typing import List, Dict, Any, Union, Optional
@@ -24,6 +23,8 @@ from typing import List, Dict, Any, Union, Optional
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
+
+from .logging_config import setup_logging, get_logger, log_exception, log_errors
 
 from codesage_mcp.tools import (
     read_code_file_tool,
@@ -124,9 +125,13 @@ from codesage_mcp.memory_manager import get_memory_manager
 from codesage_mcp.workload_pattern_recognition import get_workload_pattern_recognition
 from codesage_mcp.codebase_manager import get_llm_analysis_manager
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Configure structured logging
+setup_logging(
+    level="INFO",
+    log_file="logs/codesage.log",
+    json_format=True
+)
+logger = get_logger(__name__)
 
 
 class GeminiCompatibleJSONResponse(JSONResponse):
@@ -149,7 +154,7 @@ app = FastAPI()
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    logger.info(f"Incoming Request: Method={request.method}, URL={request.url}, Headers={request.headers}")
+    logger.info("Incoming request", method=request.method, url=str(request.url), headers=dict(request.headers))
     response = await call_next(request)
     return response
 
@@ -1640,11 +1645,12 @@ async def metrics():
         return PlainTextResponse("\n".join(prometheus_output) + "\n", media_type="text/plain; version=0.0.4; charset=utf-8")
 
     except Exception as e:
-        logger.error(f"Error generating Prometheus metrics: {e}")
+        log_exception(e, logger)
         from fastapi.responses import PlainTextResponse
         return PlainTextResponse(f"# Error generating metrics: {str(e)}\n", media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
+@log_errors(request_id_param="id")
 @app.post("/mcp")
 async def handle_jsonrpc_request(request: Request):
     """
@@ -1797,7 +1803,7 @@ async def handle_jsonrpc_request(request: Request):
                 return GeminiCompatibleJSONResponse(content=response_data)
             except Exception as e:
                 success = False
-                logger.error(f"Error executing tool {tool_name}: {e}")
+                log_exception(e, logger, request_id=str(jsonrpc_request.id), extra_context={"tool_name": tool_name})
                 error_response = create_gemini_compatible_error_response(
                     "TOOL_EXECUTION_ERROR", f"Error executing tool {tool_name}: {e}"
                 )
@@ -1824,7 +1830,7 @@ async def handle_jsonrpc_request(request: Request):
             )
     except (json.JSONDecodeError, ValidationError) as e:
         success = False
-        logger.error(f"Error processing JSON-RPC request: {e}")
+        log_exception(e, logger, request_id=request_body.get('id') if isinstance(request_body, dict) else None)
         error_response = create_gemini_compatible_error_response(
             "INVALID_REQUEST", f"Invalid JSON-RPC request: {e}"
         )
@@ -1871,8 +1877,9 @@ async def handle_jsonrpc_request(request: Request):
 
         # Log performance data for monitoring
         logger.info(
-            f"Request processed - Tool: {tool_name}, "
-            f"Response Time: {response_time_ms:.2f}ms, "
-            f"Success: {success}, "
-            f"User: {user_id}"
+            "Request processed",
+            tool_name=tool_name,
+            response_time_ms=round(response_time_ms, 2),
+            success=success,
+            user_id=user_id
         )

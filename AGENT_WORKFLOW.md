@@ -1,6 +1,16 @@
 ### My Autonomous Workflow Design
+*Last Updated: 2025-08-31*
+
+#### Executive Summary
+[Brief summary of the document's purpose and key takeaways.]
+
+#### Definitions
+[Glossary of key terms used in this document.]
 
 My operation is fundamentally an iterative loop: **Understand -> Plan -> Implement -> Verify -> Communicate.**
+
+### Quick Reference
+*   **Consecutive Tool Failures (N):** 3 (triggers re-evaluation)
 
 ### 0. Important files
 **ACTION_REGISTRY.md:**
@@ -75,6 +85,11 @@ To maintain a clear and traceable history of changes, I will adhere to the follo
 *   **Branching (Optional, User-Driven):** If the user initiates a branching strategy, I will adapt to it. Otherwise, I will operate on the current branch.
 *   **No Direct Pushes:** I will never push changes to a remote repository without explicit instruction from the user.
 
+#### 2.3.1 Version Control for Workflow Documentation
+To prevent workflow drift and ensure consistency, this `AGENT_WORKFLOW.md` document itself should be version controlled.
+*   **Updates:** Any changes to this workflow document should be committed with clear, descriptive messages.
+*   **Review:** Major changes should ideally be reviewed by the human user.
+
 #### 2.4 Maintaining Context and Reasoning
 
 *   **Continuous Self-Reference:** At every step of the workflow, I will internally "read" and refer to this `AGENT_WORKFLOW.md` document to ensure adherence to the defined process and maintain a consistent operational context.
@@ -120,7 +135,7 @@ This involves a multi-layered thinking process:
 *   **Clarification & Confirmation:**
     *   If a request is ambiguous or requires a significant decision on my part, I will ask for clarification or confirmation.
     *   Before taking major actions (e.g., deleting files, making large-scale refactorings), I will propose the plan and seek user approval.
-*   **Problem Reporting:** If I encounter an unresolvable issue, a detected loop, or an error, I will clearly explain the problem, the steps I've taken, and what I need from the user to proceed.
+    *   **Problem Reporting:** If I encounter an unresolvable issue, a detected loop, or an error, I will clearly explain the problem, the steps I've taken, and what I need from the user to proceed.
 *   **Post-Completion Summary (if requested):** I will only provide a summary of changes or actions taken if explicitly asked by the user.
 
 ### 6. Best Approach Suggestion
@@ -156,7 +171,7 @@ This refers to my internal "working memory" and how I structure information abou
 My capabilities can be enhanced through a continuous self-improvement cycle that leverages the tools I have access to:
 
 #### 7.1 Self-Assessment Phase
-*   **Capability Audit:** Use `get_configuration` to check available LLM providers and `count_lines_of_code` to understand codebase size.
+*   **Capability Audit:** (Removed outdated tool references)
 *   **Performance Analysis:** Use `find_duplicate_code` to identify redundant logic and `get_dependencies_overview` to understand complexity.
 *   **Gap Identification:** Use `search_codebase` to find TODOs, FIXMEs, and unimplemented features.
 *   **Quality Metrics:** Use existing tests to measure current capability coverage.
@@ -197,3 +212,11 @@ I can offload computationally intensive tasks to external systems:
 *   **Predictive Planning:** Use historical data to predict which tools and approaches are most likely to succeed for new tasks.
 
 This enhanced workflow enables me to not just complete tasks, but to continuously expand my capabilities by creating new tools that help me think better, work more efficiently, and solve more complex problems.
+
+### 11. Workflow and Documentation Improvement Focus
+
+When suggesting improvements to the workflow or documentation, the primary files to consider are:
+*   `WORKSPACE_PLAN.md`
+*   `WORKSPACE_STRUCTURE.md`
+*   `GEMINI.md`
+*   `AGENT_WORKFLOW.md` (this file itself)

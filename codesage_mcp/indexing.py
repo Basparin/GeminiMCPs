@@ -35,6 +35,9 @@ from .cache import get_cache_instance
 from .memory_manager import get_memory_manager
 from .chunking import DocumentChunker, chunk_file
 
+# Import custom exceptions
+from .exceptions import IndexingError, BaseMCPError
+
 # Set up logger
 logger = logging.getLogger(__name__)
 
@@ -122,7 +125,8 @@ class IndexingManager:
                         vector = np.zeros(self.faiss_index.d, dtype=np.float32)
                         self.faiss_index.reconstruct(faiss_id, vector)
                         existing_vectors.append(vector)
-                    except Exception:
+                    except Exception as reconstruct_error:
+                        logger.debug(f"Could not reconstruct vector {faiss_id}: {reconstruct_error}")
                         continue
 
                 if existing_vectors:
@@ -152,9 +156,16 @@ class IndexingManager:
                     f"Could not preserve existing vectors during recreation: {e}. Creating fresh index."
                 )
                 # Create fresh index
-                self.faiss_index = self.memory_manager.create_optimized_index(
-                    np.zeros((1, expected_dimension), dtype=np.float32)
-                )
+                try:
+                    self.faiss_index = self.memory_manager.create_optimized_index(
+                        np.zeros((1, expected_dimension), dtype=np.float32)
+                    )
+                except Exception as index_error:
+                    raise IndexingError(
+                        f"Failed to create fresh FAISS index after dimension mismatch",
+                        operation="recreate_index",
+                        context={"original_error": str(e), "index_error": str(index_error)}
+                    )
 
     def _initialize_index(self):
         """Inicializa el índice cargando datos existentes o creando uno nuevo."""
@@ -216,9 +227,15 @@ class IndexingManager:
                 # Remove the corrupted index file so it gets recreated
                 try:
                     self.faiss_index_file.unlink()
-                except:
-                    pass
+                except OSError as unlink_error:
+                    logger.warning(f"Could not remove corrupted index file: {unlink_error}")
                 self.faiss_index = None
+                raise IndexingError(
+                    f"Failed to load FAISS index from {self.faiss_index_file}",
+                    file_path=str(self.faiss_index_file),
+                    operation="load_index",
+                    context={"original_error": str(e)}
+                )
 
         if self.faiss_index is None:
             # Crear nuevo índice FAISS si no se cargó ninguno
@@ -745,8 +762,8 @@ class IndexingManager:
                             print(f"Generated new embedding for {abs_file_path}")
 
                 except Exception as e:
-                    print(
-                        f"Warning: Could not process file {abs_file_path} for embedding: {e}"
+                    logger.warning(
+                        f"Could not process file {abs_file_path} for embedding: {e}"
                     )
                     continue
 
@@ -990,7 +1007,7 @@ class IndexingManager:
                 all_file_paths.extend(file_paths_list)
                 all_indexed_files.extend(indexed_files)
             except Exception as e:
-                print(f"Warning: Failed to process file {file_path}: {e}")
+                logger.warning(f"Failed to process file {file_path}: {e}")
                 continue
 
         return all_embeddings, all_file_paths, all_indexed_files
@@ -1098,7 +1115,7 @@ class IndexingManager:
                 all_file_paths.extend(file_paths_list)
                 all_indexed_files.extend(indexed_files)
             except Exception as e:
-                print(f"Warning: Failed to process file {file_path}: {e}")
+                logger.warning(f"Failed to process file {file_path}: {e}")
                 continue
 
         return all_embeddings, all_file_paths, all_indexed_files
@@ -1181,7 +1198,7 @@ class IndexingManager:
                 indexed_files.append(relative_file_path)
 
         except Exception as e:
-            print(f"Warning: Could not process file {abs_file_path} for embedding: {e}")
+            logger.warning(f"Could not process file {abs_file_path} for embedding: {e}")
 
         return embeddings, file_paths_list, indexed_files
 
@@ -1330,9 +1347,8 @@ class IndexingManager:
                             print(f"Generated new embedding for {file_path}")
 
                 except Exception as e:
-                    print(
-                        f"Warning: Could not process file {file_path} "
-                        f"for embedding: {e}"
+                    logger.warning(
+                        f"Could not process file {file_path} for embedding: {e}"
                     )
                     continue
 
@@ -1873,8 +1889,9 @@ class IndexingManager:
             total_bytes = n_vectors * bytes_per_vector * 1.2  # 20% overhead
             return total_bytes / (1024 * 1024)
 
-        except Exception:
+        except Exception as estimate_error:
             # Fallback estimation
+            logger.debug(f"Memory estimation failed, using fallback: {estimate_error}")
             return (self.faiss_index.ntotal * self.faiss_index.d * 4 * 1.2) / (
                 1024 * 1024
             )

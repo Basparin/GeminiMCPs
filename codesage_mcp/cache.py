@@ -32,6 +32,9 @@ import numpy as np
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Import custom exceptions
+from .exceptions import BaseMCPError
+
 
 class LRUCache:
     """Simple LRU cache implementation with thread safety."""
@@ -1800,8 +1803,9 @@ class IntelligentCache:
                 return (self.search_cache.cache.size() * 1000) / (1024 * 1024)
             elif cache_type == "file":
                 return self.file_cache.stats()["total_cached_size_mb"]
-        except Exception:
-            pass
+        except Exception as stats_error:
+            logger.debug(f"Could not get file cache stats: {stats_error}")
+            return 0.0
 
         return 0.0
 

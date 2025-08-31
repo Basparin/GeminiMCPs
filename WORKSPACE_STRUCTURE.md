@@ -1,8 +1,18 @@
 ## CodeSage MCP Server Workspace Structure
+*Last Updated: 2025-08-31*
+
+### Executive Summary
+[Brief summary of the document's purpose and key takeaways.]
+
+### Definitions
+[Glossary of key terms used in this document.]
 
 This document defines the required folder structure for the CodeSage MCP Server project, ensuring organization, consistency, and ease of navigation.
 
 ```
+**Legend:**
+*   `*` : Optional element
+
 /project_root/
 ├── codesage_mcp/
 │   ├── __init__.py             # Python package initializer
@@ -63,4 +73,10 @@ This document defines the required folder structure for the CodeSage MCP Server 
 ├── .pydocstyle.ini             # Configuration for pydocstyle (docstring conventions)
 ├── .env.example                # Example file for environment variables
 └── README.md                   # Project README file
+
+### Structure Validation
+To ensure adherence to this workspace structure and facilitate automated maintenance, it is recommended to implement a script for structure validation. This script can check for:
+*   Presence of required directories and files.
+*   Correct naming conventions.
+*   Absence of unauthorized files in specific locations.
 ```
