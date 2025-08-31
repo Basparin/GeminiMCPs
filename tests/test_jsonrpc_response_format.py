@@ -103,7 +103,7 @@ class TestJSONRPCResponseFormat:
 
         # Should not have error field
         assert 'error' not in response_dict
-        assert response_dict['id'] is None
+        assert 'id' not in response_dict
 
     def test_complete_response_structure(self):
         """Test complete response structure matches JSON-RPC 2.0 spec."""

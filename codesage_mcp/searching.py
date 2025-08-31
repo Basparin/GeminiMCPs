@@ -17,6 +17,7 @@ import fnmatch
 import logging
 import numpy as np
 from pathlib import Path
+from typing import Union
 
 # Import caching system
 from .config import ENABLE_CACHING
@@ -132,7 +133,7 @@ class SearchingManager:
 
     def semantic_search_codebase(
         self, query: str, sentence_transformer_model, top_k: int = 5
-    ) -> list[dict]:
+    ) -> Union[list[dict], dict]:
         """
         Realiza una búsqueda semántica dentro de la codebase indexada usando transformadores de oraciones.
 
@@ -142,19 +143,20 @@ class SearchingManager:
             top_k (int, optional): Número de resultados similares principales a devolver. Por defecto es 5.
 
         Returns:
-            list[dict]: Lista de resultados de búsqueda, cada uno contiene la ruta del archivo y
-                puntuación de similitud. Puntuaciones más altas indican mayor similitud semántica.
+            Union[list[dict], dict]: Lista de resultados de búsqueda cuando hay índice disponible,
+                cada uno contiene la ruta del archivo y puntuación de similitud. Puntuaciones más
+                altas indican mayor similitud semántica. Devuelve {"result": []} si no existe
+                índice o si no hay embeddings disponibles.
 
         Note:
-            Requiere que la codebase esté indexada primero. Devuelve una lista vacía si
-            no existe índice o si no hay embeddings disponibles.
+            Requiere que la codebase esté indexada primero.
         """
         # Acceder al índice a través del IndexingManager
         faiss_index = self.indexing_manager.faiss_index
         file_paths_map = self.indexing_manager.file_paths_map
 
-        if faiss_index is None or faiss_index.ntotal == 0:
-            return []  # No index or no embeddings
+        if faiss_index is None or faiss_index.ntotal == 0 or faiss_index.d == 0:
+            return {"result": []}  # No index, no embeddings, or invalid dimension
 
         # Check cache for similar queries first
         query_embedding = sentence_transformer_model.encode(query)
@@ -166,7 +168,7 @@ class SearchingManager:
                 query, query_embedding, top_k
             )
 
-        if cache_hit and cached_results:
+        if cache_hit and cached_results and len(cached_results) >= top_k:
             logger.debug(f"Cache hit for search query: '{query}'")
             return cached_results
 

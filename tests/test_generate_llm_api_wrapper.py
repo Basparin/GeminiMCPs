@@ -165,5 +165,5 @@ def test_generate_llm_api_wrapper_tool_invalid_provider(llm_analysis_manager):
         llm_provider="invalid", model_name="any-model"
     )
     assert "error" in result
-    assert result["error"]["code"] == "INVALID_INPUT"
+    assert result["error"]["code"] == -32004
     assert "Unsupported LLM provider" in result["error"]["message"]

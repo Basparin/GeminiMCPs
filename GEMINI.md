@@ -1,12 +1,15 @@
 # Project: CodeSage MCP Server
 
 ## Project Overview
-The CodeSage Model Context Protocol (MCP) Server is designed to extend the capabilities of the Gemini CLI, particularly in the areas of code analysis and context management. It functions as an intermediary, enabling the Gemini CLI to interact with larger codebases and integrate with various Large Language Models (LLMs) for specialized tasks.
+The CodeSage Model Context Protocol (MCP) Server is a high-performance, production-ready platform designed to revolutionize code analysis and search capabilities. It functions as an intermediary, enabling the Gemini CLI to interact with larger codebases and integrate with various Large Language Models (LLMs) for specialized tasks.
 
 **Key Technologies:**
 *   **Python:** The primary programming language.
 *   **FastAPI:** Used for building the web API that handles JSON-RPC requests.
 *   **Uvicorn:** An ASGI server that runs the FastAPI application.
+*   **FAISS:** For vector similarity search.
+*   **Sentence Transformers:** For semantic understanding and embeddings.
+*   **psutil:** For memory management and monitoring.
 *   **python-dotenv:** For managing environment variables, especially for API keys.
 *   **groq:** The Python client for the Groq LLM API.
 *   **openai:** The official OpenAI Python client, used to interact with the OpenRouter API.
@@ -15,7 +18,7 @@ The CodeSage Model Context Protocol (MCP) Server is designed to extend the capab
 *   **Docker:** For containerization and easy deployment.
 
 **Architecture:**
-The server is a FastAPI application that exposes a JSON-RPC endpoint (`/mcp`). This endpoint handles requests for tool discovery (`initialize`, `tools/list`) and tool execution (`tools/call`). It integrates with a `CodebaseManager` for file system operations, codebase indexing, and LLM integration.
+The server is a FastAPI application that exposes a JSON-RPC endpoint (`/mcp`). This endpoint handles requests for tool discovery (`initialize`, `tools/list`) and tool execution (`tools/call`). It integrates with advanced features such as intelligent codebase indexing, semantic search, duplicate code detection, smart code summarization, memory optimization, multi-strategy caching, incremental indexing, parallel processing, index compression, adaptive cache sizing, smart prefetching, usage pattern learning, comprehensive monitoring, and enterprise security.
 
 ## Building and Running
 
@@ -27,29 +30,61 @@ The server is a FastAPI application that exposes a JSON-RPC endpoint (`/mcp`). T
     ```
 2.  **Install dependencies into the virtual environment:**
     ```bash
-    venv/bin/pip install -r requirements.txt
+    python3 -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
+    pip install -r requirements.txt
+    ```
+    For performance optimization, it's recommended to run:
+    ```bash
+    pip install --upgrade pip
+    pip install --no-cache-dir -r requirements.txt
     ```
 
 ### Running the Server
 You can run the CodeSage MCP server either directly using `uvicorn` or via Docker Compose.
 
 #### Running Directly (using uvicorn)
-To start the CodeSage MCP server:
-1.  Navigate to the project root directory (`/home/basparin/Escritorio/GeminiMCPs`).
-2.  Execute the following command:
-    ```bash
-    uvicorn codesage_mcp.main:app --host 127.0.0.1 --port 8000
-    ```
-    The server will then be accessible at `http://127.0.0.1:8000`.
-
-#### Running with Docker Compose
-Ensure you have Docker and Docker Compose installed. From the project root directory, run:
-
+To start the CodeSage MCP server in development mode:
 ```bash
-docker compose up --build
+uvicorn codesage_mcp.main:app --host 127.0.0.1 --port 8000 --reload
+```
+Alternatively, you can use the `start_server.sh` script:
+```bash
+./start_server.sh
 ```
 
+#### Running with Docker Compose (Recommended for Production)
+Ensure you have Docker and Docker Compose installed. From the project root directory, run:
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
 This will build the Docker image (if not already built) and start the server in a container. The server will be accessible at `http://localhost:8000`.
+
+### Environment Variables
+Before running the server, you need to create a `.env` file in the project root. You can copy the `.env.example` file to get started and then edit it to add your API keys and performance settings:
+
+```bash
+cp .env.example .env
+```
+
+Example `.env` content:
+```bash
+# LLM API Keys (choose your preferred provider)
+GROQ_API_KEY="gsk_..."
+OPENROUTER_API_KEY="sk-or-..."
+GOOGLE_API_KEY="AIza..."
+
+# Performance Tuning
+CODESAGE_MEMORY_LIMIT=512MB
+CODESAGE_CACHE_SIZE=1GB
+CODESAGE_INDEX_COMPRESSION=true
+CODESAGE_PARALLEL_WORKERS=4
+
+# Production Settings
+CODESAGE_LOG_LEVEL=INFO
+CODESAGE_MONITORING_ENABLED=true
+CODESAGE_METRICS_PORT=9090
+```
 
 ### Configuring Gemini CLI
 To enable the Gemini CLI to utilize the CodeSage MCP server, you need to add its configuration to your Gemini CLI `settings.json` file. This file is typically located at `~/.config/gemini-cli/settings.json` on Linux/macOS or `%APPDATA%\gemini-cli\settings.json` on Windows.
@@ -73,26 +108,10 @@ After adding this configuration, restart your Gemini CLI session for the changes
 **Tooling:**
 The project leverages `fastapi` for API development, `uvicorn` for serving the application, `python-dotenv` for secure management of environment variables, `groq`, `openai`, and `google-generativeai` for LLM integration, `pytest` for testing, and `ruff` for linting and formatting.
 
-**Code Structure:**
-*   **`codesage_mcp/main.py`**: Contains the main FastAPI application logic, handling JSON-RPC requests and routing them to the appropriate tool functions.
-*   **`codesage_mcp/tools.py`**: Defines the individual tool functions that the MCP server exposes to the Gemini CLI.
-*   **`codesage_mcp/codebase_manager.py`**: Manages file system operations, codebase indexing, and LLM integration.
-*   **`codesage_mcp/config.py`**: Loads API keys for various LLMs from environment variables.
-*   **`tests/`**: Contains the test suite for the project, with tests for the `CodebaseManager` and the FastAPI application.
+**Pre-commit Hooks:**
+The project uses pre-commit hooks to enforce code quality and consistency. The hooks are defined in the `.pre-commit-config.yaml` file and include checks for large files, trailing whitespace, private keys, `ruff` for linting and formatting, a custom hook to automatically generate the `docs/tools_reference.md` file, and a custom hook to run the `pytest` test suite.
 
-**Current Tools Implemented:**
-*   `read_code_file`: Reads and returns the content of a specified code file.
-*   `index_codebase`: Indexes a given codebase path for analysis. The index is persistent and respects `.gitignore`.
-*   `search_codebase`: Searches for a pattern within indexed code files.
-*   `get_file_structure`: Provides a high-level overview of a file's structure.
-*   `summarize_code_section`: Summarizes a specific section of code using the Groq, OpenRouter, or Google AI APIs.
-*   `semantic_search_codebase`: Performs a semantic search within the indexed codebase to find code snippets semantically similar to the given query.
-*   `find_duplicate_code`: Identifies duplicate or highly similar code sections within the indexed codebase using semantic similarity analysis.
-*   `list_undocumented_functions`: Identifies and lists Python functions in a specified file that are missing docstrings.
-*   `count_lines_of_code`: Counts lines of code (LOC) in the indexed codebase, providing a summary by file type.
-*   `get_dependencies_overview`: Analyzes Python files in the indexed codebase and extracts import statements, providing a high-level overview of internal and external dependencies.
-*   `configure_api_key`: Configures API keys for LLMs (e.g., Groq, OpenRouter, Google AI).
+To use the pre-commit hooks, you need to install `pre-commit` and then run `pre-commit install` in the project root.
 
-**Planned Features:**
-The project aims to implement more advanced features, including:
-*   More advanced search capabilities (e.g., semantic search).
+**Docstring Convention:**
+The project follows the Google docstring convention. More details can be found in `docs/docstring_standard.md`.

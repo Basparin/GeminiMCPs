@@ -82,21 +82,26 @@ def semantic_search_codebase_tool(
     search_results = codebase_manager.searching_manager.semantic_search_codebase(
         query, codebase_manager.sentence_transformer_model, top_k
     )
-    if search_results:
-        return {
-            "message": (
-                f"Found {len(search_results)} semantically similar code snippets "
-                f"for query '{query}'."
-            ),
-            "results": search_results,
-        }
+    if isinstance(search_results, dict):
+        # No index available
+        return search_results
     else:
-        return {
-            "message": (
-                f"No semantically similar code snippets found for query '{query}'."
-            ),
-            "results": [],
-        }
+        # Index available, search_results is list
+        if search_results:
+            return {
+                "message": (
+                    f"Found {len(search_results)} semantically similar code snippets "
+                    f"for query '{query}'."
+                ),
+                "results": search_results,
+            }
+        else:
+            return {
+                "message": (
+                    f"No semantically similar code snippets found for query '{query}'."
+                ),
+                "results": [],
+            }
 
 
 @tool_error_handler

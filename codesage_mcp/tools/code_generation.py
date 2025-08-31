@@ -179,7 +179,7 @@ def test_{module_name}_with_default_params():
 
     elif boilerplate_type == "class":
         class_name = class_name or "NewClass"
-        boilerplate = f'''class {class_name}:
+        boilerplate = '''class {class_name}:
     """
     {class_name} for CodeSage MCP Server.
 
@@ -208,17 +208,17 @@ def test_{module_name}_with_default_params():
         try:
             if self.param1:
                 # Do something with self.param1
-                result = f"Processed: {self.param1}"
+                result = f"Processed: {{param1}}"
             else:
                 result = "Method executed with default state"
             return result
         except Exception as e:
-            logger.error(f"Error in example_method: {e}")
-            raise'''
+            logger.error(f"Error in example_method: {{e}}")
+            raise'''.format(class_name=class_name)
 
     elif boilerplate_type == "function":
         function_name = function_name or "new_function"
-        boilerplate = f'''def {function_name}(param1: str = None) -> str:
+        boilerplate = '''def {function_name}(param1: str = None) -> str:
     """
     [Brief description of what the function does].
 
@@ -236,12 +236,12 @@ def test_{module_name}_with_default_params():
     try:
         if param1:
             # Do something with param1
-            result = f"Processed: {param1}"
+            result = f"Processed: {{param1}}"
         else:
             result = "Function executed with default parameters"
         return result
     except Exception as e:
-        raise Exception(f"An error occurred in {function_name}: {e}")'''
+        raise Exception(f"An error occurred in {{function_name}}: {{e}}")'''.format(function_name=function_name)
 
     else:
         raise ValueError(

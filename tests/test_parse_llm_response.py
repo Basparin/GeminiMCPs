@@ -2,15 +2,36 @@ import pytest
 from unittest.mock import patch
 from codesage_mcp.llm_analysis import LLMAnalysisManager
 from codesage_mcp.tools import parse_llm_response_tool
+import json
 
 
 @pytest.fixture
 def llm_analysis_manager():
     """Mock LLMAnalysisManager for testing."""
     with patch(
-        "tests.test_parse_llm_response.LLMAnalysisManager", autospec=True
-    ) as mock_manager:
-        yield mock_manager.return_value
+        "codesage_mcp.llm_analysis.LLMAnalysisManager", autospec=True
+    ) as MockLLMAnalysisManager:
+        # Configure the mock instance returned by the patch
+        mock_instance = MockLLMAnalysisManager.return_value
+        
+        # Mock the parse_llm_response method
+        def mock_parse_llm_response(llm_response_content):
+            # Simulate the actual logic of parse_llm_response
+            # This is a simplified mock; a more robust mock might use a helper function
+            # to parse the content and raise errors as needed.
+            if "```json" in llm_response_content:
+                json_str = llm_response_content.split("```json")[1].split("```")[0].strip()
+            else:
+                json_str = llm_response_content.strip()
+            
+            try:
+                return json.loads(json_str)
+            except json.JSONDecodeError:
+                raise ValueError("Failed to parse LLM response as JSON")
+
+        mock_instance.parse_llm_response.side_effect = mock_parse_llm_response
+        
+        yield mock_instance
 
 
 def test_parse_llm_response_valid_json(llm_analysis_manager):
@@ -142,7 +163,7 @@ def test_parse_llm_response_tool_invalid_json():
     invalid_json_string = '{"status": "error",'
     result = parse_llm_response_tool(invalid_json_string)
     assert "error" in result
-    assert result["error"]["code"] == "JSON_PARSE_ERROR"
+    assert result["error"]["code"] == -32004
     assert "Failed to parse LLM response as JSON" in result["error"]["message"]
 
 

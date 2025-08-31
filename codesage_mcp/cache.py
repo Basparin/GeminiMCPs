@@ -125,6 +125,7 @@ class EmbeddingCache:
         # Check if we have this embedding cached
         cached_embedding = self.embedding_cache.get(cache_key)
         if cached_embedding is not None:
+            logger.debug(f"Cache hit for {file_path}, embedding dimension: {len(cached_embedding) if hasattr(cached_embedding, '__len__') else 'unknown'}")
             return cached_embedding
 
         return None
@@ -245,6 +246,7 @@ class SearchResultCache:
 
     def _cosine_similarity(self, emb1: np.ndarray, emb2: np.ndarray) -> float:
         """Calculate cosine similarity between two embeddings."""
+        logger.debug(f"Calculating cosine similarity between embeddings of shapes: {emb1.shape if hasattr(emb1, 'shape') else len(emb1) if hasattr(emb1, '__len__') else 'unknown'} and {emb2.shape if hasattr(emb2, 'shape') else len(emb2) if hasattr(emb2, '__len__') else 'unknown'}")
         dot_product = np.dot(emb1, emb2)
         norm1 = np.linalg.norm(emb1)
         norm2 = np.linalg.norm(emb2)
@@ -257,8 +259,8 @@ class SearchResultCache:
         # Check for exact match first
         query_hash = self._hash_query(query)
         exact_match = self.cache.get(query_hash)
-        if exact_match is not None:
-            return exact_match
+        if exact_match is not None and len(exact_match) >= top_k:
+            return exact_match[:top_k]
 
         # Look for similar queries
         best_match = None
@@ -270,8 +272,7 @@ class SearchResultCache:
                 best_similarity = similarity
                 best_match = self.cache.get(cached_key)
 
-        if best_match is not None:
-            # Return only the top_k results from the cached results
+        if best_match is not None and len(best_match) >= top_k:
             return best_match[:top_k]
 
         return None
@@ -479,8 +480,17 @@ class IntelligentCache:
                 self.record_cache_access("search")
                 return results, True
             else:
-                self.stats["misses"]["search"] += 1
-                return None, False
+                # Check if exact match exists (even if len < top_k)
+                query_hash = self.search_cache._hash_query(query)
+                stored_results = self.search_cache.cache.get(query_hash)
+                if stored_results is not None:
+                    results = stored_results[:top_k]
+                    self.stats["hits"]["search"] += 1
+                    self.record_cache_access("search")
+                    return results, True
+                else:
+                    self.stats["misses"]["search"] += 1
+                    return None, False
 
     def store_search_results(
         self, query: str, query_embedding: np.ndarray, results: List[Dict]
@@ -1982,4 +1992,11 @@ def reset_cache_instance() -> None:
     with _cache_lock:
         if _cache_instance is not None:
             _cache_instance.save_persistent_cache()
+            # Explicitly clear persistent cache files for testing
+            try:
+                if _cache_instance.cache_dir.exists():
+                    import shutil
+                    shutil.rmtree(_cache_instance.cache_dir)
+            except Exception as e:
+                logger.warning(f"Could not remove cache directory: {e}")
         _cache_instance = None

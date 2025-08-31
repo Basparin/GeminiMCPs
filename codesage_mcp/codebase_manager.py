@@ -22,6 +22,7 @@ import google.generativeai as genai
 import httpx
 import ast
 from collections import defaultdict  # New import
+from typing import Union
 
 # Importaciones para modelos y búsqueda
 
@@ -517,7 +518,7 @@ class CodebaseManager:
             # to indicate that it was attempted to be analyzed.
             return [file_path]
 
-    def semantic_search_codebase(self, query: str, top_k: int = 5) -> list[dict]:
+    def semantic_search_codebase(self, query: str, top_k: int = 5) -> Union[list[dict], dict]:
         """Performs a semantic search within the indexed codebase to find code snippets
         semantically similar to the given query.
 
@@ -528,7 +529,8 @@ class CodebaseManager:
             top_k (int, optional): Number of results to return. Defaults to 5.
 
         Returns:
-            list[dict]: List of semantically similar code snippets.
+            Union[list[dict], dict]: List of semantically similar code snippets when index is available,
+                or {"result": []} when no index is available.
         """
         return self.searching_manager.semantic_search_codebase(
             query, self.sentence_transformer_model, top_k

@@ -119,13 +119,13 @@ def tool_error_handler(func):
         try:
             return func(*args, **kwargs)
         except FileNotFoundError as e:
-            return create_error_response("FILE_NOT_FOUND", str(e))
+            return {"error": create_error_response("FILE_NOT_FOUND", str(e))}
         except ValueError as e:
-            return create_error_response("INVALID_INPUT", str(e))
+            return {"error": create_error_response("INVALID_INPUT", str(e))}
         except PermissionError as e:
-            return create_error_response("PERMISSION_DENIED", str(e))
+            return {"error": create_error_response("PERMISSION_DENIED", str(e))}
         except Exception as e:
-            return create_error_response("TOOL_ERROR", f"An error occurred: {str(e)}")
+            return {"error": create_error_response("TOOL_ERROR", f"An error occurred: {str(e)}")}
 
     return wrapper
 

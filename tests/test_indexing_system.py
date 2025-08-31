@@ -258,6 +258,7 @@ class TestIndexingManagerCore:
 
             mock_model = MagicMock()
             mock_model.get_sentence_embedding_dimension.return_value = 128
+            mock_model.encode.return_value = np.random.rand(128).astype(np.float32)
 
             indexed_files = manager.index_codebase(str(codebase_dir), mock_model)
 
@@ -279,6 +280,7 @@ class TestIndexingManagerCore:
 
             mock_model = MagicMock()
             mock_model.get_sentence_embedding_dimension.return_value = 128
+            mock_model.encode.return_value = np.random.rand(128).astype(np.float32)
 
             indexed_files, was_incremental = manager.index_codebase_incremental(
                 str(codebase_dir), mock_model
@@ -297,6 +299,7 @@ class TestIndexingManagerCore:
 
             mock_model = MagicMock()
             mock_model.get_sentence_embedding_dimension.return_value = 128
+            mock_model.encode.return_value = np.random.rand(128).astype(np.float32)
 
             indexed_files, was_incremental = manager.index_codebase_incremental(
                 str(codebase_dir), mock_model, force_full=True
@@ -654,6 +657,7 @@ class TestIndexingManagerErrorHandling:
         manager = IndexingManager()
 
         mock_model = MagicMock()
+        mock_model.encode.return_value = np.random.rand(128).astype(np.float32)
 
         with pytest.raises(ValueError, match="Path is not a directory"):
             manager.index_codebase("/nonexistent/path", mock_model)

@@ -78,7 +78,7 @@ def test_generate_boilerplate_invalid_type():
 
     # Check that an error is returned
     assert "error" in result
-    assert result["error"]["code"] == "INVALID_INPUT"
+    assert result["error"]["code"] == -32004
     assert "Unsupported boilerplate_type" in result["error"]["message"]
 
 

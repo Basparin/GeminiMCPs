@@ -236,10 +236,15 @@ def analyze_codebase_improvements_tool(codebase_path: str) -> dict:
     # Check if codebase is indexed
     abs_codebase_path = str(os.path.abspath(codebase_path))
     if abs_codebase_path not in codebase_manager.indexed_codebases:
-        raise ValueError(
-            f"Codebase at {codebase_path} has not been indexed. "
-            "Please index it first using the 'index_codebase' tool."
-        )
+        return {
+            "error": {
+                "code": "NOT_INDEXED",
+                "message": (
+                    f"Codebase at {codebase_path} has not been indexed. "
+                    "Please index it first using the 'index_codebase' tool."
+                ),
+            }
+        }
 
     # Get indexed files
     indexed_files = codebase_manager.indexed_codebases[abs_codebase_path]["files"]

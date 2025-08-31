@@ -315,15 +315,16 @@ class TestEmbeddingCache:
 
     def test_stats(self):
         """Test getting embedding cache statistics."""
-        cache = EmbeddingCache()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache = EmbeddingCache(max_size=100, cache_dir=temp_dir)
 
-        cache.store_embedding("/test/file.py", "content", np.array([0.1, 0.2]))
+            cache.store_embedding("/test/file.py", "content", np.array([0.1, 0.2]))
 
-        stats = cache.stats()
+            stats = cache.stats()
 
-        assert "embedding_cache" in stats
-        assert "file_metadata_cache" in stats
-        assert stats["files_tracked"] == 1
+            assert "embedding_cache" in stats
+            assert "file_metadata_cache" in stats
+            assert stats["files_tracked"] == 1
 
 
 class TestSearchResultCache:
@@ -367,7 +368,9 @@ class TestSearchResultCache:
     def test_get_similar_results_exact_match(self):
         """Test getting exact match from cache."""
         cache = SearchResultCache()
-        test_results = [{"file": "test.py", "score": 0.9}]
+        test_results = [{"file": "test.py", "score": 0.9}, {"file": "test2.py", "score": 0.8},
+                       {"file": "test3.py", "score": 0.7}, {"file": "test4.py", "score": 0.6},
+                       {"file": "test5.py", "score": 0.5}]  # 5 results
 
         # Store results
         cache.store_results("test query", np.array([1.0, 0.0]), test_results)
@@ -380,7 +383,9 @@ class TestSearchResultCache:
     def test_get_similar_results_similar_query(self):
         """Test getting similar results based on embedding similarity."""
         cache = SearchResultCache(similarity_threshold=0.8)
-        test_results = [{"file": "test.py", "score": 0.9}]
+        test_results = [{"file": "test.py", "score": 0.9}, {"file": "test2.py", "score": 0.8},
+                       {"file": "test3.py", "score": 0.7}, {"file": "test4.py", "score": 0.6},
+                       {"file": "test5.py", "score": 0.5}]  # 5 results
 
         # Store results with one embedding
         cache.store_results("original query", np.array([1.0, 0.0, 0.0]), test_results)
@@ -408,7 +413,9 @@ class TestSearchResultCache:
     def test_store_results(self):
         """Test storing search results."""
         cache = SearchResultCache()
-        test_results = [{"file": "test.py", "score": 0.9}]
+        test_results = [{"file": "test.py", "score": 0.9}, {"file": "test2.py", "score": 0.8},
+                       {"file": "test3.py", "score": 0.7}, {"file": "test4.py", "score": 0.6},
+                       {"file": "test5.py", "score": 0.5}]  # 5 results
         query_embedding = np.array([1.0, 0.0])
 
         cache.store_results("test query", query_embedding, test_results)
@@ -438,7 +445,9 @@ class TestSearchResultCache:
     def test_stats(self):
         """Test getting search result cache statistics."""
         cache = SearchResultCache()
-        test_results = [{"file": "test.py", "score": 0.9}]
+        test_results = [{"file": "test.py", "score": 0.9}, {"file": "test2.py", "score": 0.8},
+                       {"file": "test3.py", "score": 0.7}, {"file": "test4.py", "score": 0.6},
+                       {"file": "test5.py", "score": 0.5}]  # 5 results
 
         cache.store_results("test query", np.array([1.0, 0.0]), test_results)
 
@@ -447,6 +456,25 @@ class TestSearchResultCache:
         assert "result_cache" in stats
         assert "query_embedding_cache" in stats
         assert stats["similarity_threshold"] == 0.85  # Default value
+
+    def test_insufficient_results_check(self):
+        """Test that cache returns None when stored results don't have enough entries."""
+        cache = SearchResultCache()
+        # Store results with only 3 entries
+        test_results = [{"file": "test.py", "score": 0.9}, {"file": "test2.py", "score": 0.8},
+                       {"file": "test3.py", "score": 0.7}]
+
+        cache.store_results("test query", np.array([1.0, 0.0, 0.0]), test_results)
+
+        # Try to get with top_k=5 (more than stored)
+        results = cache.get_similar_results("test query", np.array([1.0, 0.0, 0.0]), top_k=5)
+
+        assert results is None  # Should return None because len(test_results) < top_k
+
+        # Try to get with top_k=3 (exact match)
+        results = cache.get_similar_results("test query", np.array([1.0, 0.0, 0.0]), top_k=3)
+
+        assert results == test_results  # Should return results because len(test_results) >= top_k
 
 
 class TestFileContentCache:

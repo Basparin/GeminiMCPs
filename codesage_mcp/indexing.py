@@ -109,7 +109,7 @@ class IndexingManager:
 
         if self.faiss_index.d != expected_dimension:
             logger.warning(
-                f"FAISS index dimension mismatch. Expected: {expected_dimension}, Got: {self.faiss_index.d}"
+                f"FAISS index dimension mismatch. Expected: {expected_dimension}, Got: {self.faiss_index.d}. Current index has {self.faiss_index.ntotal} vectors."
             )
             logger.info("Recreating index with correct dimensions...")
 
@@ -126,7 +126,7 @@ class IndexingManager:
                         continue
 
                 if existing_vectors:
-                    print(
+                    logger.info(
                         f"Re-indexing {len(existing_vectors)} existing vectors with new dimensions..."
                     )
                     # Create new index with correct dimensions
@@ -136,8 +136,8 @@ class IndexingManager:
 
                     # Re-encode vectors to match new dimensions (this is a simplified approach)
                     # In practice, you might need to re-encode from original source
-                    print(
-                        "Warning: Re-encoding existing vectors to match new dimensions"
+                    logger.warning(
+                        "Re-encoding existing vectors to match new dimensions (simplified approach)"
                     )
                     # For now, we'll create a new index and note that vectors need re-encoding
                     self.faiss_index = faiss.IndexFlatL2(expected_dimension)
@@ -148,8 +148,8 @@ class IndexingManager:
                     )
 
             except Exception as e:
-                print(
-                    f"Warning: Could not preserve existing vectors during recreation: {e}"
+                logger.error(
+                    f"Could not preserve existing vectors during recreation: {e}. Creating fresh index."
                 )
                 # Create fresh index
                 self.faiss_index = self.memory_manager.create_optimized_index(
@@ -228,6 +228,7 @@ class IndexingManager:
 
     def _save_index(self):
         """Guarda el índice actual en archivos."""
+        self.index_dir.mkdir(exist_ok=True)
         data_to_save = {
             "indexed_codebases": self.indexed_codebases,
             "file_paths_map": self.file_paths_map,
@@ -319,14 +320,14 @@ class IndexingManager:
 
     def _detect_changed_files(
         self, codebase_path: str
-    ) -> Tuple[Set[str], Set[str], Set[str]]:
+    ) -> Tuple[List[str], List[str], List[str]]:
         """Detect added, modified, and deleted files in a codebase.
 
         Args:
             codebase_path: Path to the codebase
 
         Returns:
-            Tuple of (added_files, modified_files, deleted_files) as sets of relative paths
+            Tuple of (added_files, modified_files, deleted_files) as lists of relative paths
         """
         codebase_key = self._get_codebase_key(codebase_path)
         root_path = Path(codebase_path)
@@ -394,13 +395,13 @@ class IndexingManager:
         return list(added_files), list(all_modified_files), list(deleted_files)
 
     def _remove_deleted_embeddings(
-        self, codebase_path: str, deleted_files: Set[str]
+        self, codebase_path: str, deleted_files: List[str]
     ) -> None:
         """Remove embeddings for deleted files from the index.
 
         Args:
             codebase_path: Path to the codebase
-            deleted_files: Set of deleted file paths (relative)
+            deleted_files: List of deleted file paths (relative)
         """
         if not deleted_files or not self.faiss_index:
             return
@@ -598,19 +599,28 @@ class IndexingManager:
 
         # Add all new embeddings to FAISS in one operation
         if all_new_embeddings:
+            # Validate that all embeddings are numpy arrays
+            for i, emb in enumerate(all_new_embeddings):
+                if not isinstance(emb, np.ndarray):
+                    raise TypeError(f"Embedding at index {i} is not a numpy array, got {type(emb)}")
+                if emb.dtype != np.float32:
+                    all_new_embeddings[i] = emb.astype(np.float32)
+
             embeddings_array = np.array(all_new_embeddings).astype("float32")
+            logger.debug(f"Adding {len(all_new_embeddings)} embeddings to FAISS. Embedding shape: {embeddings_array.shape}, Index dimension: {self.faiss_index.d}")
             if (
                 embeddings_array.shape[0] > 0
                 and embeddings_array.shape[1] == self.faiss_index.d
             ):
                 self.faiss_index.add(embeddings_array)
+                logger.info(f"Successfully added {len(all_new_embeddings)} embeddings to FAISS index")
 
                 # Update file paths map
                 for i, fp in enumerate(all_new_file_paths):
                     self.file_paths_map[str(current_faiss_id + i)] = fp
             else:
-                print(
-                    f"Warning: Embedding dimension mismatch. Expected: {self.faiss_index.d}, Got: {embeddings_array.shape[1] if embeddings_array.shape[0] > 0 else 0}"
+                logger.error(
+                    f"Embedding dimension mismatch. Expected: {self.faiss_index.d}, Got: {embeddings_array.shape[1] if embeddings_array.shape[0] > 0 else 0}. Cannot add embeddings to index."
                 )
 
         # Update codebase metadata
@@ -1131,6 +1141,7 @@ class IndexingManager:
                     if not cache_hit:
                         # Generate new embedding for chunk
                         embedding = sentence_transformer_model.encode(chunk.content)
+                        logger.debug(f"Generated embedding for chunk {chunk_id}, dimension: {len(embedding) if hasattr(embedding, '__len__') else 'unknown'}")
 
                         # Store in cache
                         if self.cache:
@@ -1326,8 +1337,18 @@ class IndexingManager:
                     continue
 
         if new_embeddings:
+            # Validate that all embeddings are numpy arrays
+            for i, emb in enumerate(new_embeddings):
+                if not isinstance(emb, np.ndarray):
+                    raise TypeError(f"Embedding at index {i} is not a numpy array, got {type(emb)}")
+                if emb.dtype != np.float32:
+                    new_embeddings[i] = emb.astype(np.float32)
+
             # Add new embeddings to FAISS index
-            self.faiss_index.add(np.array(new_embeddings).astype("float32"))
+            embeddings_array = np.array(new_embeddings).astype("float32")
+            logger.debug(f"Adding {len(new_embeddings)} embeddings to FAISS in full indexing. Embedding shape: {embeddings_array.shape}, Index dimension: {self.faiss_index.d}")
+            self.faiss_index.add(embeddings_array)
+            logger.info(f"Successfully added {len(new_embeddings)} embeddings to FAISS index in full indexing")
             # Update file_paths_map
             for i, fp in enumerate(new_file_paths):
                 self.file_paths_map[str(current_faiss_id + i)] = fp

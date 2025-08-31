@@ -49,9 +49,15 @@ class GeminiCompatibilityHandler:
     def __init__(self):
         self.request_history = []
 
-    def detect_response_format(self, request_headers: Dict[str, Any],
-                                request_body: Dict[str, Any]) -> ResponseFormat:
+    def detect_response_format(self, request_headers: Optional[Dict[str, Any]],
+                                request_body: Optional[Dict[str, Any]]) -> ResponseFormat:
         """Detect the expected response format based on request characteristics."""
+
+        # Handle None values by defaulting to empty dicts
+        if request_headers is None:
+            request_headers = {}
+        if request_body is None:
+            request_body = {}
 
         # Track this request in history
         self.request_history.append(request_body)
@@ -80,21 +86,27 @@ class GeminiCompatibilityHandler:
         """Adapt tools response format based on detected requirements."""
 
         if format_type == ResponseFormat.GEMINI_ARRAY_TOOLS:
+            # Check if tools are already in array format
+            if isinstance(tools_object, list):
+                logger.debug("Tools already in array format, no adaptation needed")
+                return {"tools": tools_object}
+            # Check if tools are already wrapped in array format
+            if isinstance(tools_object, dict) and isinstance(tools_object.get("tools"), list):
+                logger.debug("Tools already in wrapped array format, no adaptation needed")
+                return tools_object
             # Convert object format to array format
-            tools_array = []
-            for tool_name, tool_def in tools_object.items():
-                tools_array.append(tool_def)
-            logger.debug(f"Adapted tools to array format with {len(tools_array)} tools")
-            return {"tools": tools_array}
+            if isinstance(tools_object, dict):
+                tools_array = []
+                for tool_name, tool_def in tools_object.items():
+                    tools_array.append(tool_def)
+                logger.debug(f"Adapted tools to array format with {len(tools_array)} tools")
+                return {"tools": tools_array}
 
         # For standard MCP or other formats, ensure consistent structure
         # Gemini CLI may expect tools to be wrapped even in standard format
         if format_type == ResponseFormat.STANDARD_MCP:
-            tools_array = []
-            for tool_name, tool_def in tools_object.items():
-                tools_array.append(tool_def)
-            logger.debug(f"Adapted tools to standard array format with {len(tools_array)} tools")
-            return {"tools": tools_array}
+            logger.debug(f"Using standard object format for tools")
+            return tools_object # Return the original object for standard MCP
 
         # Fallback to object format
         logger.debug(f"Using fallback object format for tools")
@@ -115,31 +127,49 @@ class GeminiCompatibilityHandler:
         return error_response
 
     def create_compatible_response(self,
-                                   result: Optional[Any] = None,
-                                   error: Optional[Dict[str, Any]] = None,
-                                   request_id: Union[str, int, None] = None) -> Dict[str, Any]:
+                                    result: Optional[Any] = None,
+                                    error: Optional[Dict[str, Any]] = None,
+                                    request_id: Union[str, int, None] = None,
+                                    request_headers: Optional[Dict[str, Any]] = None,
+                                    request_body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Create a response compatible with the detected Gemini CLI format."""
 
-        # Start with base response structure
+        format_type = self.detect_response_format(request_headers, request_body)
+
+        # For Gemini formats, return the payload directly at the top level for success, but wrap errors
+        if format_type in [ResponseFormat.GEMINI_ARRAY_TOOLS, ResponseFormat.GEMINI_NUMERIC_ERRORS]:
+            if error is not None:
+                adapted_error = self.adapt_error_response(error, format_type)
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": adapted_error
+                }
+                logger.debug(f"Created wrapped Gemini error response: {response}")
+                return response
+            else:
+                logger.debug(f"Created unwrapped Gemini success response with result type: {type(result)}")
+                if format_type == ResponseFormat.GEMINI_ARRAY_TOOLS and isinstance(result, dict) and "tools" in result:
+                    result = self.adapt_tools_response(result["tools"], format_type)
+                return result
+
+        # Standard MCP format with JSON-RPC wrapper
         response = {
             "jsonrpc": "2.0",
         }
 
-        # Only include 'id' if it's not None (for requests that expect a response)
-        if request_id is not None:
-            response["id"] = request_id
+        # Always include 'id' field, even if None, for JSON-RPC 2.0 compliance in error responses
+        response["id"] = request_id
 
         if error is not None:
-            # Adapt error format based on detected format (assuming standard MCP for now)
-            # This part might need further refinement if specific error code adaptations are truly needed
-            adapted_error = self.adapt_error_response(error, ResponseFormat.STANDARD_MCP)
+            adapted_error = self.adapt_error_response(error, format_type)
             response["error"] = adapted_error
             # Do not include 'result' field when there's an error (JSON-RPC 2.0 spec)
-            logger.debug(f"Created error response: {response}")
+            logger.debug(f"Created standard error response: {response}")
         else:
             # For successful responses, only include result field
             response["result"] = result
-            logger.debug(f"Created success response with result type: {type(result)}")
+            logger.debug(f"Created standard success response with result type: {type(result)}")
 
         return response
 
@@ -165,13 +195,19 @@ def get_compatibility_handler() -> GeminiCompatibilityHandler:
 
 
 def create_gemini_compatible_error_response(error_code: Union[str, int],
-                                           message: str) -> Dict[str, Any]:
+                                           message: str,
+                                           format_type: Optional[ResponseFormat] = None) -> Dict[str, Any]:
     """Create an error response compatible with Gemini CLI expectations."""
 
-    # Convert string codes to numeric if needed
-    if isinstance(error_code, str):
+    # Default to GEMINI_NUMERIC_ERRORS for backward compatibility
+    if format_type is None:
+        format_type = ResponseFormat.GEMINI_NUMERIC_ERRORS
+
+    # Convert string codes to numeric if needed based on format type
+    if format_type == ResponseFormat.GEMINI_NUMERIC_ERRORS and isinstance(error_code, str):
         numeric_code = GeminiCompatibilityHandler.MCP_ERROR_CODES.get(error_code, -32603)
         error_code = numeric_code
+    # For STANDARD_MCP, keep string codes as-is
 
     return {
         "code": error_code,
@@ -181,10 +217,14 @@ def create_gemini_compatible_error_response(error_code: Union[str, int],
 
 def adapt_response_for_gemini(result: Optional[Any] = None,
                             error: Optional[Dict[str, Any]] = None,
-                            request_id: Union[str, int, None] = None) -> Dict[str, Any]:
+                            request_id: Union[str, int, None] = None,
+                            request_headers: Optional[Dict[str, Any]] = None,
+                            request_body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Adapt response for Gemini CLI compatibility."""
     return compatibility_handler.create_compatible_response(
         result=result,
         error=error,
-        request_id=request_id
+        request_id=request_id,
+        request_headers=request_headers,
+        request_body=request_body
     )

@@ -117,7 +117,7 @@ def test_resolve_todo_fixme_file_not_found():
     """
     result = resolve_todo_fixme_tool("/path/to/nonexistent_file.py")
     assert "error" in result
-    assert result["error"]["code"] == "FILE_NOT_FOUND"
+    assert result["error"]["code"] == -32003
 
 
 def test_resolve_todo_fixme_no_todo_found(
@@ -138,7 +138,7 @@ def test_resolve_todo_fixme_no_todo_found(
     )
     result = resolve_todo_fixme_tool(str(temp_file_without_todos))
     assert "error" in result
-    assert result["error"]["code"] == "INVALID_INPUT"
+    assert result["error"]["code"] == -32004
     assert "No TODO/FIXME comments found" in result["error"]["message"]
 
 
@@ -161,7 +161,7 @@ def test_resolve_todo_fixme_specific_line_not_found(
     )
     result = resolve_todo_fixme_tool(str(temp_file_with_todos), line_number=100)
     assert "error" in result
-    assert result["error"]["code"] == "INVALID_INPUT"
+    assert result["error"]["code"] == -32004
     assert "No TODO/FIXME comment found at line 100" in result["error"]["message"]
 
 
@@ -182,5 +182,5 @@ def test_resolve_todo_fixme_llm_error(mock_llm_analysis_manager, temp_file_with_
     )
     result = resolve_todo_fixme_tool(str(temp_file_with_todos), line_number=3)
     assert "error" in result
-    assert result["error"]["code"] == "TODO_FIXME_RESOLUTION_ERROR"
+    assert result["error"]["code"] == -32012
     assert "LLM API error" in result["error"]["message"]

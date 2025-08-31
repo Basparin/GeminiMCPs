@@ -1677,7 +1677,9 @@ async def handle_jsonrpc_request(request: Request):
             compatibility_handler = get_compatibility_handler()
             response_data = compatibility_handler.create_compatible_response(
                 result=response_result,
-                request_id=jsonrpc_request.id
+                request_id=jsonrpc_request.id,
+                request_headers=request_headers,
+                request_body=request_body
             )
             return GeminiCompatibleJSONResponse(content=response_data)
 
@@ -1689,7 +1691,9 @@ async def handle_jsonrpc_request(request: Request):
             compatibility_handler = get_compatibility_handler()
             response_data = compatibility_handler.create_compatible_response(
                 result=None,
-                request_id=jsonrpc_request.id
+                request_id=jsonrpc_request.id,
+                request_headers=request_headers,
+                request_body=request_body
             )
             return GeminiCompatibleJSONResponse(content=response_data)
 
@@ -1714,7 +1718,9 @@ async def handle_jsonrpc_request(request: Request):
             # Return raw dictionary to avoid Pydantic serialization issues
             response_data = compatibility_handler.create_compatible_response(
                 result=adapted_tools,
-                request_id=jsonrpc_request.id
+                request_id=jsonrpc_request.id,
+                request_headers=request_headers,
+                request_body=request_body
             )
             return GeminiCompatibleJSONResponse(content=response_data)
 
@@ -1727,7 +1733,9 @@ async def handle_jsonrpc_request(request: Request):
             compatibility_handler = get_compatibility_handler()
             response_data = compatibility_handler.create_compatible_response(
                 result=prompts_result,
-                request_id=jsonrpc_request.id
+                request_id=jsonrpc_request.id,
+                request_headers=request_headers,
+                request_body=request_body
             )
             return GeminiCompatibleJSONResponse(content=response_data)
 
@@ -1742,7 +1750,9 @@ async def handle_jsonrpc_request(request: Request):
                 compatibility_handler = get_compatibility_handler()
                 response_data = compatibility_handler.create_compatible_response(
                     error=error_response,
-                    request_id=jsonrpc_request.id
+                    request_id=jsonrpc_request.id,
+                    request_headers=request_headers,
+                    request_body=request_body
                 )
                 return GeminiCompatibleJSONResponse(content=response_data)
 
@@ -1757,7 +1767,9 @@ async def handle_jsonrpc_request(request: Request):
                 compatibility_handler = get_compatibility_handler()
                 response_data = compatibility_handler.create_compatible_response(
                     error=error_response,
-                    request_id=jsonrpc_request.id
+                    request_id=jsonrpc_request.id,
+                    request_headers=request_headers,
+                    request_body=request_body
                 )
                 return GeminiCompatibleJSONResponse(content=response_data)
 
@@ -1778,7 +1790,9 @@ async def handle_jsonrpc_request(request: Request):
                 compatibility_handler = get_compatibility_handler()
                 response_data = compatibility_handler.create_compatible_response(
                     result=tool_result,
-                    request_id=jsonrpc_request.id
+                    request_id=jsonrpc_request.id,
+                    request_headers=request_headers,
+                    request_body=request_body
                 )
                 return GeminiCompatibleJSONResponse(content=response_data)
             except Exception as e:
@@ -1791,7 +1805,9 @@ async def handle_jsonrpc_request(request: Request):
                 compatibility_handler = get_compatibility_handler()
                 response_data = compatibility_handler.create_compatible_response(
                     error=error_response,
-                    request_id=jsonrpc_request.id
+                    request_id=jsonrpc_request.id,
+                    request_headers=request_headers,
+                    request_body=request_body
                 )
                 return GeminiCompatibleJSONResponse(content=response_data)
         else:
@@ -1802,7 +1818,9 @@ async def handle_jsonrpc_request(request: Request):
             compatibility_handler = get_compatibility_handler()
             return compatibility_handler.create_compatible_response(
                 error=error_response,
-                request_id=jsonrpc_request.id
+                request_id=jsonrpc_request.id,
+                request_headers=request_headers,
+                request_body=request_body
             )
     except (json.JSONDecodeError, ValidationError) as e:
         success = False
@@ -1814,7 +1832,9 @@ async def handle_jsonrpc_request(request: Request):
         compatibility_handler = get_compatibility_handler()
         response_data = compatibility_handler.create_compatible_response(
             error=error_response,
-            request_id=None
+            request_id=request_body.get('id') if isinstance(request_body, dict) else None,
+            request_headers=request_headers,
+            request_body=request_body
         )
         return GeminiCompatibleJSONResponse(content=response_data)
     finally:

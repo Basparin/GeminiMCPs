@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
         # Test analyzing the entire file
         result = suggest_code_improvements_tool(
-            temp_file_path, llm_analysis_manager=llm_analysis_manager
+            temp_file_path
         )
 
         # Check the structure of the result
@@ -110,7 +110,7 @@ def test_suggest_code_improvements_tool_not_found():
 
     # Check that we get an error
     assert "error" in result
-    assert result["error"]["code"] == "FILE_NOT_FOUND"
+    assert result["error"]["code"] == -32003
 
 
 # --- New test for LLMAnalysisManager ---
@@ -164,9 +164,7 @@ def hello_world():
 
         mock_google_response = MagicMock()
         mock_google_response.text = "Google AI suggestion: Consider adding type hints to the function parameters."
-        mock_google_ai_client.GenerativeModel().generate_content.return_value = (
-            mock_google_response
-        )
+        mock_google_ai_client.generate_content.return_value = mock_google_response
 
         # Create an instance of LLMAnalysisManager with mocked clients
         from codesage_mcp.llm_analysis import LLMAnalysisManager
@@ -189,7 +187,7 @@ def hello_world():
         # Verify mocks were called
         mock_groq_client.chat.completions.create.assert_called()
         mock_openai_client.chat.completions.create.assert_called()
-        mock_google_ai_client.GenerativeModel().generate_content.assert_called()
+        mock_google_ai_client.generate_content.assert_called()
 
     finally:
         # Clean up the temporary file

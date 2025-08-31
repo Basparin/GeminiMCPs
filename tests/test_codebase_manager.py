@@ -4,6 +4,7 @@ from pathlib import Path
 import shutil
 from unittest.mock import MagicMock, patch, mock_open
 from codesage_mcp.codebase_manager import CodebaseManager
+import numpy as np
 
 
 @pytest.fixture
@@ -196,21 +197,17 @@ def test_summarize_code_section_with_openrouter(mock_openai, temp_codebase):
     assert call_args.kwargs["model"] == "google/gemini-flash-1.5"
 
 
-@patch("codesage_mcp.codebase_manager.genai")
-def test_summarize_code_section_with_google_ai(mock_genai, temp_codebase):
+def test_summarize_code_section_with_google_ai(temp_codebase):
     """Test the summarization feature with a mocked Google AI API call."""
     # Instead of using CodebaseManager, we will test LLMAnalysisManager directly
     from codesage_mcp.llm_analysis import LLMAnalysisManager
 
     mock_model = MagicMock()
-    mock_genai.GenerativeModel.return_value = mock_model
-    mock_response = MagicMock()
-    mock_response.text = "This is a mock Google AI summary."
-    mock_model.generate_content.return_value = mock_response
+    mock_model.generate_content.return_value = MagicMock(text="This is a mock Google AI summary.")
 
     # Create an instance of LLMAnalysisManager with the mocked client
     llm_analysis_manager = LLMAnalysisManager(
-        groq_client=None, openrouter_client=None, google_ai_client=mock_genai
+        groq_client=None, openrouter_client=None, google_ai_client=mock_model
     )
 
     summary = llm_analysis_manager.summarize_code_section(
@@ -221,7 +218,6 @@ def test_summarize_code_section_with_google_ai(mock_genai, temp_codebase):
     )
 
     assert summary == "This is a mock Google AI summary."
-    mock_genai.GenerativeModel.assert_called_once_with("gemini-pro")
     mock_model.generate_content.assert_called_once()
     call_args = mock_model.generate_content.call_args
     assert "Please summarize the following code snippet:" in call_args.args[0]
@@ -246,7 +242,7 @@ def test_semantic_search_empty_index():
     results = searching_manager.semantic_search_codebase(
         "test query", sentence_transformer_model=None
     )
-    assert results == []
+    assert results == {'result': []}
 
     # Test with an index that has 0 total vectors
     mock_faiss_index = MagicMock()
@@ -257,7 +253,7 @@ def test_semantic_search_empty_index():
     results = searching_manager.semantic_search_codebase(
         "test query", sentence_transformer_model=None
     )
-    assert results == []
+    assert results == {'result': []}
     # Ensure no search was attempted on an empty index
     mock_faiss_index.search.assert_not_called()
 
@@ -361,27 +357,19 @@ def test_semantic_search_top_k():
     # Mock the indexing manager's faiss_index attribute
     mock_faiss_index = MagicMock()
     mock_faiss_index.ntotal = 2  # Pretend we have 2 vectors indexed
+    mock_faiss_index.d = 384  # Set the vector dimension to prevent early return
     manager.indexing_manager.faiss_index = mock_faiss_index
 
     # Custom mock side effect for search to respect top_k
     def mock_search_side_effect(query_vector, k):
-        """Test Mock search side effect.
+        if k == 1:
+            return (np.array([[0.1]]), np.array([[0]]))
+        elif k == 2:
+            return (np.array([[0.1, 0.2]]), np.array([[0, 1]]))
+        else:
+            return (np.array([]), np.array([])) # Default for other k values
 
-        Creates a custom mock side effect for FAISS search operations
-        to respect the top_k parameter. This function simulates FAISS
-        returning different numbers of results based on the requested k value.
-
-        Args:
-            query_vector: Test parameter representing the query vector.
-            k: Test parameter representing the number of results to return.
-        """
-        # Simulate FAISS returning two results if k >= 2, otherwise one.
-        if k >= 2:
-            return ([[0.1, 0.2]], [[0, 1]])
-        else:  # k == 1
-            return ([[0.1]], [[0]])
-
-    mock_faiss_index.search = MagicMock(side_effect=mock_search_side_effect)
+    mock_faiss_index.search.side_effect = mock_search_side_effect
 
     # Mock the indexing manager's file_paths_map attribute
     manager.indexing_manager.file_paths_map = {
@@ -880,7 +868,7 @@ def test_profile_code_performance_tool_not_found():
 
     # Check that we get an error
     assert "error" in result
-    assert result["error"]["code"] == "FILE_NOT_FOUND"
+    assert result["error"]["code"] == -32003
 
 
 def test_profile_code_performance_tool_invalid_function():

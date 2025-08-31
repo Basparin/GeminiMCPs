@@ -147,4 +147,4 @@ def test_mcp_tool_call_suggest_code_improvements_error():
 
     # Check that we get an error
     assert "error" in result
-    assert result["error"]["code"] == "FILE_NOT_FOUND"
+    assert result["error"]["code"] == -32003
