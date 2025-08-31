@@ -360,4 +360,105 @@ def _generate_maintenance_alerts(monitor, predictions: Dict[str, Any],
             "recommendation": "Consider routine maintenance and restart"
         })
 
+def detect_performance_regressions_tool(current_results: Dict[str, Any] = None) -> Dict[str, Any]:
+    """
+    Detect performance regressions by comparing current results against baseline.
+
+    This tool analyzes benchmark results to identify performance regressions using
+    statistical methods and configurable thresholds. It can trigger alerts, create
+    GitHub issues, and recommend rollback actions for critical regressions.
+
+    Args:
+        current_results: Current benchmark results to analyze. If None, uses latest available results.
+
+    Returns:
+        Comprehensive regression analysis report including:
+        - Detected regressions with severity levels
+        - Statistical significance analysis
+        - Recommendations for remediation
+        - Alert status and actions taken
+    """
+    try:
+        from codesage_mcp.regression_detector import get_regression_detector
+
+        detector = get_regression_detector()
+
+        # If no current results provided, try to get from recent benchmark results
+        if current_results is None:
+            # Try to load from benchmark_results directory
+            import os
+            from pathlib import Path
+            import json
+
+            results_dir = Path("benchmark_results")
+            if results_dir.exists():
+                # Look for the most recent benchmark report
+                json_files = list(results_dir.glob("benchmark_report_*.json"))
+                if json_files:
+                    latest_report = max(json_files, key=lambda f: f.stat().st_mtime)
+                    try:
+                        with open(latest_report, 'r') as f:
+                            report_data = json.load(f)
+                            # Extract results from the report
+                            current_results = {}
+                            for result in report_data.get("results", []):
+                                metric_name = result["metric_name"]
+                                current_results[metric_name] = {
+                                    "value": result["value"],
+                                    "unit": result["unit"],
+                                    "timestamp": report_data.get("timestamp")
+                                }
+                    except Exception as e:
+                        logger.warning(f"Failed to load benchmark report: {e}")
+
+        if not current_results:
+            return {
+                "error": "No current benchmark results available for regression analysis",
+                "message": "Please run benchmarks first or provide current_results parameter",
+                "timestamp": None
+            }
+
+        # Run regression detection
+        report = detector.detect_regressions(current_results)
+
+        # Convert dataclasses to dictionaries for JSON serialization
+        result = {
+            "test_run_id": report.test_run_id,
+            "timestamp": report.timestamp,
+            "regressions_detected": [
+                {
+                    "metric_name": r.metric_name,
+                    "baseline_value": r.baseline_value,
+                    "current_value": r.current_value,
+                    "percentage_change": r.percentage_change,
+                    "is_regression": r.is_regression,
+                    "severity": r.severity,
+                    "statistical_significance": r.statistical_significance,
+                    "p_value": r.p_value,
+                    "sample_size": r.sample_size,
+                    "metadata": r.metadata
+                }
+                for r in report.regressions_detected
+            ],
+            "summary": report.summary,
+            "recommendations": report.recommendations,
+            "alerts_triggered": len(report.regressions_detected) > 0,
+            "critical_regressions": len([r for r in report.regressions_detected if r.severity == "critical"])
+        }
+
+        # Add additional context
+        result["analysis_complete"] = True
+        result["baseline_available"] = report.summary.get("total_metrics_analyzed", 0) > 0
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error detecting performance regressions: {e}")
+        return {
+            "error": f"Failed to detect performance regressions: {str(e)}",
+            "analysis_complete": False,
+            "regressions_detected": [],
+            "recommendations": ["Investigate the error and try again"],
+            "timestamp": None
+        }
     return alerts

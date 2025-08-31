@@ -15,6 +15,9 @@ import json
 import statistics
 import psutil
 import shutil
+import requests
+import threading
+import concurrent.futures
 from pathlib import Path
 from typing import Dict, List, Any, Tuple, Optional
 from dataclasses import dataclass, field
@@ -22,6 +25,8 @@ from unittest.mock import MagicMock, patch
 import tempfile
 import os
 import numpy as np
+import socket
+import subprocess
 
 from codesage_mcp.indexing import IndexingManager
 from codesage_mcp.searching import SearchingManager
@@ -530,7 +535,466 @@ class Class_{i}:
 
         return results
 
-    def run_full_benchmark_suite(self) -> PerformanceReport:
+    def benchmark_jsonrpc_latency(self, server_url: str = "http://localhost:8000/mcp",
+                                  num_requests: int = 100) -> List[BenchmarkResult]:
+        """Benchmark JSON-RPC request latency."""
+        results = []
+
+        # Test different types of requests
+        test_requests = [
+            {
+                "jsonrpc": "2.0",
+                "method": "initialize",
+                "id": 1,
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "benchmark-client", "version": "1.0.0"}
+                }
+            },
+            {
+                "jsonrpc": "2.0",
+                "method": "tools/list",
+                "id": 2,
+                "params": {}
+            }
+        ]
+
+        for req_idx, request_data in enumerate(test_requests):
+            latencies = []
+
+            for i in range(num_requests):
+                try:
+                    start_time = time.time()
+                    response = requests.post(server_url, json=request_data, timeout=10)
+                    latency = (time.time() - start_time) * 1000  # Convert to milliseconds
+
+                    if response.status_code == 200:
+                        latencies.append(latency)
+                except Exception as e:
+                    print(f"Request {i} failed: {e}")
+
+            if latencies:
+                avg_latency = statistics.mean(latencies)
+                p95_latency = statistics.quantiles(latencies, n=20)[18] if len(latencies) >= 20 else max(latencies)
+                p99_latency = statistics.quantiles(latencies, n=100)[98] if len(latencies) >= 100 else max(latencies)
+
+                method_name = request_data["method"]
+                results.extend([
+                    BenchmarkResult(
+                        test_name=f"jsonrpc_latency_{method_name}",
+                        metric_name="avg_latency",
+                        value=avg_latency,
+                        unit="milliseconds",
+                        target=500.0,  # Should be under 500ms
+                        achieved=avg_latency <= 500.0,
+                        metadata={"requests": len(latencies), "method": method_name}
+                    ),
+                    BenchmarkResult(
+                        test_name=f"jsonrpc_latency_{method_name}",
+                        metric_name="p95_latency",
+                        value=p95_latency,
+                        unit="milliseconds",
+                        target=1000.0,  # 95th percentile under 1s
+                        achieved=p95_latency <= 1000.0,
+                        metadata={"requests": len(latencies), "method": method_name}
+                    ),
+                    BenchmarkResult(
+                        test_name=f"jsonrpc_latency_{method_name}",
+                        metric_name="p99_latency",
+                        value=p99_latency,
+                        unit="milliseconds",
+                        target=2000.0,  # 99th percentile under 2s
+                        achieved=p99_latency <= 2000.0,
+                        metadata={"requests": len(latencies), "method": method_name}
+                    )
+                ])
+
+        return results
+
+    def benchmark_tool_execution_times(self, server_url: str = "http://localhost:8000/mcp",
+                                       tools_to_test: List[str] = None) -> List[BenchmarkResult]:
+        """Benchmark execution times for specific MCP tools."""
+        results = []
+
+        if tools_to_test is None:
+            tools_to_test = ["read_code_file", "search_codebase", "get_file_structure"]
+
+        # Create test codebase for tool testing
+        codebase_dir = self.create_test_codebase("medium")
+
+        try:
+            # Test each tool
+            for tool_name in tools_to_test:
+                tool_args = self._get_tool_test_args(tool_name, str(codebase_dir))
+                if not tool_args:
+                    continue
+
+                request_data = {
+                    "jsonrpc": "2.0",
+                    "method": "tools/call",
+                    "id": 1,
+                    "params": {
+                        "name": tool_name,
+                        "arguments": tool_args
+                    }
+                }
+
+                latencies = []
+                for i in range(10):  # Test 10 times for each tool
+                    try:
+                        start_time = time.time()
+                        response = requests.post(server_url, json=request_data, timeout=30)
+                        latency = (time.time() - start_time) * 1000
+
+                        if response.status_code == 200:
+                            latencies.append(latency)
+                    except Exception as e:
+                        print(f"Tool {tool_name} request {i} failed: {e}")
+
+                if latencies:
+                    avg_time = statistics.mean(latencies)
+                    max_time = max(latencies)
+
+                    results.extend([
+                        BenchmarkResult(
+                            test_name=f"tool_execution_{tool_name}",
+                            metric_name="avg_execution_time",
+                            value=avg_time,
+                            unit="milliseconds",
+                            target=5000.0,  # Should complete within 5 seconds
+                            achieved=avg_time <= 5000.0,
+                            metadata={"tool": tool_name, "requests": len(latencies)}
+                        ),
+                        BenchmarkResult(
+                            test_name=f"tool_execution_{tool_name}",
+                            metric_name="max_execution_time",
+                            value=max_time,
+                            unit="milliseconds",
+                            target=10000.0,  # Max should be under 10 seconds
+                            achieved=max_time <= 10000.0,
+                            metadata={"tool": tool_name, "requests": len(latencies)}
+                        )
+                    ])
+
+        finally:
+            shutil.rmtree(codebase_dir)
+
+        return results
+
+    def _get_tool_test_args(self, tool_name: str, codebase_path: str) -> Dict[str, Any]:
+        """Get test arguments for a specific tool."""
+        if tool_name == "read_code_file":
+            return {"file_path": f"{codebase_path}/module_0.py"}
+        elif tool_name == "search_codebase":
+            return {
+                "codebase_path": codebase_path,
+                "pattern": "def get_module_id",
+                "file_types": ["*.py"]
+            }
+        elif tool_name == "get_file_structure":
+            return {
+                "codebase_path": codebase_path,
+                "file_path": f"{codebase_path}/module_0.py"
+            }
+        elif tool_name == "get_dependencies_overview":
+            return {"codebase_path": codebase_path}
+        elif tool_name == "count_lines_of_code":
+            return {"codebase_path": codebase_path}
+        else:
+            return {}
+
+    def benchmark_resource_utilization(self, duration_seconds: int = 60) -> List[BenchmarkResult]:
+        """Benchmark resource utilization during load."""
+        results = []
+
+        # Monitor resources for the specified duration
+        cpu_percentages = []
+        memory_percentages = []
+        disk_io_read = []
+        disk_io_write = []
+        network_bytes_sent = []
+        network_bytes_recv = []
+
+        start_time = time.time()
+        initial_net = psutil.net_io_counters()
+
+        while time.time() - start_time < duration_seconds:
+            # CPU usage
+            cpu_percentages.append(self.process.cpu_percent(interval=1))
+
+            # Memory usage
+            memory_percentages.append(self.process.memory_percent())
+
+            # Disk I/O
+            disk_counters = psutil.disk_io_counters()
+            if disk_counters:
+                disk_io_read.append(disk_counters.read_bytes)
+                disk_io_write.append(disk_counters.write_bytes)
+
+            # Network I/O
+            net_counters = psutil.net_io_counters()
+            network_bytes_sent.append(net_counters.bytes_sent - initial_net.bytes_sent)
+            network_bytes_recv.append(net_counters.bytes_recv - initial_net.bytes_recv)
+
+        # Calculate averages and peaks
+        if cpu_percentages:
+            avg_cpu = statistics.mean(cpu_percentages)
+            max_cpu = max(cpu_percentages)
+
+            results.extend([
+                BenchmarkResult(
+                    test_name="resource_utilization",
+                    metric_name="avg_cpu_usage",
+                    value=avg_cpu,
+                    unit="percent",
+                    target=80.0,  # Should stay under 80%
+                    achieved=avg_cpu <= 80.0,
+                    metadata={"duration": duration_seconds}
+                ),
+                BenchmarkResult(
+                    test_name="resource_utilization",
+                    metric_name="max_cpu_usage",
+                    value=max_cpu,
+                    unit="percent",
+                    target=90.0,  # Peak should be under 90%
+                    achieved=max_cpu <= 90.0,
+                    metadata={"duration": duration_seconds}
+                )
+            ])
+
+        if memory_percentages:
+            avg_memory = statistics.mean(memory_percentages)
+            max_memory = max(memory_percentages)
+
+            results.extend([
+                BenchmarkResult(
+                    test_name="resource_utilization",
+                    metric_name="avg_memory_usage",
+                    value=avg_memory,
+                    unit="percent",
+                    target=85.0,  # Should stay under 85%
+                    achieved=avg_memory <= 85.0,
+                    metadata={"duration": duration_seconds}
+                ),
+                BenchmarkResult(
+                    test_name="resource_utilization",
+                    metric_name="max_memory_usage",
+                    value=max_memory,
+                    unit="percent",
+                    target=95.0,  # Peak should be under 95%
+                    achieved=max_memory <= 95.0,
+                    metadata={"duration": duration_seconds}
+                )
+            ])
+
+        return results
+
+    def benchmark_throughput_and_scalability(self, server_url: str = "http://localhost:8000/mcp",
+                                             concurrent_users: List[int] = None) -> List[BenchmarkResult]:
+        """Benchmark throughput and scalability with different concurrent user loads."""
+        results = []
+
+        if concurrent_users is None:
+            concurrent_users = [1, 5, 10, 20]
+
+        for num_users in concurrent_users:
+            print(f"Benchmarking with {num_users} concurrent users...")
+
+            # Test for 30 seconds per concurrency level
+            duration = 30
+            request_counts = []
+            latencies = []
+
+            def worker_thread(thread_id: int):
+                """Worker thread for making requests."""
+                local_requests = 0
+                local_latencies = []
+
+                end_time = time.time() + duration
+                request_id = thread_id * 1000
+
+                while time.time() < end_time:
+                    try:
+                        request_data = {
+                            "jsonrpc": "2.0",
+                            "method": "tools/list",
+                            "id": request_id,
+                            "params": {}
+                        }
+
+                        start_time = time.time()
+                        response = requests.post(server_url, json=request_data, timeout=5)
+                        latency = (time.time() - start_time) * 1000
+
+                        if response.status_code == 200:
+                            local_requests += 1
+                            local_latencies.append(latency)
+
+                        request_id += 1
+
+                    except Exception as e:
+                        pass  # Ignore errors for throughput testing
+
+                return local_requests, local_latencies
+
+            # Start worker threads
+            with concurrent.futures.ThreadPoolExecutor(max_workers=num_users) as executor:
+                futures = [executor.submit(worker_thread, i) for i in range(num_users)]
+                results_thread = [future.result() for future in concurrent.futures.as_completed(futures)]
+
+            # Aggregate results
+            total_requests = sum(r[0] for r in results_thread)
+            all_latencies = [lat for r in results_thread for lat in r[1]]
+
+            if total_requests > 0:
+                throughput_rps = total_requests / duration
+                avg_latency = statistics.mean(all_latencies) if all_latencies else 0
+                p95_latency = statistics.quantiles(all_latencies, n=20)[18] if len(all_latencies) >= 20 else max(all_latencies)
+
+                results.extend([
+                    BenchmarkResult(
+                        test_name=f"throughput_scalability_{num_users}_users",
+                        metric_name="requests_per_second",
+                        value=throughput_rps,
+                        unit="rps",
+                        target=50.0,  # At least 50 RPS
+                        achieved=throughput_rps >= 50.0,
+                        metadata={"concurrent_users": num_users, "duration": duration}
+                    ),
+                    BenchmarkResult(
+                        test_name=f"throughput_scalability_{num_users}_users",
+                        metric_name="avg_latency",
+                        value=avg_latency,
+                        unit="milliseconds",
+                        target=1000.0,  # Under 1 second
+                        achieved=avg_latency <= 1000.0,
+                        metadata={"concurrent_users": num_users, "total_requests": total_requests}
+                    ),
+                    BenchmarkResult(
+                        test_name=f"throughput_scalability_{num_users}_users",
+                        metric_name="p95_latency",
+                        value=p95_latency,
+                        unit="milliseconds",
+                        target=2000.0,  # 95th percentile under 2 seconds
+                        achieved=p95_latency <= 2000.0,
+                        metadata={"concurrent_users": num_users, "total_requests": total_requests}
+                    )
+                ])
+
+        return results
+
+    def benchmark_edge_cases(self, server_url: str = "http://localhost:8000/mcp") -> List[BenchmarkResult]:
+        """Benchmark edge cases like large codebases, network failures, and malformed requests."""
+        results = []
+
+        # Test 1: Large codebase handling
+        print("Testing large codebase handling...")
+        large_codebase_dir = self.create_test_codebase("large")
+
+        try:
+            # Index large codebase
+            start_time = time.time()
+            request_data = {
+                "jsonrpc": "2.0",
+                "method": "tools/call",
+                "id": 1,
+                "params": {
+                    "name": "index_codebase",
+                    "arguments": {"path": str(large_codebase_dir)}
+                }
+            }
+
+            response = requests.post(server_url, json=request_data, timeout=120)
+            large_indexing_time = (time.time() - start_time) * 1000
+
+            if response.status_code == 200:
+                results.append(BenchmarkResult(
+                    test_name="edge_cases_large_codebase",
+                    metric_name="large_codebase_indexing_time",
+                    value=large_indexing_time,
+                    unit="milliseconds",
+                    target=60000.0,  # Should complete within 60 seconds
+                    achieved=large_indexing_time <= 60000.0,
+                    metadata={"codebase_size": "large", "files": 200}
+                ))
+
+        except Exception as e:
+            print(f"Large codebase test failed: {e}")
+        finally:
+            shutil.rmtree(large_codebase_dir)
+
+        # Test 2: Network failure simulation (timeout)
+        print("Testing network timeout handling...")
+        timeout_requests = 0
+        timeout_failures = 0
+
+        for i in range(10):
+            try:
+                request_data = {
+                    "jsonrpc": "2.0",
+                    "method": "tools/call",
+                    "id": i,
+                    "params": {
+                        "name": "read_code_file",
+                        "arguments": {"file_path": "/nonexistent/file.py"}
+                    }
+                }
+
+                # Use very short timeout to simulate network issues
+                response = requests.post(server_url, json=request_data, timeout=0.001)
+                timeout_requests += 1
+
+            except requests.exceptions.Timeout:
+                timeout_failures += 1
+            except Exception:
+                timeout_requests += 1
+
+        if timeout_requests > 0:
+            timeout_failure_rate = (timeout_failures / timeout_requests) * 100
+
+            results.append(BenchmarkResult(
+                test_name="edge_cases_network_failures",
+                metric_name="timeout_failure_rate",
+                value=timeout_failure_rate,
+                unit="percent",
+                target=50.0,  # Should handle timeouts gracefully
+                achieved=timeout_failure_rate <= 50.0,
+                metadata={"total_requests": timeout_requests, "timeouts": timeout_failures}
+            ))
+
+        # Test 3: Malformed requests
+        print("Testing malformed request handling...")
+        malformed_requests = [
+            {"invalid": "request"},  # Missing required fields
+            {"jsonrpc": "2.0", "method": "invalid_method", "id": 1},  # Invalid method
+            {"jsonrpc": "2.0", "method": "tools/call", "params": "invalid", "id": 1},  # Invalid params
+        ]
+
+        malformed_errors = 0
+        for req in malformed_requests:
+            try:
+                response = requests.post(server_url, json=req, timeout=5)
+                if response.status_code != 200:
+                    malformed_errors += 1
+            except Exception:
+                malformed_errors += 1
+
+        error_rate = (malformed_errors / len(malformed_requests)) * 100
+
+        results.append(BenchmarkResult(
+            test_name="edge_cases_malformed_requests",
+            metric_name="malformed_request_error_rate",
+            value=error_rate,
+            unit="percent",
+            target=100.0,  # Should properly handle all malformed requests
+            achieved=error_rate >= 80.0,  # At least 80% should be handled gracefully
+            metadata={"total_requests": len(malformed_requests), "errors": malformed_errors}
+        ))
+
+        return results
+
+    def run_full_benchmark_suite(self, server_url: str = "http://localhost:8000/mcp") -> PerformanceReport:
         """Run the complete benchmark suite."""
         print("Starting comprehensive performance benchmark suite...")
 
@@ -551,6 +1015,33 @@ class Class_{i}:
 
         print("5. Benchmarking chunking performance...")
         all_results.extend(self.benchmark_chunking_performance())
+
+        print("6. Benchmarking JSON-RPC latency...")
+        try:
+            all_results.extend(self.benchmark_jsonrpc_latency(server_url))
+        except Exception as e:
+            print(f"JSON-RPC latency benchmark failed: {e}")
+
+        print("7. Benchmarking tool execution times...")
+        try:
+            all_results.extend(self.benchmark_tool_execution_times(server_url))
+        except Exception as e:
+            print(f"Tool execution benchmark failed: {e}")
+
+        print("8. Benchmarking resource utilization...")
+        all_results.extend(self.benchmark_resource_utilization())
+
+        print("9. Benchmarking throughput and scalability...")
+        try:
+            all_results.extend(self.benchmark_throughput_and_scalability(server_url))
+        except Exception as e:
+            print(f"Throughput benchmark failed: {e}")
+
+        print("10. Benchmarking edge cases...")
+        try:
+            all_results.extend(self.benchmark_edge_cases(server_url))
+        except Exception as e:
+            print(f"Edge cases benchmark failed: {e}")
 
         # Generate summary
         summary = self._generate_summary(all_results)
@@ -703,16 +1194,17 @@ class Class_{i}:
         print("\n" + "=" * 80)
 
 
-def run_performance_benchmarks():
+def run_performance_benchmarks(server_url: str = "http://localhost:8000/mcp"):
     """Run the complete performance benchmark suite."""
     benchmarker = PerformanceBenchmarker()
 
     print("CodeSage MCP Performance Benchmark Suite")
     print("=========================================")
+    print(f"Server URL: {server_url}")
     print()
 
     # Run benchmarks
-    report = benchmarker.run_full_benchmark_suite()
+    report = benchmarker.run_full_benchmark_suite(server_url)
 
     # Print results
     benchmarker.print_report(report)
@@ -721,4 +1213,8 @@ def run_performance_benchmarks():
 
 
 if __name__ == "__main__":
-    run_performance_benchmarks()
+    import sys
+    server_url = "http://localhost:8000/mcp"
+    if len(sys.argv) > 1:
+        server_url = sys.argv[1]
+    run_performance_benchmarks(server_url)

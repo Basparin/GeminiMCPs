@@ -1,0 +1,54 @@
+# Dockerfile for CodeSage MCP Benchmarking Environment
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies for benchmarking
+RUN apt-get update && apt-get install -y \
+    curl \
+    jq \
+    procps \
+    htop \
+    iotop \
+    sysstat \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir \
+    pytest \
+    pytest-benchmark \
+    requests \
+    locust \
+    memory-profiler \
+    psutil \
+    numpy
+
+# Copy application code
+COPY codesage_mcp/ ./codesage_mcp/
+COPY tests/ ./tests/
+COPY scripts/ ./scripts/
+
+# Create directories for results and logs
+RUN mkdir -p /app/benchmark_results /app/logs /app/config
+
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV RESULTS_DIR=/app/benchmark_results
+
+# Create a non-root user for security
+RUN useradd --create-home --shell /bin/bash benchmark && \
+    chown -R benchmark:benchmark /app
+USER benchmark
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)" || exit 1
+
+# Default command
+CMD ["python", "--version"]

@@ -107,6 +107,7 @@ from codesage_mcp.tools import (
     analyze_continuous_improvement_opportunities_tool,  # Import the new continuous improvement tools
     implement_automated_improvements_tool,
     monitor_improvement_effectiveness_tool,
+    detect_performance_regressions_tool,  # Import the new regression detection tool
 )
 from codesage_mcp.utils import create_error_response
 from codesage_mcp.gemini_compatibility import (
@@ -123,6 +124,7 @@ from codesage_mcp.auto_performance_tuner import get_auto_performance_tuner
 from codesage_mcp.adaptive_cache_manager import get_adaptive_cache_manager
 from codesage_mcp.memory_manager import get_memory_manager
 from codesage_mcp.workload_pattern_recognition import get_workload_pattern_recognition
+from codesage_mcp.regression_detector import get_regression_detector
 from codesage_mcp.codebase_manager import get_llm_analysis_manager
 
 # Configure structured logging
@@ -1423,6 +1425,25 @@ def get_all_tools_definitions_as_object():
                 },
                 "required": [],
             },
+        "detect_performance_regressions": {
+            "name": "detect_performance_regressions",
+            "description": (
+                "Detect performance regressions by comparing current benchmark results against baseline. "
+                "Uses statistical analysis to identify significant performance changes and provides "
+                "recommendations for remediation, including automated alerts and issue creation."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "current_results": {
+                        "type": "object",
+                        "description": "Current benchmark results to analyze (optional - uses latest if not provided)"
+                    }
+                },
+                "required": []
+            },
+            "type": "function",
+        },
             "type": "function",
         },
     }
@@ -1505,6 +1526,7 @@ TOOL_FUNCTIONS = {
     "get_resource_allocation_status": get_resource_allocation_status_tool,
     "forecast_workload_patterns": forecast_workload_patterns_tool,
     "analyze_pattern_effectiveness": analyze_pattern_effectiveness_tool,
+    "detect_performance_regressions": detect_performance_regressions_tool,
     "get_pattern_recognition_configuration": get_pattern_recognition_configuration_tool,
     "update_pattern_recognition_configuration": update_pattern_recognition_configuration_tool,
     "analyze_continuous_improvement_opportunities": analyze_continuous_improvement_opportunities_tool,

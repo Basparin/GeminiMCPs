@@ -1,0 +1,26 @@
+{
+  "config_name": "default",
+  "config": {
+    "concurrent_users": 10,
+    "test_iterations": 5,
+    "duration_seconds": 60,
+    "load_scenario": "sustained",
+    "codebase_size": "medium",
+    "enable_edge_cases": true
+  },
+  "results": {
+    "config": {
+      "concurrent_users": 10,
+      "test_iterations": 5,
+      "duration_seconds": 60,
+      "load_scenario": "sustained",
+      "codebase_size": "medium",
+      "enable_edge_cases": true
+    },
+    "timestamp": 1756623141.6572125,
+    "results": {
+      "timeout": true
+    }
+  },
+  "timestamp": 1756623261
+}

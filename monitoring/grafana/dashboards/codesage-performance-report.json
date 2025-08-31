@@ -1,0 +1,397 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "CodeSage MCP Performance Report Dashboard",
+    "tags": ["codesage", "performance", "mcp"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Overall Health Score",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "codesage_health_score",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [],
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "color": "red",
+                  "value": null
+                },
+                {
+                  "color": "orange",
+                  "value": 50
+                },
+                {
+                  "color": "yellow",
+                  "value": 70
+                },
+                {
+                  "color": "green",
+                  "value": 85
+                }
+              ]
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Response Time (95th percentile)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"codesage\"}[5m])) * 1000",
+            "legendFormat": "95th percentile",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"codesage\"}[5m])) * 1000",
+            "legendFormat": "50th percentile",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Throughput (Requests/Second)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{job=\"codesage\"}[5m])",
+            "legendFormat": "Total RPS",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(http_requests_total{status=~\"2..\",job=\"codesage\"}[5m])",
+            "legendFormat": "Success RPS",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(http_requests_total{status=~\"5..\",job=\"codesage\"}[5m])",
+            "legendFormat": "Error RPS",
+            "refId": "C"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 4,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "(rate(http_requests_total{status=~\"5..\",job=\"codesage\"}[5m]) / rate(http_requests_total{job=\"codesage\"}[5m])) * 100",
+            "legendFormat": "Error Rate %",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 5,
+        "title": "Resource Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "(process_resident_memory_bytes{job=\"codesage\"} / process_virtual_memory_max_bytes) * 100",
+            "legendFormat": "Memory Usage %",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(process_cpu_user_seconds_total{job=\"codesage\"}[5m]) * 100",
+            "legendFormat": "CPU Usage %",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 6,
+        "title": "Cache Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "codesage_cache_hit_rate{type=\"embedding\"}",
+            "legendFormat": "Embedding Cache Hit Rate",
+            "refId": "A"
+          },
+          {
+            "expr": "codesage_cache_hit_rate{type=\"file\"}",
+            "legendFormat": "File Cache Hit Rate",
+            "refId": "B"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        }
+      },
+      {
+        "id": 7,
+        "title": "Benchmark Results",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "codesage_benchmark_result",
+            "legendFormat": "{{test_name}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "displayMode": "auto"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "test_name"
+              },
+              "properties": [
+                {
+                  "id": "displayName",
+                  "value": "Test Name"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "metric_name"
+              },
+              "properties": [
+                {
+                  "id": "displayName",
+                  "value": "Metric"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "value"
+              },
+              "properties": [
+                {
+                  "id": "displayName",
+                  "value": "Value"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "achieved"
+              },
+              "properties": [
+                {
+                  "id": "displayName",
+                  "value": "Status"
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "0": {
+                          "text": "FAILED",
+                          "color": "red"
+                        },
+                        "1": {
+                          "text": "PASSED",
+                          "color": "green"
+                        }
+                      },
+                      "type": "value"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 24
+        }
+      },
+      {
+        "id": 8,
+        "title": "Performance Trends",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "increase(codesage_performance_score[1h])",
+            "legendFormat": "Performance Score Change",
+            "refId": "A"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 32
+        }
+      },
+      {
+        "id": 9,
+        "title": "Regression Alerts",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "codesage_regression_detected",
+            "legendFormat": "{{metric_name}}",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "displayMode": "auto"
+            }
+          },
+          "overrides": [
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "metric_name"
+              },
+              "properties": [
+                {
+                  "id": "displayName",
+                  "value": "Metric"
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "severity"
+              },
+              "properties": [
+                {
+                  "id": "displayName",
+                  "value": "Severity"
+                },
+                {
+                  "id": "mappings",
+                  "value": [
+                    {
+                      "options": {
+                        "critical": {
+                          "text": "CRITICAL",
+                          "color": "red"
+                        },
+                        "high": {
+                          "text": "HIGH",
+                          "color": "orange"
+                        },
+                        "medium": {
+                          "text": "MEDIUM",
+                          "color": "yellow"
+                        },
+                        "low": {
+                          "text": "LOW",
+                          "color": "blue"
+                        }
+                      },
+                      "type": "value"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "matcher": {
+                "id": "byName",
+                "options": "percentage_change"
+              },
+              "properties": [
+                {
+                  "id": "displayName",
+                  "value": "Change %"
+                },
+                {
+                  "id": "unit",
+                  "value": "percent"
+                }
+              ]
+            }
+          ]
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 32
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": "-- Grafana --",
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "refresh": "30s",
+    "schemaVersion": 27,
+    "version": 0,
+    "links": []
+  }
+}
