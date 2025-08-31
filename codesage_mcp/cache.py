@@ -122,14 +122,21 @@ class EmbeddingCache:
 
     def get_embedding(self, file_path: str, content: str) -> Optional[np.ndarray]:
         """Get cached embedding if available and valid."""
+        start_time = time.time()
         content_hash = self._hash_content(content)
         cache_key = self._get_cache_key(file_path, content_hash)
 
         # Check if we have this embedding cached
         cached_embedding = self.embedding_cache.get(cache_key)
+        response_time = time.time() - start_time
+
         if cached_embedding is not None:
-            logger.debug(f"Cache hit for {file_path}, embedding dimension: {len(cached_embedding) if hasattr(cached_embedding, '__len__') else 'unknown'}")
+            logger.debug(f"Cache hit for {file_path}, embedding dimension: {len(cached_embedding) if hasattr(cached_embedding, '__len__') else 'unknown'}, response_time: {response_time:.6f}s")
+            logger.info(f"CACHE_METRICS: embedding_hit file={file_path} response_time={response_time:.6f} cache_size={self.embedding_cache.size()}")
             return cached_embedding
+        else:
+            logger.debug(f"Cache miss for {file_path}, response_time: {response_time:.6f}s")
+            logger.info(f"CACHE_METRICS: embedding_miss file={file_path} response_time={response_time:.6f} cache_size={self.embedding_cache.size()}")
 
         return None
 
@@ -137,6 +144,7 @@ class EmbeddingCache:
         self, file_path: str, content: str, embedding: np.ndarray
     ) -> None:
         """Store an embedding in the cache."""
+        start_time = time.time()
         content_hash = self._hash_content(content)
         cache_key = self._get_cache_key(file_path, content_hash)
 
@@ -150,6 +158,10 @@ class EmbeddingCache:
         self.file_metadata.put(
             file_path, {"hash": content_hash, "timestamp": time.time()}
         )
+
+        response_time = time.time() - start_time
+        logger.debug(f"Stored embedding for {file_path}, response_time: {response_time:.6f}s")
+        logger.info(f"CACHE_METRICS: embedding_store file={file_path} response_time={response_time:.6f} cache_size={self.embedding_cache.size()}")
 
     def invalidate_file(self, file_path: str) -> int:
         """Invalidate all cached embeddings for a file. Returns number of invalidated entries."""
@@ -453,14 +465,19 @@ class IntelligentCache:
         self, file_path: str, content: str
     ) -> Tuple[Optional[np.ndarray], bool]:
         """Get embedding from cache or return None if not cached. Returns (embedding, was_hit)."""
+        start_time = time.time()
         with self.lock:
             embedding = self.embedding_cache.get_embedding(file_path, content)
+            response_time = time.time() - start_time
+
             if embedding is not None:
                 self.stats["hits"]["embedding"] += 1
                 self.record_cache_access("embedding")
+                logger.info(f"CACHE_METRICS: intelligent_embedding_hit file={file_path} response_time={response_time:.6f} total_hits={self.stats['hits']['embedding']} total_misses={self.stats['misses']['embedding']}")
                 return embedding, True
             else:
                 self.stats["misses"]["embedding"] += 1
+                logger.info(f"CACHE_METRICS: intelligent_embedding_miss file={file_path} response_time={response_time:.6f} total_hits={self.stats['hits']['embedding']} total_misses={self.stats['misses']['embedding']}")
                 return None, False
 
     def store_embedding(
@@ -504,15 +521,20 @@ class IntelligentCache:
 
     def get_file_content(self, file_path: str) -> Tuple[Optional[str], bool]:
         """Get file content from cache. Returns (content, was_hit)."""
+        start_time = time.time()
         with self.lock:
             content = self.file_cache.get_content(file_path)
+            response_time = time.time() - start_time
+
             if content is not None:
                 self.stats["hits"]["file"] += 1
                 self._record_file_access(file_path)
                 self.record_cache_access("file")
+                logger.info(f"CACHE_METRICS: file_hit file={file_path} response_time={response_time:.6f} total_hits={self.stats['hits']['file']} total_misses={self.stats['misses']['file']}")
                 return content, True
             else:
                 self.stats["misses"]["file"] += 1
+                logger.info(f"CACHE_METRICS: file_miss file={file_path} response_time={response_time:.6f} total_hits={self.stats['hits']['file']} total_misses={self.stats['misses']['file']}")
                 return None, False
 
     def store_file_content(self, file_path: str, content: str) -> bool:
@@ -998,6 +1020,8 @@ class IntelligentCache:
             if prev_file != file_path:  # Don't count self-access
                 self.usage_patterns["file_coaccess"][prev_file][file_path] += 1
 
+        logger.debug(f"FILE_ACCESS_PATTERN: file={file_path} access_count={self.usage_patterns['file_access_counts'][file_path]} sequence_length={len(self.usage_patterns['file_access_sequence'])}")
+
     def predict_next_files(
         self, current_file: str, max_predictions: int = 5
     ) -> List[str]:
@@ -1283,12 +1307,15 @@ class IntelligentCache:
         self.workload_stats["accesses_last_minute"] += 1
         self.workload_stats["accesses_last_hour"] += 1
 
+        logger.debug(f"CACHE_ACCESS: type={cache_type} accesses_last_minute={self.workload_stats['accesses_last_minute']} accesses_last_hour={self.workload_stats['accesses_last_hour']}")
+
         # Trigger adaptive sizing check periodically
         if self.workload_stats["accesses_last_minute"] % 50 == 0:
             try:
                 adaptation_result = self.adapt_cache_sizes()
                 if adaptation_result["adapted"]:
                     logger.info(f"Adaptive cache sizing: {adaptation_result}")
+                    logger.info(f"CACHE_METRICS: adaptive_sizing_triggered old_sizes={adaptation_result['old_sizes']} new_sizes={adaptation_result['new_sizes']}")
             except Exception as e:
                 logger.warning(f"Adaptive cache sizing failed: {e}")
 
