@@ -51,7 +51,7 @@ This means that when I elaborate a task for an external LLM, it is expected to l
     *   **Context:** Relevant background information, current state, and any known issues.
     *   **Specific Steps (High-Level):** Guidance on the approach or sub-goals for the external LLM.
     *   **Expected Output:** The final state or deliverable from the external LLM (e.g., all tests passing, a specific feature implemented).
-*   **Delegate to External LLM (via User):** I will provide these elaborated instructions to the human user, who will then pass them to the external LLM.
+*   **Delegate to External LLM:** I will provide these elaborated instructions directly to the external LLM.
 
 #### 2.2 Execution and Verification Loop
 
@@ -63,8 +63,8 @@ This means that when I elaborate a task for an external LLM, it is expected to l
     *   **Code Review (Automated):** If tools are available, perform automated code quality checks.
 *   **Analyze Verification Results:** I will analyze the output of the verification steps.
 *   **Iterate or Conclude:**
-    *   If issues are found, I will analyze the new failures/errors and provide updated, refined instructions to the external LLM (via the user) for further iteration.
-    *   If verification passes, I will mark the task as complete and proceed to the next item in `todo.md`.
+    *   If issues are found, I will analyze the new failures/errors and provide updated, refined instructions to the external LLM for further iteration.
+    *   If verification passes, I will mark the task as complete and proceed to the next item in `todo .md`.
 
 #### 2.3 Git Workflow for Orchestration
 

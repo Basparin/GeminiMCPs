@@ -53,10 +53,12 @@ class GeminiCompatibilityHandler:
                                 request_body: Optional[Dict[str, Any]]) -> ResponseFormat:
         """Detect the expected response format based on request characteristics."""
 
-        # Handle None values by defaulting to empty dicts
-        if request_headers is None:
+        # Handle None values and validate types by defaulting to empty dicts
+        if request_headers is None or not isinstance(request_headers, dict):
+            logger.warning(f"Invalid request_headers type: {type(request_headers)}, defaulting to empty dict")
             request_headers = {}
-        if request_body is None:
+        if request_body is None or not isinstance(request_body, dict):
+            logger.warning(f"Invalid request_body type: {type(request_body)}, defaulting to empty dict")
             request_body = {}
 
         # Track this request in history
@@ -66,7 +68,12 @@ class GeminiCompatibilityHandler:
             self.request_history = self.request_history[-10:]
 
         # Check for Gemini CLI specific headers
-        user_agent = request_headers.get('user-agent', '').lower()
+        user_agent = request_headers.get('user-agent', '')
+        if isinstance(user_agent, str):
+            user_agent = user_agent.lower()
+        else:
+            logger.warning(f"Invalid user-agent type: {type(user_agent)}, expected str, defaulting to empty")
+            user_agent = ''
         if 'gemini' in user_agent or 'node' in user_agent:
             # Check request patterns that indicate format preferences
             method = request_body.get('method', '')
@@ -79,11 +86,20 @@ class GeminiCompatibilityHandler:
             if method in ['tools/call', 'initialize']:
                 return ResponseFormat.GEMINI_NUMERIC_ERRORS
 
-        return ResponseFormat.STANDARD_MCP
+        format_type = ResponseFormat.STANDARD_MCP
+        logger.debug(f"Detected response format: {format_type}")
+        return format_type
 
     def adapt_tools_response(self, tools_object: Dict[str, Any],
                             format_type: ResponseFormat) -> Dict[str, Any]:
         """Adapt tools response format based on detected requirements."""
+
+        logger.debug(f"Adapting tools response for format: {format_type}")
+
+        # Handle None input defensively
+        if tools_object is None:
+            logger.debug("Tools object is None, returning empty tools array")
+            return {"tools": []}
 
         if format_type == ResponseFormat.GEMINI_ARRAY_TOOLS:
             # Check if tools are already in array format
@@ -101,6 +117,10 @@ class GeminiCompatibilityHandler:
                     tools_array.append(tool_def)
                 logger.debug(f"Adapted tools to array format with {len(tools_array)} tools")
                 return {"tools": tools_array}
+            # For invalid types, raise TypeError to maintain expected behavior
+            else:
+                logger.error(f"Invalid tools_object type: {type(tools_object)}, expected dict or list")
+                raise TypeError(f"Invalid tools_object type: {type(tools_object)}, expected dict or list")
 
         # For standard MCP or other formats, ensure consistent structure
         # Gemini CLI may expect tools to be wrapped even in standard format
@@ -113,8 +133,20 @@ class GeminiCompatibilityHandler:
         return tools_object
 
     def adapt_error_response(self, error_response: Dict[str, Any],
-                           format_type: ResponseFormat) -> Dict[str, Any]:
+                            format_type: ResponseFormat) -> Dict[str, Any]:
         """Adapt error response format for compatibility."""
+
+        logger.debug(f"Adapting error response for format: {format_type}")
+
+        # Handle None input defensively
+        if error_response is None:
+            logger.debug("Error response is None, returning None")
+            return None
+
+        # Ensure error_response is a dict before processing
+        if not isinstance(error_response, dict):
+            logger.warning(f"Invalid error_response type: {type(error_response)}, returning as is")
+            return error_response
 
         if format_type == ResponseFormat.GEMINI_NUMERIC_ERRORS:
             # Convert string error codes to numeric codes
@@ -122,19 +154,31 @@ class GeminiCompatibilityHandler:
             if isinstance(error_code, str):
                 # Map string codes to numeric codes
                 numeric_code = self.MCP_ERROR_CODES.get(error_code, -32603)
+                logger.debug(f"Converting error code '{error_code}' to numeric {numeric_code}")
                 error_response['code'] = numeric_code
 
         return error_response
 
     def create_compatible_response(self,
-                                    result: Optional[Any] = None,
-                                    error: Optional[Dict[str, Any]] = None,
-                                    request_id: Union[str, int, None] = None,
-                                    request_headers: Optional[Dict[str, Any]] = None,
-                                    request_body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                                     result: Optional[Any] = None,
+                                     error: Optional[Dict[str, Any]] = None,
+                                     request_id: Union[str, int, None] = None,
+                                     request_headers: Optional[Dict[str, Any]] = None,
+                                     request_body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Create a response compatible with the detected Gemini CLI format."""
 
+        logger.debug("Creating compatible response")
+
+        # Validate inputs
+        if error is not None and not isinstance(error, dict):
+            logger.warning(f"Invalid error type: {type(error)}, expected dict or None")
+            error = None  # Reset to None to avoid issues
+
+        if request_id is not None and not isinstance(request_id, (str, int)):
+            logger.warning(f"Invalid request_id type: {type(request_id)}, expected str, int, or None")
+
         format_type = self.detect_response_format(request_headers, request_body)
+        logger.debug(f"Using format type: {format_type}")
 
         # For Gemini formats, return the payload directly at the top level for success, but wrap errors
         if format_type in [ResponseFormat.GEMINI_ARRAY_TOOLS, ResponseFormat.GEMINI_NUMERIC_ERRORS]:
@@ -175,9 +219,17 @@ class GeminiCompatibilityHandler:
 
     def get_tools_definitions_array(self, tools_object: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Convert tools object to array format for Gemini CLI compatibility."""
+        logger.debug("Converting tools object to array format")
+        if tools_object is None:
+            logger.error("Tools object is None, cannot convert to array")
+            raise AttributeError("'NoneType' object has no attribute 'items'")
+        if not isinstance(tools_object, dict):
+            logger.error(f"Invalid tools_object type: {type(tools_object)}, expected dict")
+            raise TypeError(f"Expected dict, got {type(tools_object)}")
         tools_array = []
         for tool_name, tool_def in tools_object.items():
             tools_array.append(tool_def)
+        logger.debug(f"Converted {len(tools_array)} tools to array format")
         return tools_array
 
     def get_tools_definitions_object(self, tools_object: Dict[str, Any]) -> Dict[str, Any]:
@@ -199,6 +251,8 @@ def create_gemini_compatible_error_response(error_code: Union[str, int],
                                            format_type: Optional[ResponseFormat] = None) -> Dict[str, Any]:
     """Create an error response compatible with Gemini CLI expectations."""
 
+    logger.debug(f"Creating Gemini compatible error response with code: {error_code}")
+
     # Default to GEMINI_NUMERIC_ERRORS for backward compatibility
     if format_type is None:
         format_type = ResponseFormat.GEMINI_NUMERIC_ERRORS
@@ -206,6 +260,7 @@ def create_gemini_compatible_error_response(error_code: Union[str, int],
     # Convert string codes to numeric if needed based on format type
     if format_type == ResponseFormat.GEMINI_NUMERIC_ERRORS and isinstance(error_code, str):
         numeric_code = GeminiCompatibilityHandler.MCP_ERROR_CODES.get(error_code, -32603)
+        logger.debug(f"Converting error code '{error_code}' to numeric {numeric_code}")
         error_code = numeric_code
     # For STANDARD_MCP, keep string codes as-is
 
@@ -216,11 +271,18 @@ def create_gemini_compatible_error_response(error_code: Union[str, int],
 
 
 def adapt_response_for_gemini(result: Optional[Any] = None,
-                            error: Optional[Dict[str, Any]] = None,
-                            request_id: Union[str, int, None] = None,
-                            request_headers: Optional[Dict[str, Any]] = None,
-                            request_body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                             error: Optional[Dict[str, Any]] = None,
+                             request_id: Union[str, int, None] = None,
+                             request_headers: Optional[Dict[str, Any]] = None,
+                             request_body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Adapt response for Gemini CLI compatibility."""
+    logger.debug("Adapting response for Gemini compatibility")
+    if request_headers is not None and not isinstance(request_headers, dict):
+        logger.error(f"Invalid request_headers type: {type(request_headers)}, expected dict or None")
+        raise TypeError(f"request_headers must be dict or None, got {type(request_headers)}")
+    if request_body is not None and not isinstance(request_body, dict):
+        logger.error(f"Invalid request_body type: {type(request_body)}, expected dict or None")
+        raise TypeError(f"request_body must be dict or None, got {type(request_body)}")
     return compatibility_handler.create_compatible_response(
         result=result,
         error=error,

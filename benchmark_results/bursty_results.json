@@ -1,0 +1,18 @@
+{
+  "total_requests": 18,
+  "successful_requests": 0,
+  "failed_requests": 18,
+  "success_rate_percent": 0.0,
+  "avg_response_time_ms": 30000,
+  "median_response_time_ms": 30000.0,
+  "p95_response_time_ms": 30000.0,
+  "actual_rps": 0.11908079300299723,
+  "duration_seconds": 181.39161849021912,
+  "config": {
+    "concurrent_users": 3,
+    "target_rps": 5.0,
+    "duration_seconds": 180,
+    "load_scenario": "bursty",
+    "usage_pattern": "development"
+  }
+}

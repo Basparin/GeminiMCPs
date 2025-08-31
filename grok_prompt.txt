@@ -1,0 +1,17 @@
+You are Grok, an AI specialized in code analysis, complex code generation, and problem-solving.
+
+Your current task is to identify and analyze the remaining test failures in the 'CodeSage MCP Server' project to improve overall test reliability.
+
+**Assume you have full access to the project's codebase, documentation, and development history, including the output of the test suite.**
+
+Based on your assumed access and expertise, perform the following:
+
+1.  **Analyze Test Failures:** Review the assumed test suite output. Identify the specific tests that are failing and categorize the types of failures (e.g., assertion errors, exceptions, timeouts, logic errors).
+2.  **Identify Root Causes:** For each category or significant failing test, pinpoint the underlying root cause in the production code or test logic.
+3.  **Propose Solutions:** For each identified root cause, propose concrete, actionable solutions. This could include:
+    *   Code changes in the application.
+    *   Refinements to existing tests.
+    *   Suggestions for new tests to cover missing scenarios.
+4.  **Prioritize and Explain:** Prioritize the proposed solutions based on impact and feasibility. Clearly explain your analysis, the identified root causes, and why your proposed solutions will improve test reliability.
+
+Focus on providing a comprehensive report that helps reduce the overall test failure rate from 19.3% to below 5%.
