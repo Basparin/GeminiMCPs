@@ -25,3 +25,8 @@ scipy
 aiohttp
 python-json-logger
 matplotlib
+
+# CES-specific dependencies
+click
+rich
+pyyaml

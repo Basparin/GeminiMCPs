@@ -1,7 +1,7 @@
 [project]
 name = "codesage-mcp"
 version = "0.1.0"
-description = "CodeSage Model Context Protocol (MCP) Server"
+description = "CodeSage Model Context Protocol (MCP) Server with CES Integration"
 requires-python = ">=3.9"
 dependencies = [
     "fastapi",
@@ -15,17 +15,29 @@ dependencies = [
     "python-multipart", # For file uploads in FastAPI
     "radon", # For cyclomatic complexity analysis
     "stdlib-list", # For standard library module detection
+    # CES-specific dependencies
+    "click", # For CLI interface
+    "rich", # For enhanced terminal output
+    "pyyaml", # For configuration files
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
     "ruff",
-]
+    "black",
+    "mypy",
+    "pre-commit",
+],
+ces = [
+    "codesage-mcp", # CES depends on CodeSage
+],
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["codesage_mcp*"]
+include = ["codesage_mcp*", "ces*"]
 namespaces = false
 
 [tool.ruff]

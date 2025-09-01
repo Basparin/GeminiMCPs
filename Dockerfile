@@ -77,13 +77,36 @@ EXPOSE 8000
 
 # Default command with production settings
 CMD ["uvicorn", "codesage_mcp.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--workers", "1", \
-     "--loop", "uvloop", \
-     "--http", "httptools", \
-     "--access-log", \
-     "--log-level", "info"]
+      "--host", "0.0.0.0", \
+      "--port", "8000", \
+      "--workers", "1", \
+      "--loop", "uvloop", \
+      "--http", "httptools", \
+      "--access-log", \
+      "--log-level", "info"]
+
+# ================================
+# CES Development Stage (Optional)
+# ================================
+FROM runtime AS ces-development
+
+# Switch back to root for development
+USER root
+
+# Install additional CES development dependencies
+RUN pip install --no-cache-dir \
+    click \
+    rich \
+    pyyaml
+
+# Create CES directories
+RUN mkdir -p /app/ces_memory /app/.ces
+
+# Switch back to codesage user
+USER codesage
+
+# CES development command (can be overridden)
+CMD ["python", "-m", "ces.cli.ces_cli", "--help"]
 
 # ================================
 # Development Stage (Optional)
