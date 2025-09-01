@@ -1,7 +1,7 @@
 Metadata-Version: 2.4
 Name: codesage-mcp
 Version: 0.1.0
-Summary: CodeSage Model Context Protocol (MCP) Server
+Summary: CodeSage Model Context Protocol (MCP) Server with CES Integration
 Requires-Python: >=3.9
 Requires-Dist: fastapi
 Requires-Dist: uvicorn
@@ -14,6 +14,16 @@ Requires-Dist: faiss-cpu
 Requires-Dist: python-multipart
 Requires-Dist: radon
 Requires-Dist: stdlib-list
+Requires-Dist: click
+Requires-Dist: rich
+Requires-Dist: pyyaml
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-asyncio; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
 Requires-Dist: ruff; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
+Requires-Dist: pre-commit; extra == "dev"
+Provides-Extra: ces
+Requires-Dist: codesage-mcp; extra == "ces"

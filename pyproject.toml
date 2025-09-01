@@ -23,17 +23,17 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest",
-    "pytest-asyncio",
-    "pytest-cov",
-    "ruff",
-    "black",
-    "mypy",
-    "pre-commit",
-],
+   "pytest",
+   "pytest-asyncio",
+   "pytest-cov",
+   "ruff",
+   "black",
+   "mypy",
+   "pre-commit"
+]
 ces = [
-    "codesage-mcp", # CES depends on CodeSage
-],
+    "codesage-mcp" # CES depends on CodeSage
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

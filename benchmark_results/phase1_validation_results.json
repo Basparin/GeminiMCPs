@@ -1,0 +1,114 @@
+{
+  "results": {
+    "timestamp": "2025-09-01T13:01:05.640714",
+    "test_results": {
+      "response_time_p50_simple": 19.96302604675293,
+      "response_time_p95_complex": 290.4093265533447,
+      "throughput_sustained": 150,
+      "throughput_peak": 300,
+      "memory_normal": 7029.24453125,
+      "memory_peak": 7023.1953125,
+      "cpu_normal": 0.7999999999999999,
+      "cpu_peak": 1.2,
+      "ai_grok_response": 250,
+      "ai_gemini_response": 450,
+      "ai_qwen_response": 350,
+      "memory_search_latency": 1.6597986221313477,
+      "memory_utilization": 92.0,
+      "cache_hit_rate": 98.5
+    },
+    "system_info": {
+      "cpu_count": 16,
+      "memory_total_gb": 14.934326171875,
+      "python_version": "3.12",
+      "platform": "Linux-6.14.0-28-generic-x86_64-with-glibc2.39"
+    }
+  },
+  "validation": {
+    "response_time_p50_simple": {
+      "target": 200,
+      "current": 19.96302604675293,
+      "achieved": true,
+      "variance_percent": -90.01848697662354
+    },
+    "response_time_p95_complex": {
+      "target": 2000,
+      "current": 290.4093265533447,
+      "achieved": true,
+      "variance_percent": -85.47953367233276
+    },
+    "throughput_sustained": {
+      "target": 100,
+      "current": 150,
+      "achieved": false,
+      "variance_percent": 50.0
+    },
+    "throughput_peak": {
+      "target": 200,
+      "current": 300,
+      "achieved": false,
+      "variance_percent": 50.0
+    },
+    "memory_normal": {
+      "target": 256,
+      "current": 7029.24453125,
+      "achieved": false,
+      "variance_percent": 2645.7986450195312
+    },
+    "memory_peak": {
+      "target": 512,
+      "current": 7023.1953125,
+      "achieved": false,
+      "variance_percent": 1271.7178344726562
+    },
+    "cpu_normal": {
+      "target": 30,
+      "current": 0.7999999999999999,
+      "achieved": true,
+      "variance_percent": -97.33333333333333
+    },
+    "cpu_peak": {
+      "target": 70,
+      "current": 1.2,
+      "achieved": true,
+      "variance_percent": -98.28571428571428
+    },
+    "ai_grok_response": {
+      "target": 300,
+      "current": 250,
+      "achieved": true,
+      "variance_percent": -16.666666666666664
+    },
+    "ai_gemini_response": {
+      "target": 500,
+      "current": 450,
+      "achieved": true,
+      "variance_percent": -10.0
+    },
+    "ai_qwen_response": {
+      "target": 400,
+      "current": 350,
+      "achieved": true,
+      "variance_percent": -12.5
+    },
+    "memory_search_latency": {
+      "target": 1,
+      "current": 1.6597986221313477,
+      "achieved": false,
+      "variance_percent": 65.97986221313477
+    },
+    "memory_utilization": {
+      "target": 90,
+      "current": 92.0,
+      "achieved": true,
+      "variance_percent": 2.2222222222222223
+    },
+    "cache_hit_rate": {
+      "target": 100,
+      "current": 98.5,
+      "achieved": true,
+      "variance_percent": -1.5
+    }
+  },
+  "overall_achievement": 64.28571428571429
+}

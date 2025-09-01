@@ -107,7 +107,25 @@ class PerformanceMonitor:
         self.current_alerts: List[PerformanceAlert] = []
         self.performance_history: List[PerformanceReport] = []
 
-        # Thresholds for alerts
+        # Phase 1 benchmark targets
+        self.phase1_targets = {
+            'response_time_p50_simple': 200,  # ms
+            'response_time_p95_complex': 2000,  # ms
+            'throughput_sustained': 100,  # req/min
+            'throughput_peak': 200,  # req/min
+            'memory_normal': 256,  # MB
+            'memory_peak': 512,  # MB
+            'cpu_normal': 30,  # %
+            'cpu_peak': 70,  # %
+            'ai_grok_response': 300,  # ms
+            'ai_gemini_response': 500,  # ms
+            'ai_qwen_response': 400,  # ms
+            'memory_search_latency': 1,  # ms
+            'memory_utilization': 90,  # %
+            'cache_hit_rate': 100  # %
+        }
+
+        # Thresholds for alerts (optimized for Phase 1 targets)
         self.thresholds = {
             PerformanceMetric.RESPONSE_TIME: {
                 'warning': 300,  # ms
@@ -115,16 +133,16 @@ class PerformanceMonitor:
                 'p95_target': target_p95_ms
             },
             PerformanceMetric.CPU_USAGE: {
-                'warning': 70,  # %
-                'critical': 90   # %
+                'warning': 40,  # % (above normal target)
+                'critical': 80   # % (approaching peak target)
             },
             PerformanceMetric.MEMORY_USAGE: {
-                'warning': 80,  # %
-                'critical': 95   # %
+                'warning': 300,  # MB (above normal target)
+                'critical': 450   # MB (approaching peak target)
             },
             PerformanceMetric.TASK_COMPLETION_TIME: {
-                'warning': 5000,  # ms
-                'critical': 15000  # ms
+                'warning': 1000,  # ms
+                'critical': 3000  # ms
             }
         }
 
@@ -137,7 +155,23 @@ class PerformanceMonitor:
         self.optimization_recommendations: List[str] = []
         self.bottleneck_patterns: Dict[str, int] = defaultdict(int)
 
-        self.logger.info(f"Performance Monitor initialized with P95 target: {target_p95_ms}ms")
+        # Phase 1 tracking
+        self.phase1_metrics = {
+            'response_times_simple': deque(maxlen=1000),
+            'response_times_complex': deque(maxlen=1000),
+            'throughput_minute': deque(maxlen=60),
+            'memory_usage_mb': deque(maxlen=1000),
+            'cpu_usage_percent': deque(maxlen=1000),
+            'ai_response_times': {
+                'grok': deque(maxlen=100),
+                'gemini': deque(maxlen=100),
+                'qwen': deque(maxlen=100)
+            },
+            'memory_search_times': deque(maxlen=100),
+            'cache_hit_rates': deque(maxlen=100)
+        }
+
+        self.logger.info(f"Performance Monitor initialized with Phase 1 targets - P95 target: {target_p95_ms}ms")
 
     def start_monitoring(self):
         """Start the performance monitoring system"""
@@ -183,14 +217,21 @@ class PerformanceMonitor:
         self._check_thresholds(sample)
 
     def record_response_time(self, response_time_ms: float, component: str = "api",
-                           metadata: Optional[Dict[str, Any]] = None):
-        """Record response time with automatic P95 tracking"""
+                            metadata: Optional[Dict[str, Any]] = None):
+        """Record response time with automatic P95 tracking and Phase 1 classification"""
         self.record_sample(
             PerformanceMetric.RESPONSE_TIME,
             response_time_ms,
             component,
             metadata
         )
+
+        # Phase 1: Classify and track response times
+        is_complex = metadata.get('complexity', 'simple') == 'complex' if metadata else False
+        if is_complex:
+            self.phase1_metrics['response_times_complex'].append(response_time_ms)
+        else:
+            self.phase1_metrics['response_times_simple'].append(response_time_ms)
 
     def record_task_completion(self, completion_time_ms: float, task_type: str = "general",
                              metadata: Optional[Dict[str, Any]] = None):
@@ -219,7 +260,7 @@ class PerformanceMonitor:
         )
 
     def record_conflict_resolution(self, resolution_time_ms: float, strategy: str = "auto",
-                                 metadata: Optional[Dict[str, Any]] = None):
+                                  metadata: Optional[Dict[str, Any]] = None):
         """Record conflict resolution time"""
         metadata = metadata or {}
         metadata['resolution_strategy'] = strategy
@@ -230,6 +271,30 @@ class PerformanceMonitor:
             "conflict_resolver",
             metadata
         )
+
+    def record_ai_response_time(self, assistant_name: str, response_time_ms: float,
+                               metadata: Optional[Dict[str, Any]] = None):
+        """Record AI assistant response time for Phase 1 tracking"""
+        if assistant_name in self.phase1_metrics['ai_response_times']:
+            self.phase1_metrics['ai_response_times'][assistant_name].append(response_time_ms)
+
+        # Also record as general response time
+        self.record_response_time(response_time_ms, f"ai_{assistant_name}", metadata)
+
+    def record_memory_search_time(self, search_time_ms: float, metadata: Optional[Dict[str, Any]] = None):
+        """Record memory search latency for Phase 1 tracking"""
+        self.phase1_metrics['memory_search_times'].append(search_time_ms)
+
+        # Record as context retrieval time
+        self.record_context_retrieval(search_time_ms, "memory_search", metadata)
+
+    def record_cache_hit_rate(self, hit_rate_percent: float, metadata: Optional[Dict[str, Any]] = None):
+        """Record cache hit rate for Phase 1 tracking"""
+        self.phase1_metrics['cache_hit_rates'].append(hit_rate_percent)
+
+    def record_throughput(self, requests_per_minute: float, metadata: Optional[Dict[str, Any]] = None):
+        """Record throughput for Phase 1 tracking"""
+        self.phase1_metrics['throughput_minute'].append(requests_per_minute)
 
     def get_current_metrics(self) -> Dict[str, Any]:
         """Get current performance metrics"""
@@ -259,6 +324,108 @@ class PerformanceMonitor:
         metrics.update(self._get_system_metrics())
 
         return metrics
+
+    def get_phase1_performance_report(self) -> Dict[str, Any]:
+        """Generate Phase 1 specific performance report with benchmark validation"""
+        report = {
+            'timestamp': datetime.now().isoformat(),
+            'phase': 'Phase 1',
+            'benchmarks': {},
+            'current_metrics': {},
+            'target_achievement': {},
+            'optimization_recommendations': []
+        }
+
+        # Calculate current Phase 1 metrics
+        current_metrics = {
+            'response_time_p50_simple': self._calculate_p50(self.phase1_metrics['response_times_simple']),
+            'response_time_p95_complex': self._calculate_p95(self.phase1_metrics['response_times_complex']),
+            'throughput_sustained': self._calculate_average(self.phase1_metrics['throughput_minute']),
+            'throughput_peak': max(self.phase1_metrics['throughput_minute']) if self.phase1_metrics['throughput_minute'] else 0,
+            'memory_normal': self._calculate_average(self.phase1_metrics['memory_usage_mb']),
+            'memory_peak': max(self.phase1_metrics['memory_usage_mb']) if self.phase1_metrics['memory_usage_mb'] else 0,
+            'cpu_normal': self._calculate_average(self.phase1_metrics['cpu_usage_percent']),
+            'cpu_peak': max(self.phase1_metrics['cpu_usage_percent']) if self.phase1_metrics['cpu_usage_percent'] else 0,
+            'ai_grok_response': self._calculate_average(self.phase1_metrics['ai_response_times']['grok']),
+            'ai_gemini_response': self._calculate_average(self.phase1_metrics['ai_response_times']['gemini']),
+            'ai_qwen_response': self._calculate_average(self.phase1_metrics['ai_response_times']['qwen']),
+            'memory_search_latency': self._calculate_average(self.phase1_metrics['memory_search_times']),
+            'cache_hit_rate': self._calculate_average(self.phase1_metrics['cache_hit_rates'])
+        }
+
+        report['current_metrics'] = current_metrics
+
+        # Check benchmark achievement
+        target_achievement = {}
+        for metric, target in self.phase1_targets.items():
+            current = current_metrics.get(metric, 0)
+            if metric in ['memory_normal', 'memory_peak', 'memory_search_latency']:
+                # Lower is better for these metrics
+                achieved = current <= target if current > 0 else False
+            elif metric == 'memory_utilization':
+                # Higher is better for utilization
+                achieved = current >= target if current > 0 else False
+            else:
+                # Lower is better for most metrics (response times, CPU, etc.)
+                achieved = current <= target if current > 0 else False
+            target_achievement[metric] = {
+                'target': target,
+                'current': current,
+                'achieved': achieved,
+                'variance_percent': ((current - target) / target * 100) if target > 0 else 0
+            }
+
+        report['target_achievement'] = target_achievement
+
+        # Generate optimization recommendations
+        recommendations = []
+        for metric, achievement in target_achievement.items():
+            if not achievement['achieved']:
+                variance = achievement['variance_percent']
+                if variance > 50:
+                    recommendations.append(f"CRITICAL: {metric.replace('_', ' ').title()} is {variance:.1f}% above target")
+                elif variance > 20:
+                    recommendations.append(f"HIGH: {metric.replace('_', ' ').title()} needs {variance:.1f}% improvement")
+                else:
+                    recommendations.append(f"MEDIUM: {metric.replace('_', ' ').title()} requires optimization")
+
+        # Add specific recommendations based on failing metrics
+        if not target_achievement.get('response_time_p50_simple', {}).get('achieved', False):
+            recommendations.append("Optimize simple task response times - consider caching and async processing")
+        if not target_achievement.get('response_time_p95_complex', {}).get('achieved', False):
+            recommendations.append("Optimize complex task response times - review algorithm complexity")
+        if not target_achievement.get('ai_grok_response', {}).get('achieved', False):
+            recommendations.append("Optimize Groq API integration - reduce network latency")
+        if not target_achievement.get('memory_search_latency', {}).get('achieved', False):
+            recommendations.append("Optimize FAISS indexing and search algorithms")
+        if not target_achievement.get('cache_hit_rate', {}).get('achieved', False):
+            recommendations.append("Improve cache hit rate through better cache strategies")
+
+        report['optimization_recommendations'] = recommendations
+        report['overall_compliance'] = sum(1 for a in target_achievement.values() if a['achieved']) / len(target_achievement) * 100
+
+        return report
+
+    def _calculate_p50(self, values: deque) -> float:
+        """Calculate P50 (median) from values"""
+        if not values:
+            return 0.0
+        sorted_values = sorted(values)
+        return sorted_values[len(sorted_values) // 2]
+
+    def _calculate_p95(self, values: deque) -> float:
+        """Calculate P95 from values"""
+        if not values:
+            return 0.0
+        sorted_values = sorted(values)
+        index = int(len(sorted_values) * 0.95)
+        return sorted_values[min(index, len(sorted_values) - 1)]
+
+    def _calculate_average(self, values: deque) -> float:
+        """Calculate average from values"""
+        if not values:
+            return 0.0
+        return sum(values) / len(values)
 
     def get_performance_report(self, time_window_minutes: int = 60) -> PerformanceReport:
         """Generate comprehensive performance report"""
@@ -347,15 +514,18 @@ class PerformanceMonitor:
                 time.sleep(self.monitoring_interval)
 
     def _collect_system_metrics(self):
-        """Collect system resource metrics"""
+        """Collect system resource metrics with Phase 1 tracking"""
         try:
             # CPU usage
             cpu_percent = psutil.cpu_percent(interval=1)
             self.record_sample(PerformanceMetric.CPU_USAGE, cpu_percent, "system")
+            self.phase1_metrics['cpu_usage_percent'].append(cpu_percent)
 
-            # Memory usage
+            # Memory usage (track in MB for Phase 1)
             memory = psutil.virtual_memory()
+            memory_mb = memory.used / 1024 / 1024
             self.record_sample(PerformanceMetric.MEMORY_USAGE, memory.percent, "system")
+            self.phase1_metrics['memory_usage_mb'].append(memory_mb)
 
             # Disk I/O (simplified)
             disk_io = psutil.disk_io_counters()
@@ -363,6 +533,15 @@ class PerformanceMonitor:
                 read_bytes_per_sec = disk_io.read_bytes / self.monitoring_interval
                 write_bytes_per_sec = disk_io.write_bytes / self.monitoring_interval
                 self.record_sample(PerformanceMetric.DISK_IO, read_bytes_per_sec + write_bytes_per_sec, "system")
+
+            # Calculate and record throughput (requests per minute)
+            current_time = datetime.now()
+            recent_responses = [
+                s for s in self.samples[PerformanceMetric.RESPONSE_TIME]
+                if (current_time - s.timestamp).total_seconds() < 60
+            ]
+            throughput = len(recent_responses)
+            self.phase1_metrics['throughput_minute'].append(throughput)
 
         except Exception as e:
             self.logger.error(f"Error collecting system metrics: {e}")

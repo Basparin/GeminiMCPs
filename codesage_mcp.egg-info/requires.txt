@@ -9,7 +9,18 @@ faiss-cpu
 python-multipart
 radon
 stdlib-list
+click
+rich
+pyyaml
+
+[ces]
+codesage-mcp
 
 [dev]
 pytest
+pytest-asyncio
+pytest-cov
 ruff
+black
+mypy
+pre-commit

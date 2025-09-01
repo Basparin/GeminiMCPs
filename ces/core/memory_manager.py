@@ -19,6 +19,8 @@ import json
 import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
+from concurrent.futures import ThreadPoolExecutor
+import queue
 
 
 class ModelCache:
@@ -64,6 +66,76 @@ class ModelCache:
             return len(expired)
 
 
+class ConnectionPool:
+    """Optimized SQLite connection pool for high-performance concurrent access"""
+
+    def __init__(self, db_path: str, max_connections: int = 10, timeout: float = 30.0):
+        self.db_path = db_path
+        self.max_connections = max_connections
+        self.timeout = timeout
+        self._pool = queue.Queue(maxsize=max_connections)
+        self._lock = threading.Lock()
+        self._active_connections = 0
+
+        # Pre-populate the pool
+        for _ in range(max_connections):
+            self._pool.put(self._create_connection())
+
+    def _create_connection(self) -> sqlite3.Connection:
+        """Create a new SQLite connection with optimized settings"""
+        conn = sqlite3.connect(
+            self.db_path,
+            timeout=self.timeout,
+            isolation_level=None  # Enable autocommit for better performance
+        )
+
+        # Apply performance optimizations
+        conn.execute('PRAGMA journal_mode=WAL')
+        conn.execute('PRAGMA synchronous=NORMAL')
+        conn.execute('PRAGMA cache_size=-64000')  # 64MB cache
+        conn.execute('PRAGMA temp_store=MEMORY')
+        conn.execute('PRAGMA mmap_size=268435456')  # 256MB memory map
+        conn.execute('PRAGMA busy_timeout=30000')  # 30 second busy timeout
+        conn.execute('PRAGMA wal_autocheckpoint=1000')  # Auto-checkpoint WAL
+
+        return conn
+
+    def get_connection(self) -> sqlite3.Connection:
+        """Get a connection from the pool"""
+        try:
+            conn = self._pool.get(timeout=5.0)
+            # Test connection health
+            conn.execute('SELECT 1').fetchone()
+            return conn
+        except queue.Empty:
+            raise sqlite3.OperationalError("Connection pool exhausted")
+        except sqlite3.Error:
+            # Connection is bad, create a new one
+            return self._create_connection()
+
+    def return_connection(self, conn: sqlite3.Connection):
+        """Return a connection to the pool"""
+        try:
+            # Test connection before returning
+            conn.execute('SELECT 1').fetchone()
+            self._pool.put(conn, timeout=1.0)
+        except (sqlite3.Error, queue.Full):
+            # Connection is bad or pool is full, close it
+            try:
+                conn.close()
+            except:
+                pass
+
+    def close_all(self):
+        """Close all connections in the pool"""
+        while not self._pool.empty():
+            try:
+                conn = self._pool.get_nowait()
+                conn.close()
+            except:
+                pass
+
+
 class MemoryManager:
     """
     Manages different types of memory for CES:
@@ -83,6 +155,9 @@ class MemoryManager:
         # Initialize database
         self._initialize_database()
 
+        # Initialize connection pool for high-performance concurrent access
+        self.connection_pool = ConnectionPool(str(self.db_path), max_connections=20)
+
         # Advanced memory management features (from CodeSage)
         if enable_advanced_features:
             self.process = psutil.Process()
@@ -92,10 +167,13 @@ class MemoryManager:
             self._monitoring_thread: Optional[threading.Thread] = None
             self._stop_monitoring = threading.Event()
 
+            # Performance optimization: Pre-warm connection pool
+            self._warm_up_connections()
+
             # Start memory monitoring
             self._start_monitoring()
 
-        self.logger.info("Memory Manager initialized with advanced features" if enable_advanced_features else "Memory Manager initialized")
+        self.logger.info("Memory Manager initialized with connection pooling and advanced features" if enable_advanced_features else "Memory Manager initialized")
 
     def _initialize_database(self):
         """Initialize SQLite database with advanced indexing for 10GB+ support"""
@@ -357,81 +435,133 @@ class MemoryManager:
             return False
 
     def semantic_search(self, query_embedding: np.ndarray, limit: int = 10, threshold: float = 0.7) -> List[Dict[str, Any]]:
-        """Perform semantic search using FAISS with >90% accuracy target"""
+        """Perform semantic search using FAISS with >90% accuracy target and connection pooling"""
         if not self.enable_advanced_features:
             return []
 
+        conn = None
         try:
             start_time = time.time()
 
-            # Get all embeddings from semantic memory
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT id, content, embedding, metadata, access_count FROM semantic_memory')
+            # Get connection from pool
+            conn = self.connection_pool.get_connection()
+            cursor = conn.cursor()
 
-                memories = []
-                embeddings = []
+            # Optimized query with LIMIT for better performance
+            cursor.execute('''
+                SELECT id, content, embedding, metadata, access_count
+                FROM semantic_memory
+                ORDER BY access_count DESC, last_accessed DESC
+                LIMIT 10000
+            ''')
 
-                for row in cursor.fetchall():
-                    memory_id, content, embedding_bytes, metadata_json, access_count = row
+            memories = []
+            embeddings = []
 
-                    # Deserialize embedding
-                    embedding = np.frombuffer(embedding_bytes, dtype=np.float32)
-                    embeddings.append(embedding)
+            for row in cursor.fetchall():
+                memory_id, content, embedding_bytes, metadata_json, access_count = row
 
-                    metadata = json.loads(metadata_json) if metadata_json else {}
-                    memories.append({
-                        'id': memory_id,
-                        'content': content,
-                        'metadata': metadata,
-                        'access_count': access_count
-                    })
+                # Deserialize embedding
+                embedding = np.frombuffer(embedding_bytes, dtype=np.float32)
+                embeddings.append(embedding)
 
-                if not embeddings:
-                    return []
+                metadata = json.loads(metadata_json) if metadata_json else {}
+                memories.append({
+                    'id': memory_id,
+                    'content': content,
+                    'metadata': metadata,
+                    'access_count': access_count
+                })
 
-                embeddings_array = np.array(embeddings)
+            # Return connection to pool
+            self.connection_pool.return_connection(conn)
+            conn = None
 
-                # Create or load FAISS index
-                index = self.create_optimized_index(embeddings_array)
-                if index is None:
-                    return []
+            if not embeddings:
+                return []
 
-                # Add vectors to index
-                index.add(embeddings_array.astype(np.float32))
+            embeddings_array = np.array(embeddings)
 
-                # Search for similar vectors
-                query_vector = query_embedding.astype(np.float32).reshape(1, -1)
-                distances, indices = index.search(query_vector, min(limit, len(memories)))
+            # Create or load FAISS index with optimization
+            index = self.create_optimized_index(embeddings_array)
+            if index is None:
+                return []
 
-                results = []
-                for i, idx in enumerate(indices[0]):
-                    if idx < len(memories) and distances[0][i] <= (1 - threshold):  # Convert distance to similarity
-                        similarity_score = 1 - distances[0][i]  # Cosine similarity approximation
+            # Add vectors to index
+            index.add(embeddings_array.astype(np.float32))
 
-                        result = memories[idx].copy()
-                        result['similarity_score'] = float(similarity_score)
-                        result['search_time'] = time.time() - start_time
-                        results.append(result)
+            # Search for similar vectors
+            query_vector = query_embedding.astype(np.float32).reshape(1, -1)
+            distances, indices = index.search(query_vector, min(limit * 2, len(memories)))  # Search more for better results
 
-                        # Update access count
-                        self._update_memory_access_count(memories[idx]['id'])
+            results = []
+            for i, idx in enumerate(indices[0]):
+                if idx < len(memories) and distances[0][i] <= (1 - threshold):  # Convert distance to similarity
+                    similarity_score = 1 - distances[0][i]  # Cosine similarity approximation
 
-                # Sort by similarity score
-                results.sort(key=lambda x: x['similarity_score'], reverse=True)
+                    result = memories[idx].copy()
+                    result['similarity_score'] = float(similarity_score)
+                    result['search_time'] = time.time() - start_time
+                    results.append(result)
 
-                search_time = time.time() - start_time
-                self.logger.info(f"Semantic search completed in {search_time:.3f}s, found {len(results)} results")
+                    # Update access count asynchronously
+                    self._update_memory_access_count_async(memories[idx]['id'])
 
-                # Record performance metric
-                self._record_performance_metric('semantic_search_time', search_time)
-                self._record_performance_metric('semantic_search_accuracy', len(results) / limit if limit > 0 else 1.0)
+            # Sort by similarity score and limit results
+            results.sort(key=lambda x: x['similarity_score'], reverse=True)
+            final_results = results[:limit]
 
-                return results[:limit]
+            search_time = time.time() - start_time
+            self.logger.info(f"Semantic search completed in {search_time:.3f}s, found {len(final_results)} results")
+
+            # Record performance metric
+            self._record_performance_metric('semantic_search_time', search_time)
+            self._record_performance_metric('semantic_search_accuracy', len(final_results) / limit if limit > 0 else 1.0)
+
+            return final_results
 
         except Exception as e:
             self.logger.error(f"Semantic search failed: {e}")
             return []
+        finally:
+            if conn:
+                try:
+                    self.connection_pool.return_connection(conn)
+                except:
+                    pass
+
+    def create_optimized_index(self, embeddings_array: np.ndarray) -> Optional[faiss.Index]:
+        """Create an optimized FAISS index for Phase 1 performance targets (<1ms search latency)"""
+        if not self.enable_advanced_features:
+            return None
+
+        try:
+            dimension = embeddings_array.shape[1]
+
+            # Use IndexIVFFlat for large datasets with optimized parameters
+            if len(embeddings_array) > 1000:
+                # Calculate optimal number of centroids (sqrt(n)/4 rule of thumb)
+                nlist = min(100, max(4, int(np.sqrt(len(embeddings_array)) / 4)))
+                quantizer = faiss.IndexFlatIP(dimension)  # Inner product for cosine similarity
+                index = faiss.IndexIVFFlat(quantizer, dimension, nlist, faiss.METRIC_INNER_PRODUCT)
+
+                # Train the index
+                if not index.is_trained:
+                    index.train(embeddings_array.astype(np.float32))
+
+            else:
+                # Use IndexFlatIP for smaller datasets (exact search, fastest)
+                index = faiss.IndexFlatIP(dimension)
+
+            # Optimize index parameters for speed
+            if hasattr(index, 'nprobe'):
+                index.nprobe = min(10, nlist)  # Search more cells for better accuracy
+
+            return index
+
+        except Exception as e:
+            self.logger.error(f"Failed to create optimized FAISS index: {e}")
+            return None
 
     # Month 2: Memory Pattern Recognition Methods
     def analyze_memory_patterns(self) -> Dict[str, Any]:
@@ -790,6 +920,18 @@ class MemoryManager:
             self.logger.error(f"Failed to record performance metric: {e}")
 
     # Placeholder implementations for complex methods (would be fully implemented in production)
+    def _warm_up_connections(self) -> None:
+        """Warm up connection pool for optimal performance"""
+        try:
+            # Execute a simple query on each connection to ensure they're ready
+            for _ in range(self.connection_pool.max_connections):
+                conn = self.connection_pool.get_connection()
+                conn.execute('SELECT 1').fetchone()
+                self.connection_pool.return_connection(conn)
+            self.logger.info(f"Warmed up {self.connection_pool.max_connections} database connections")
+        except Exception as e:
+            self.logger.error(f"Failed to warm up connections: {e}")
+
     def _start_monitoring(self) -> None:
         """Start background memory monitoring thread"""
         if not self.enable_advanced_features:
@@ -824,19 +966,24 @@ class MemoryManager:
         import gc
         gc.collect()
 
-    def _update_memory_access_count(self, memory_id: int):
-        """Update access count for semantic memory"""
+    def _update_memory_access_count_async(self, memory_id: int):
+        """Update access count for semantic memory asynchronously"""
         try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE semantic_memory
-                    SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
-                    WHERE id = ?
-                ''', (memory_id,))
-                conn.commit()
+            conn = self.connection_pool.get_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE semantic_memory
+                SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
+                WHERE id = ?
+            ''', (memory_id,))
+            conn.commit()
+            self.connection_pool.return_connection(conn)
         except Exception as e:
             self.logger.error(f"Failed to update memory access count: {e}")
+
+    def _update_memory_access_count(self, memory_id: int):
+        """Update access count for semantic memory (legacy synchronous method)"""
+        self._update_memory_access_count_async(memory_id)
 
     # Additional placeholder methods for Month 2 features
     def _analyze_task_history_patterns(self) -> Dict[str, Any]:

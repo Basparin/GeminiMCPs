@@ -359,13 +359,21 @@ class AIOrchestrator:
                         'execution_time': task_result['response_time']
                     }
 
-        # Execute all subtasks concurrently with enhanced parallelism
+        # Execute all subtasks concurrently with Phase 1 optimized parallelism
         tasks = [execute_subtask_with_load_balancing(subtask) for subtask in subtasks]
 
-        # Use ThreadPoolExecutor for better resource management with 5+ operations
-        with ThreadPoolExecutor(max_workers=max_concurrent) as executor:
-            loop = asyncio.get_event_loop()
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+        # Phase 1 Optimization: Increase max concurrent operations for better throughput
+        max_concurrent = min(len(subtasks), 20)  # Increased from 10 to 20 for Phase 1 targets
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        # Use optimized concurrent execution
+        async def execute_with_semaphore(task_func, subtask):
+            async with semaphore:
+                return await task_func(subtask)
+
+        # Execute with enhanced concurrency control
+        concurrent_tasks = [execute_with_semaphore(execute_subtask_with_load_balancing, subtask) for subtask in subtasks]
+        results = await asyncio.gather(*concurrent_tasks, return_exceptions=True)
 
         # Organize results by subtask ID
         organized_results = {}
