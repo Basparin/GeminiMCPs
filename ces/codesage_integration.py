@@ -19,7 +19,7 @@ from dataclasses import dataclass
 class MCPRequest:
     """MCP protocol request structure"""
     jsonrpc: str = "2.0"
-    method: str
+    method: str = ""
     params: Optional[Dict[str, Any]] = None
     id: Optional[Union[str, int]] = None
 

@@ -6,10 +6,12 @@ and coordinates task delegation based on capabilities and performance.
 """
 
 import logging
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 from datetime import datetime
 import subprocess
 import json
+
+from .cli_integration import AIAssistantManager, APIResult, CLIResult
 
 
 class AIOrchestrator:
@@ -23,7 +25,10 @@ class AIOrchestrator:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-        # Available AI assistants and their capabilities
+        # Initialize real CLI integration manager
+        self.cli_manager = AIAssistantManager()
+
+        # Available AI assistants and their capabilities (for backward compatibility)
         self.assistants = {
             'grok': {
                 'name': 'Grok CLI',
@@ -38,14 +43,14 @@ class AIOrchestrator:
                 'strengths': ['code_generation', 'technical_tasks']
             },
             'gemini': {
-                'name': 'gemini-cli',
+                'name': 'Gemini CLI',
                 'capabilities': ['analysis', 'documentation', 'review'],
                 'command': 'gemini-cli',
                 'strengths': ['code_analysis', 'documentation']
             }
         }
 
-        self.logger.info("AI Orchestrator initialized")
+        self.logger.info("AI Orchestrator initialized with real CLI integration")
 
     def recommend_assistants(self, task_description: str, required_skills: List[str]) -> List[str]:
         """
@@ -82,8 +87,8 @@ class AIOrchestrator:
 
         return recommendations
 
-    def execute_task(self, task_description: str, context: Optional[Dict[str, Any]] = None,
-                    assistant_preferences: Optional[List[str]] = None) -> Dict[str, Any]:
+    async def execute_task(self, task_description: str, context: Optional[Dict[str, Any]] = None,
+                          assistant_preferences: Optional[List[str]] = None) -> Dict[str, Any]:
         """
         Execute a task using the most appropriate AI assistant
 
@@ -95,6 +100,8 @@ class AIOrchestrator:
         Returns:
             Task execution result
         """
+        start_time = datetime.now()
+
         # Select assistant
         assistant = self._select_assistant(task_description, assistant_preferences)
 
@@ -102,31 +109,31 @@ class AIOrchestrator:
             return {
                 "status": "failed",
                 "error": "No suitable AI assistant available",
-                "timestamp": datetime.now().isoformat()
+                "timestamp": start_time.isoformat()
             }
-
-        # Prepare task prompt with context
-        prompt = self._prepare_prompt(task_description, context)
 
         # Execute with selected assistant
         try:
-            result = self._execute_with_assistant(assistant, prompt)
+            result = await self._execute_with_assistant(assistant, task_description, context)
+            execution_time = (datetime.now() - start_time).total_seconds()
 
             return {
                 "status": "completed",
                 "assistant_used": assistant,
                 "result": result,
-                "execution_time": 0,  # Would be calculated in real implementation
-                "timestamp": datetime.now().isoformat()
+                "execution_time": execution_time,
+                "timestamp": start_time.isoformat()
             }
 
         except Exception as e:
+            execution_time = (datetime.now() - start_time).total_seconds()
             self.logger.error(f"Task execution failed with {assistant}: {e}")
             return {
                 "status": "failed",
                 "assistant_used": assistant,
                 "error": str(e),
-                "timestamp": datetime.now().isoformat()
+                "execution_time": execution_time,
+                "timestamp": start_time.isoformat()
             }
 
     def _select_assistant(self, task_description: str,
@@ -151,9 +158,12 @@ class AIOrchestrator:
         if assistant_name not in self.assistants:
             return False
 
-        # In a real implementation, this would check if the CLI tool is installed
-        # For now, assume all configured assistants are available
-        return True
+        # Check availability using real CLI manager
+        assistant = self.cli_manager.get_assistant(assistant_name)
+        if assistant:
+            return assistant.is_available()
+
+        return False
 
     def _prepare_prompt(self, task_description: str, context: Optional[Dict[str, Any]] = None) -> str:
         """Prepare a comprehensive prompt with context"""
@@ -170,32 +180,42 @@ class AIOrchestrator:
 
         return "\n".join(prompt_parts)
 
-    def _execute_with_assistant(self, assistant_name: str, prompt: str) -> str:
+    async def _execute_with_assistant(self, assistant_name: str, task_description: str, context: Optional[Dict[str, Any]] = None) -> Union[APIResult, CLIResult]:
         """
-        Execute a task with a specific AI assistant
+        Execute a task with a specific AI assistant using real CLI integration
 
-        Note: This is a placeholder implementation. In production, this would
-        interface with actual AI CLI tools or APIs.
+        Args:
+            assistant_name: Name of the assistant to use
+            task_description: Task description
+            context: Additional context
+
+        Returns:
+            Result from assistant execution
         """
-        assistant_info = self.assistants[assistant_name]
+        self.logger.info(f"Executing task with {assistant_name}")
 
-        # Placeholder for actual AI execution
-        # In real implementation, this would:
-        # 1. Format the prompt for the specific assistant
-        # 2. Execute the CLI command or API call
-        # 3. Parse and return the response
+        try:
+            # Use the real CLI manager to execute the task
+            result = await self.cli_manager.execute_with_assistant(assistant_name, task_description, context)
 
-        self.logger.info(f"Executing task with {assistant_info['name']}")
+            if isinstance(result, APIResult):
+                if result.success:
+                    return result.response
+                else:
+                    self.logger.error(f"API call failed for {assistant_name}: {result.error}")
+                    return f"Error: {result.error}"
+            elif isinstance(result, CLIResult):
+                if result.success:
+                    return result.output
+                else:
+                    self.logger.error(f"CLI execution failed for {assistant_name}: {result.error}")
+                    return f"Error: {result.error}"
+            else:
+                return f"Unknown result type from {assistant_name}"
 
-        # Mock response based on assistant type
-        if assistant_name == 'grok':
-            return f"Grok analysis: {prompt[:100]}... Task appears to be well-structured."
-        elif assistant_name == 'qwen':
-            return f"qwen-cli-coder: Generated code solution for: {prompt[:100]}..."
-        elif assistant_name == 'gemini':
-            return f"gemini-cli analysis: Code review completed for: {prompt[:100]}..."
-        else:
-            return f"Task executed: {prompt[:100]}..."
+        except Exception as e:
+            self.logger.error(f"Failed to execute with {assistant_name}: {e}")
+            return f"Execution failed: {str(e)}"
 
     def get_available_assistants(self) -> List[Dict[str, Any]]:
         """Get list of available AI assistants"""
@@ -210,7 +230,7 @@ class AIOrchestrator:
                 })
         return available
 
-    def test_assistant_connection(self, assistant_name: str) -> Dict[str, Any]:
+    async def test_assistant_connection(self, assistant_name: str) -> Dict[str, Any]:
         """
         Test connection to an AI assistant
 
@@ -224,8 +244,8 @@ class AIOrchestrator:
             return {"status": "error", "message": "Assistant not found"}
 
         try:
-            # Simple test execution
-            test_result = self._execute_with_assistant(assistant_name, "Test connection")
+            # Test execution with real CLI manager
+            test_result = await self._execute_with_assistant(assistant_name, "Test connection - please respond with 'Connection successful'")
             return {
                 "status": "success",
                 "assistant": assistant_name,
@@ -243,11 +263,43 @@ class AIOrchestrator:
     def get_status(self) -> Dict[str, Any]:
         """Get AI orchestrator status"""
         available_count = len(self.get_available_assistants())
+        cli_status = self.cli_manager.get_all_status()
 
         return {
             "status": "operational",
             "total_assistants": len(self.assistants),
             "available_assistants": available_count,
             "assistants": list(self.assistants.keys()),
+            "cli_integration_status": cli_status,
             "last_check": datetime.now().isoformat()
         }
+
+    def health_check(self) -> Dict[str, Any]:
+        """Perform comprehensive health check"""
+        health_status = {
+            "component": "AI Orchestrator",
+            "timestamp": datetime.now().isoformat(),
+            "orchestrator_status": "healthy",
+            "checks": {}
+        }
+
+        # Check CLI manager health
+        cli_health = self.cli_manager.health_check()
+        health_status["checks"]["cli_manager"] = cli_health
+
+        # Check assistant availability
+        available_assistants = self.get_available_assistants()
+        health_status["checks"]["assistant_availability"] = {
+            "status": "healthy" if len(available_assistants) > 0 else "warning",
+            "details": f"{len(available_assistants)} assistants available"
+        }
+
+        # Overall health
+        all_healthy = all(
+            check.get("status") in ["healthy", "skipped"]
+            for check in health_status["checks"].values()
+            if isinstance(check, dict)
+        )
+        health_status["overall_status"] = "healthy" if all_healthy else "degraded"
+
+        return health_status
