@@ -1,8 +1,7 @@
-"""
-CES Web Dashboard Module
+"""CES Web Interface Package.
 
-Provides web-based user interface for CES with real-time monitoring,
-collaborative features, and analytics dashboard.
+This package provides the web-based user interface for the Cognitive Enhancement System,
+including real-time dashboards, AI assistant interaction, and collaborative features.
 """
 
 __version__ = "0.4.0"

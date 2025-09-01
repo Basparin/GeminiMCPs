@@ -1,0 +1,308 @@
+version: '3.8'
+
+services:
+  # CES Web Application
+  ces-web:
+    image: ${DOCKER_REGISTRY:-localhost}/ces_web:latest
+    container_name: ces-web-prod
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+      - PYTHONPATH=/app
+    env_file:
+      - .env
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+      - ces_memory:/app/data
+    networks:
+      - ces-network
+    depends_on:
+      - ces-redis
+      - ces-postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # CES API Server (if separated from web)
+  ces-api:
+    image: ${DOCKER_REGISTRY:-localhost}/ces_api:latest
+    container_name: ces-api-prod
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+      - PYTHONPATH=/app
+    env_file:
+      - .env
+    expose:
+      - "8000"
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+      - ces_memory:/app/data
+    networks:
+      - ces-network
+    depends_on:
+      - ces-redis
+      - ces-postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+  # PostgreSQL Database (for production data persistence)
+  ces-postgres:
+    image: postgres:15-alpine
+    container_name: ces-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ces_prod
+      POSTGRES_USER: ces_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme123}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - ces_postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - ces-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ces_user -d ces_prod"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # Redis Cache
+  ces-redis:
+    image: redis:7-alpine
+    container_name: ces-redis-prod
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - ces_redis_data:/data
+    networks:
+      - ces-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # Nginx Reverse Proxy
+  ces-nginx:
+    image: nginx:alpine
+    container_name: ces-nginx-prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ces_nginx_logs:/var/log/nginx
+    networks:
+      - ces-network
+    depends_on:
+      - ces-web
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+  # Monitoring Stack
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ces-prometheus-prod
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ces_prometheus_data:/prometheus
+    networks:
+      - ces-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ces-grafana-prod
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: "grafana-piechart-panel,grafana-worldmap-panel"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ces_grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks:
+      - ces-network
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # Alert Manager
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: ces-alertmanager-prod
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ces_alertmanager_data:/alertmanager
+    networks:
+      - ces-network
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+  # Node Exporter for system metrics
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: ces-node-exporter-prod
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - ces-network
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 32M
+
+  # cAdvisor for container metrics
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: ces-cadvisor-prod
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - ces-network
+    privileged: true
+    devices:
+      - /dev/kmsg
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+volumes:
+  ces_memory:
+    driver: local
+  ces_postgres_data:
+    driver: local
+  ces_redis_data:
+    driver: local
+  ces_nginx_logs:
+    driver: local
+  ces_prometheus_data:
+    driver: local
+  ces_grafana_data:
+    driver: local
+  ces_alertmanager_data:
+    driver: local
+
+networks:
+  ces-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

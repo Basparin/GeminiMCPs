@@ -1,9 +1,7 @@
+"""CES Configuration Package.
+
+Provides configuration management for the Cognitive Enhancement System,
+including environment variables, settings, and runtime configuration.
 """
-CES Configuration Management
 
-Handles configuration loading, validation, and environment setup for CES components.
-"""
-
-from .ces_config import CESConfig
-
-__all__ = ["CESConfig"]
+__version__ = "0.4.0"

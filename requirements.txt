@@ -30,4 +30,10 @@ matplotlib
 click
 rich
 pyyaml
+
+# Web interface dependencies
+jinja2
 aiofiles
+websockets
+python-multipart
+uvicorn[standard]
