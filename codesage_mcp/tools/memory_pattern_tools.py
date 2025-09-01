@@ -114,7 +114,7 @@ def optimize_memory_for_load_tool(load_level: str) -> Dict[str, Any]:
         return optimization
 
     except Exception as e:
-        logger.error(f"Error optimizing memory for load: {e}")
+        logger.exception(f"Error optimizing memory for load: {e}")
         return {
             "error": f"Failed to optimize memory for load: {str(e)}",
             "load_level": load_level

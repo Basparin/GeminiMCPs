@@ -16,32 +16,110 @@ from typing import Dict, List, Any
 from dataclasses import dataclass
 import concurrent.futures
 
-from benchmark_performance import BenchmarkResult, PerformanceBenchmarker
+from tests.benchmark_performance import BenchmarkResult, PerformanceBenchmarker
+
+# Hardware-adaptive imports
+from tests.hardware_utils import (
+    get_hardware_profile,
+    get_adaptive_config,
+    check_safety_requirements,
+    log_system_info,
+    detect_cpu_cores,
+    detect_available_ram
+)
 
 
 @dataclass
 class ModularBenchmarkConfig:
-    """Configuration for modular benchmark tests."""
+    """Configuration for modular benchmark tests with hardware-adaptive scaling."""
     server_url: str = "http://localhost:8000/mcp"
     test_iterations: int = 5
     concurrent_users: int = 1
     timeout_seconds: int = 30
     enable_edge_cases: bool = True
 
+    # Hardware-adaptive configuration
+    hardware_profile: str = None  # Will be auto-detected
+    adaptive_config: Dict[str, Any] = None  # Will be auto-generated
+    cpu_cores: int = None
+    available_ram_gb: float = None
+
+    def __post_init__(self):
+        """Initialize hardware-adaptive configuration."""
+        if self.hardware_profile is None:
+            self.hardware_profile = get_hardware_profile()
+        if self.adaptive_config is None:
+            self.adaptive_config = get_adaptive_config(self.hardware_profile)
+        if self.cpu_cores is None:
+            self.cpu_cores = detect_cpu_cores()
+        if self.available_ram_gb is None:
+            self.available_ram_gb = detect_available_ram()
+
+        # Apply hardware-adaptive scaling to base configuration
+        self._apply_adaptive_scaling()
+
+    def _apply_adaptive_scaling(self):
+        """Apply hardware-adaptive scaling to configuration parameters."""
+        scaling_factors = {
+            'light': 0.3,   # Reduce resource usage on low-end hardware
+            'medium': 0.7,  # Moderate scaling for mid-range hardware
+            'full': 1.0     # Full scale on high-end hardware
+        }
+
+        scaling_factor = scaling_factors.get(self.hardware_profile, 1.0)
+
+        # Scale test iterations
+        self.test_iterations = max(3, int(self.test_iterations * scaling_factor))
+
+        # Scale concurrent users
+        self.concurrent_users = max(1, int(self.concurrent_users * scaling_factor))
+
+        # Scale timeout based on hardware profile
+        timeout_scaling = {
+            'light': 1.5,   # Longer timeouts on slower hardware
+            'medium': 1.2,  # Slightly longer timeouts
+            'full': 1.0     # Standard timeouts
+        }
+        self.timeout_seconds = int(self.timeout_seconds * timeout_scaling.get(self.hardware_profile, 1.0))
+
 
 class ModularMCPToolBenchmarker:
-    """Modular benchmarker for MCP tools with specialized test scenarios."""
+    """Modular benchmarker for MCP tools with hardware-adaptive test scenarios."""
 
     def __init__(self, config: ModularBenchmarkConfig = None):
         self.config = config or ModularBenchmarkConfig()
         self.base_benchmarker = PerformanceBenchmarker()
 
+        # Log hardware information
+        log_system_info()
+
+        # Check safety requirements
+        if not check_safety_requirements(self.config.hardware_profile):
+            print(f"WARNING: System does not meet minimum safety requirements for hardware profile '{self.config.hardware_profile}'")
+            print("Benchmarks may be resource-intensive or fail on this system.")
+
+        print(f"Hardware Profile: {self.config.hardware_profile} (CPU: {self.config.cpu_cores}, RAM: {self.config.available_ram_gb:.1f}GB)")
+        print(f"Adaptive Config: {self.config.adaptive_config}")
+        print(f"Scaled Test Iterations: {self.config.test_iterations}")
+        print(f"Scaled Concurrent Users: {self.config.concurrent_users}")
+        print(f"Scaled Timeout: {self.config.timeout_seconds}s")
+        print()
+
     def benchmark_code_reading_tools(self) -> List[BenchmarkResult]:
-        """Benchmark code reading and file access tools."""
+        """Benchmark code reading and file access tools with hardware-adaptive codebase sizes."""
         results = []
 
+        # Adaptive codebase size selection based on hardware profile
+        if self.config.hardware_profile == 'light':
+            codebase_size = "small"  # Use small codebase on low-end hardware
+        else:
+            codebase_size = "medium"  # Use medium codebase on mid-range and high-end hardware
+
+        print(f"Creating {codebase_size} test codebase for code reading tools "
+              f"(adapted for {self.config.hardware_profile} hardware)")
+
         # Create test codebase
-        codebase_dir = self.base_benchmarker.create_test_codebase("medium")
+        codebase_dir = self.base_benchmarker.create_test_codebase(codebase_size)
 
         try:
             tools_to_test = [
@@ -81,11 +159,20 @@ class ModularMCPToolBenchmarker:
         return results
 
     def benchmark_search_and_analysis_tools(self) -> List[BenchmarkResult]:
-        """Benchmark search and code analysis tools."""
+        """Benchmark search and code analysis tools with hardware-adaptive codebase sizes."""
         results = []
 
+        # Adaptive codebase size selection based on hardware profile
+        if self.config.hardware_profile == 'light':
+            codebase_size = "small"  # Use small codebase on low-end hardware
+        else:
+            codebase_size = "medium"  # Use medium codebase on mid-range and high-end hardware
+
+        print(f"Creating {codebase_size} test codebase for search and analysis tools "
+              f"(adapted for {self.config.hardware_profile} hardware)")
+
         # Create test codebase
-        codebase_dir = self.base_benchmarker.create_test_codebase("medium")
+        codebase_dir = self.base_benchmarker.create_test_codebase(codebase_size)
 
         try:
             tools_to_test = [
@@ -293,15 +380,28 @@ class ModularMCPToolBenchmarker:
         return results
 
     def _benchmark_burst_access(self) -> List[BenchmarkResult]:
-        """Benchmark burst access pattern (multiple requests in quick succession)."""
+        """Benchmark burst access pattern with hardware-adaptive request counts."""
         results = []
+
+        # Adaptive burst request count based on hardware profile
+        burst_scaling_factors = {
+            'light': 0.3,   # Reduce burst requests significantly on low-end hardware
+            'medium': 0.6,  # Moderate reduction for mid-range hardware
+            'full': 1.0     # Full burst requests on high-end hardware
+        }
+
+        scaling_factor = burst_scaling_factors.get(self.config.hardware_profile, 1.0)
+        adaptive_burst_requests = max(5, int(20 * scaling_factor))
+
+        print(f"Testing burst access with {adaptive_burst_requests} requests "
+              f"(scaled by {scaling_factor:.1f}x for {self.config.hardware_profile} hardware)")
 
         codebase_dir = self.base_benchmarker.create_test_codebase("small")
 
         try:
             # Send multiple requests in burst
             latencies = []
-            for i in range(20):  # 20 requests in burst
+            for i in range(adaptive_burst_requests):  # Adaptive burst requests
                 request_data = {
                     "jsonrpc": "2.0",
                     "method": "tools/call",
@@ -324,7 +424,7 @@ class ModularMCPToolBenchmarker:
                 results.extend(self._create_tool_results(
                     "access_pattern_burst",
                     latencies,
-                    "Burst file access (20 requests)"
+                    f"Burst file access ({adaptive_burst_requests} requests)"
                 ))
 
         finally:
@@ -416,13 +516,27 @@ class ModularMCPToolBenchmarker:
         return results
 
     def _benchmark_large_files(self) -> List[BenchmarkResult]:
-        """Benchmark handling of very large files."""
+        """Benchmark handling of very large files with hardware-adaptive file sizes."""
         results = []
+
+        # Adaptive file size based on hardware profile
+        file_size_scaling_factors = {
+            'light': 0.2,   # Reduce file size significantly on low-end hardware
+            'medium': 0.5,  # Moderate reduction for mid-range hardware
+            'full': 1.0     # Full file size on high-end hardware
+        }
+
+        scaling_factor = file_size_scaling_factors.get(self.config.hardware_profile, 1.0)
+        adaptive_iterations = max(2000, int(10000 * scaling_factor))
+        estimated_size_mb = (adaptive_iterations * 0.0001)  # Rough estimate
+
+        print(f"Testing large file handling with ~{estimated_size_mb:.1f}MB file "
+              f"(scaled by {scaling_factor:.1f}x for {self.config.hardware_profile} hardware)")
 
         # Create a large test file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-            # Create a file with ~1MB of content
-            for i in range(10000):
+            # Create a file with adaptive content size
+            for i in range(adaptive_iterations):
                 f.write(f"""
 def function_{i}():
     \"\"\"Function {i} documentation.\"\"\"
@@ -455,7 +569,7 @@ class Class_{i}:
                 results.extend(self._create_tool_results(
                     "edge_case_large_file",
                     latencies,
-                    "Large file reading (~1MB)"
+                    f"Large file reading (~{estimated_size_mb:.1f}MB)"
                 ))
 
         finally:
@@ -464,8 +578,21 @@ class Class_{i}:
         return results
 
     def _benchmark_concurrent_access(self) -> List[BenchmarkResult]:
-        """Benchmark concurrent access to the same resource."""
+        """Benchmark concurrent access to the same resource with hardware-adaptive worker counts."""
         results = []
+
+        # Adaptive concurrent worker count based on hardware profile
+        worker_scaling_factors = {
+            'light': 0.4,   # Reduce workers significantly on low-end hardware
+            'medium': 0.7,  # Moderate reduction for mid-range hardware
+            'full': 1.0     # Full worker count on high-end hardware
+        }
+
+        scaling_factor = worker_scaling_factors.get(self.config.hardware_profile, 1.0)
+        adaptive_workers = max(2, int(5 * scaling_factor))
+
+        print(f"Testing concurrent access with {adaptive_workers} workers "
+              f"(scaled by {scaling_factor:.1f}x for {self.config.hardware_profile} hardware)")
 
         codebase_dir = self.base_benchmarker.create_test_codebase("small")
 
@@ -485,7 +612,7 @@ class Class_{i}:
 
                     start_time = time.time()
                     response = requests.post(self.config.server_url, json=request_data,
-                                           timeout=self.config.timeout_seconds)
+                                            timeout=self.config.timeout_seconds)
                     latency = (time.time() - start_time) * 1000
 
                     if response.status_code == 200:
@@ -493,9 +620,9 @@ class Class_{i}:
 
                 return latencies
 
-            # Run concurrent workers
-            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-                futures = [executor.submit(concurrent_worker, i) for i in range(5)]
+            # Run concurrent workers with adaptive count
+            with concurrent.futures.ThreadPoolExecutor(max_workers=adaptive_workers) as executor:
+                futures = [executor.submit(concurrent_worker, i) for i in range(adaptive_workers)]
                 all_latencies = []
                 for future in concurrent.futures.as_completed(futures):
                     all_latencies.extend(future.result())
@@ -504,7 +631,7 @@ class Class_{i}:
                 results.extend(self._create_tool_results(
                     "edge_case_concurrent_access",
                     all_latencies,
-                    "Concurrent access to same file"
+                    f"Concurrent access to same file ({adaptive_workers} workers)"
                 ))
 
         finally:
@@ -547,16 +674,29 @@ class Class_{i}:
         return results
 
     def _benchmark_memory_pressure(self) -> List[BenchmarkResult]:
-        """Benchmark performance under memory pressure."""
+        """Benchmark performance under memory pressure with hardware-adaptive codebase counts."""
         results = []
+
+        # Adaptive codebase count based on hardware profile
+        codebase_scaling_factors = {
+            'light': 0.4,   # Reduce codebase count significantly on low-end hardware
+            'medium': 0.7,  # Moderate reduction for mid-range hardware
+            'full': 1.0     # Full codebase count on high-end hardware
+        }
+
+        scaling_factor = codebase_scaling_factors.get(self.config.hardware_profile, 1.0)
+        adaptive_codebases = max(2, int(5 * scaling_factor))
+
+        print(f"Testing memory pressure with {adaptive_codebases} codebases "
+              f"(scaled by {scaling_factor:.1f}x for {self.config.hardware_profile} hardware)")
 
         # Create multiple large codebases and test access
         latencies = []
         temp_dirs = []
 
         try:
-            # Create 5 medium codebases
-            for i in range(5):
+            # Create adaptive number of medium codebases
+            for i in range(adaptive_codebases):
                 temp_dir = self.base_benchmarker.create_test_codebase("medium")
                 temp_dirs.append(temp_dir)
 
@@ -591,7 +731,7 @@ class Class_{i}:
             results.extend(self._create_tool_results(
                 "edge_case_memory_pressure",
                 latencies,
-                "Memory pressure with multiple codebases"
+                f"Memory pressure with {adaptive_codebases} codebases"
             ))
 
         return results
@@ -626,8 +766,8 @@ class Class_{i}:
         return latencies
 
     def _create_tool_results(self, test_name: str, latencies: List[float],
-                           description: str) -> List[BenchmarkResult]:
-        """Create benchmark results from latency data."""
+                            description: str) -> List[BenchmarkResult]:
+        """Create benchmark results from latency data with hardware profile metadata."""
         if not latencies:
             return []
 
@@ -638,6 +778,15 @@ class Class_{i}:
         else:
             p95_latency = max_latency
 
+        # Add hardware profile metadata to all results
+        base_metadata = {
+            "description": description,
+            "iterations": len(latencies),
+            "hardware_profile": self.config.hardware_profile,
+            "cpu_cores": self.config.cpu_cores,
+            "available_ram_gb": self.config.available_ram_gb
+        }
+
         return [
             BenchmarkResult(
                 test_name=test_name,
@@ -646,7 +795,7 @@ class Class_{i}:
                 unit="milliseconds",
                 target=2000.0,  # 2 seconds
                 achieved=avg_latency <= 2000.0,
-                metadata={"description": description, "iterations": len(latencies)}
+                metadata=base_metadata
             ),
             BenchmarkResult(
                 test_name=test_name,
@@ -655,7 +804,7 @@ class Class_{i}:
                 unit="milliseconds",
                 target=5000.0,  # 5 seconds
                 achieved=max_latency <= 5000.0,
-                metadata={"description": description, "iterations": len(latencies)}
+                metadata=base_metadata
             ),
             BenchmarkResult(
                 test_name=test_name,
@@ -664,15 +813,20 @@ class Class_{i}:
                 unit="milliseconds",
                 target=3000.0,  # 3 seconds
                 achieved=p95_latency <= 3000.0,
-                metadata={"description": description, "iterations": len(latencies)}
+                metadata=base_metadata
             )
         ]
 
     def run_modular_benchmark_suite(self) -> List[BenchmarkResult]:
-        """Run the complete modular benchmark suite."""
+        """Run the complete modular benchmark suite with hardware-adaptive configuration."""
         print("Starting modular MCP tools benchmark suite...")
         print(f"Server URL: {self.config.server_url}")
+        print(f"Hardware Profile: {self.config.hardware_profile}")
+        print(f"CPU Cores: {self.config.cpu_cores}")
+        print(f"Available RAM: {self.config.available_ram_gb:.1f}GB")
         print(f"Test iterations: {self.config.test_iterations}")
+        print(f"Concurrent users: {self.config.concurrent_users}")
+        print(f"Timeout: {self.config.timeout_seconds}s")
         print()
 
         all_results = []
@@ -700,7 +854,7 @@ class Class_{i}:
 
 def run_modular_benchmarks(server_url: str = "http://localhost:8000/mcp",
                           test_iterations: int = 5) -> List[BenchmarkResult]:
-    """Run the modular benchmark suite with specified configuration."""
+    """Run the modular benchmark suite with hardware-adaptive configuration."""
     config = ModularBenchmarkConfig(
         server_url=server_url,
         test_iterations=test_iterations
@@ -723,10 +877,14 @@ if __name__ == "__main__":
 
     print("CodeSage MCP Modular Tools Benchmark Suite")
     print("=" * 50)
+    print(f"Server URL: {server_url}")
+    print(f"Base test iterations: {test_iterations}")
+    print("(Hardware-adaptive scaling will be applied automatically)")
+    print()
 
     results = run_modular_benchmarks(server_url, test_iterations)
 
-    # Print summary
+    # Print summary with hardware information
     passed = sum(1 for r in results if r.achieved)
     total = len(results)
 
@@ -735,6 +893,15 @@ if __name__ == "__main__":
     print(f"Passed: {passed}")
     print(f"Failed: {total - passed}")
     print(f"Success rate: {(passed/total)*100:.1f}%")
+
+    # Get hardware info from first result if available
+    if results:
+        hw_profile = results[0].metadata.get('hardware_profile', 'unknown')
+        cpu_cores = results[0].metadata.get('cpu_cores', 'unknown')
+        ram_gb = results[0].metadata.get('available_ram_gb', 'unknown')
+        print(f"Hardware Profile: {hw_profile}")
+        print(f"CPU Cores: {cpu_cores}")
+        print(f"Available RAM: {ram_gb}GB")
 
     # Print detailed results
     print("\nDETAILED RESULTS:")

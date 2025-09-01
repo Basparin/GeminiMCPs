@@ -641,7 +641,7 @@ class IndexingManager:
             # Validate that all embeddings are numpy arrays
             for i, emb in enumerate(all_new_embeddings):
                 if not isinstance(emb, np.ndarray):
-                    raise TypeError(f"Embedding at index {i} is not a numpy array, got {type(emb)}")
+                    raise EmbeddingError(f"Embedding at index {i} is not a numpy array, got {type(emb)}", index=i, embedding_type=str(type(emb)))
                 if emb.dtype != np.float32:
                     all_new_embeddings[i] = emb.astype(np.float32)
 
@@ -1405,7 +1405,7 @@ class IndexingManager:
             # Validate that all embeddings are numpy arrays
             for i, emb in enumerate(new_embeddings):
                 if not isinstance(emb, np.ndarray):
-                    raise TypeError(f"Embedding at index {i} is not a numpy array, got {type(emb)}")
+                    raise EmbeddingError(f"Embedding at index {i} is not a numpy array, got {type(emb)}", index=i, embedding_type=str(type(emb)))
                 if emb.dtype != np.float32:
                     new_embeddings[i] = emb.astype(np.float32)
 
@@ -1608,7 +1608,7 @@ class IndexingManager:
                     logger.debug(f"Updated code graph with {len(code_nodes)} nodes for {file_path}")
 
                 except Exception as e:
-                    logger.warning(f"Failed to update code graph for {file_path}: {e}")
+                    logger.exception(f"Failed to update code graph for {file_path}: {e}")
 
     def get_code_graph_statistics(self) -> Dict[str, Any]:
         """Get statistics about the code graph.

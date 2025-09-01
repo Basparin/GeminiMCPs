@@ -24,6 +24,9 @@ from benchmark_mcp_tools import (
 )
 
 
+@pytest.mark.intensive
+@pytest.mark.benchmark
+@pytest.mark.performance
 class TestBenchmarkResult:
     """Test cases for BenchmarkResult dataclass."""
 
@@ -61,6 +64,9 @@ class TestBenchmarkResult:
         assert result.metadata == {}
 
 
+@pytest.mark.intensive
+@pytest.mark.benchmark
+@pytest.mark.performance
 class TestPerformanceBenchmarker:
     """Test cases for PerformanceBenchmarker class."""
 
@@ -253,6 +259,9 @@ class TestPerformanceBenchmarker:
         assert summary["failed_tests"] == 1
 
 
+@pytest.mark.intensive
+@pytest.mark.benchmark
+@pytest.mark.performance
 class TestModularBenchmarkConfig:
     """Test cases for ModularBenchmarkConfig."""
 
@@ -284,6 +293,9 @@ class TestModularBenchmarkConfig:
         assert "read_code_file" in config.request_mix_ratios
 
 
+@pytest.mark.intensive
+@pytest.mark.benchmark
+@pytest.mark.performance
 class TestModularMCPToolBenchmarker:
     """Test cases for ModularMCPToolBenchmarker class."""
 
@@ -377,6 +389,9 @@ class TestModularMCPToolBenchmarker:
             assert isinstance(results, list)
 
 
+@pytest.mark.intensive
+@pytest.mark.benchmark
+@pytest.mark.performance
 class TestBenchmarkIntegration:
     """Integration tests for benchmark framework."""
 

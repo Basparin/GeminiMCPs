@@ -151,7 +151,7 @@ def get_user_insights_tool(user_id: str) -> Dict[str, Any]:
         return insights
 
     except Exception as e:
-        logger.error(f"Error getting user insights: {e}")
+        logger.exception(f"Error getting user insights: {e}")
         return {
             "error": f"Failed to get user insights: {str(e)}",
             "user_id": user_id

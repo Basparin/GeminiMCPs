@@ -121,7 +121,7 @@ class UserFeedbackCollector:
                 try:
                     callback(feedback)
                 except Exception as e:
-                    logger.error(f"Error in feedback callback: {e}")
+                    logger.exception(f"Error in feedback callback: {e}")
 
             # Save to storage
             self._save_feedback()

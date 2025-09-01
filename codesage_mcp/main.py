@@ -1772,7 +1772,7 @@ async def metrics():
                 prometheus_output.append(f"codesage_mcp_{provider}_rate_limited {1 if rate_stats['is_rate_limited'] else 0}")
 
         except Exception as e:
-            logger.warning(f"Failed to collect connection pool metrics: {e}")
+            logger.exception(f"Failed to collect connection pool metrics: {e}")
 
         # Return response with correct content type
         from fastapi.responses import PlainTextResponse

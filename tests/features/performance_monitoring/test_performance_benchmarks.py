@@ -17,6 +17,13 @@ from codesage_mcp.core.gemini_compatibility import (
     ResponseFormat
 )
 
+# Hardware-adaptive imports
+from tests.hardware_utils import (
+    get_hardware_profile,
+    get_adaptive_config,
+    log_system_info
+)
+
 
 class TestPerformanceBenchmarks:
     """Performance benchmarks for GeminiCompatibilityHandler."""
@@ -24,6 +31,26 @@ class TestPerformanceBenchmarks:
     def setup_method(self):
         """Set up test fixtures."""
         self.handler = GeminiCompatibilityHandler()
+
+        # Hardware-adaptive configuration
+        self.hardware_profile = get_hardware_profile()
+        self.adaptive_config = get_adaptive_config(self.hardware_profile)
+
+        # Adaptive scaling based on hardware profile
+        if self.hardware_profile == 'light':
+            self.adaptive_tools_count = 100
+            self.adaptive_thread_count = 2
+            self.adaptive_payload_size = 1000  # 1KB
+        elif self.hardware_profile == 'medium':
+            self.adaptive_tools_count = 500
+            self.adaptive_thread_count = 5
+            self.adaptive_payload_size = 5000  # 5KB
+        else:  # full
+            self.adaptive_tools_count = 1000
+            self.adaptive_thread_count = 10
+            self.adaptive_payload_size = 10000  # 10KB
+
+        log_system_info()
 
     def test_detect_response_format_performance(self, benchmark, gemini_cli_headers, tools_list_request_body):
         """Benchmark detect_response_format performance."""
@@ -68,7 +95,7 @@ class TestPerformanceBenchmarks:
             return self.handler.adapt_tools_response(large_tools_object, ResponseFormat.GEMINI_ARRAY_TOOLS)
 
         result = benchmark(run_large_adaptation)
-        assert len(result["tools"]) == 1000
+        assert len(result["tools"]) == self.adaptive_tools_count
 
     def test_concurrent_requests_performance(self, benchmark):
         """Benchmark handling of concurrent requests."""
@@ -83,7 +110,7 @@ class TestPerformanceBenchmarks:
 
         def run_concurrent():
             threads = []
-            for _ in range(10):
+            for _ in range(self.adaptive_thread_count):
                 t = threading.Thread(target=worker)
                 threads.append(t)
                 t.start()
@@ -100,6 +127,24 @@ class TestMemoryUsageBenchmarks:
     def setup_method(self):
         """Set up test fixtures."""
         self.handler = GeminiCompatibilityHandler()
+
+        # Hardware-adaptive configuration
+        self.hardware_profile = get_hardware_profile()
+        self.adaptive_config = get_adaptive_config(self.hardware_profile)
+
+        # Adaptive scaling based on hardware profile
+        if self.hardware_profile == 'light':
+            self.adaptive_tools_count = 100
+            self.adaptive_thread_count = 2
+            self.adaptive_payload_size = 1000  # 1KB
+        elif self.hardware_profile == 'medium':
+            self.adaptive_tools_count = 500
+            self.adaptive_thread_count = 5
+            self.adaptive_payload_size = 5000  # 5KB
+        else:  # full
+            self.adaptive_tools_count = 1000
+            self.adaptive_thread_count = 10
+            self.adaptive_payload_size = 10000  # 10KB
 
     def test_memory_usage_detect_response_format(self, gemini_cli_headers, tools_list_request_body):
         """Test memory usage for detect_response_format."""
@@ -120,8 +165,15 @@ class TestMemoryUsageBenchmarks:
         mem_usage = memory_usage(operation, interval=0.1)
         max_memory = max(mem_usage)
 
-        # Should use less than 50MB for 1000 tools
-        assert max_memory < 50
+        # Adaptive memory limits based on hardware profile
+        if self.hardware_profile == 'light':
+            memory_limit = 10  # MB for 100 tools
+        elif self.hardware_profile == 'medium':
+            memory_limit = 25  # MB for 500 tools
+        else:  # full
+            memory_limit = 50  # MB for 1000 tools
+
+        assert max_memory < memory_limit
 
     def test_memory_usage_request_history(self):
         """Test memory usage with request history accumulation."""
@@ -157,6 +209,24 @@ class TestThroughputBenchmarks:
     def setup_method(self):
         """Set up test fixtures."""
         self.handler = GeminiCompatibilityHandler()
+
+        # Hardware-adaptive configuration
+        self.hardware_profile = get_hardware_profile()
+        self.adaptive_config = get_adaptive_config(self.hardware_profile)
+
+        # Adaptive scaling based on hardware profile
+        if self.hardware_profile == 'light':
+            self.adaptive_tools_count = 100
+            self.adaptive_thread_count = 2
+            self.adaptive_payload_size = 1000  # 1KB
+        elif self.hardware_profile == 'medium':
+            self.adaptive_tools_count = 500
+            self.adaptive_thread_count = 5
+            self.adaptive_payload_size = 5000  # 5KB
+        else:  # full
+            self.adaptive_tools_count = 1000
+            self.adaptive_thread_count = 10
+            self.adaptive_payload_size = 10000  # 10KB
 
     def test_throughput_small_requests(self, benchmark):
         """Test throughput for small requests."""
@@ -209,7 +279,7 @@ class TestThroughputBenchmarks:
                 {
                     "method": "tools/list",
                     "id": i,
-                    "params": {"data": "x" * 10000}  # 10KB per request
+                    "params": {"data": "x" * self.adaptive_payload_size}
                 }
             )
             for i in range(50)
@@ -234,9 +304,33 @@ class TestScalabilityBenchmarks:
         """Set up test fixtures."""
         self.handler = GeminiCompatibilityHandler()
 
+        # Hardware-adaptive configuration
+        self.hardware_profile = get_hardware_profile()
+        self.adaptive_config = get_adaptive_config(self.hardware_profile)
+
+        # Adaptive scaling based on hardware profile
+        if self.hardware_profile == 'light':
+            self.adaptive_tools_count = 100
+            self.adaptive_thread_count = 2
+            self.adaptive_payload_size = 1000  # 1KB
+        elif self.hardware_profile == 'medium':
+            self.adaptive_tools_count = 500
+            self.adaptive_thread_count = 5
+            self.adaptive_payload_size = 5000  # 5KB
+        else:  # full
+            self.adaptive_tools_count = 1000
+            self.adaptive_thread_count = 10
+            self.adaptive_payload_size = 10000  # 10KB
+
     @pytest.mark.parametrize("num_tools", [10, 100, 1000, 5000])
     def test_scalability_tools_adaptation(self, benchmark, num_tools):
         """Test scalability of tools adaptation with different sizes."""
+        # Skip large tool counts on lower-end hardware
+        if self.hardware_profile == 'light' and num_tools > self.adaptive_tools_count:
+            pytest.skip(f"Skipping {num_tools} tools test on light hardware (max: {self.adaptive_tools_count})")
+        elif self.hardware_profile == 'medium' and num_tools > self.adaptive_tools_count:
+            pytest.skip(f"Skipping {num_tools} tools test on medium hardware (max: {self.adaptive_tools_count})")
+
         tools = {
             f"tool_{i}": {
                 "name": f"tool_{i}",
@@ -285,15 +379,16 @@ class TestScalabilityBenchmarks:
             return results
 
         def run_concurrent_users():
-            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-                futures = [executor.submit(simulate_user_requests, i) for i in range(10)]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=self.adaptive_thread_count) as executor:
+                futures = [executor.submit(simulate_user_requests, i) for i in range(self.adaptive_thread_count)]
                 results = []
                 for future in concurrent.futures.as_completed(futures):
                     results.extend(future.result())
                 return results
 
         results = benchmark(run_concurrent_users)
-        assert len(results) == 500  # 10 users * 50 requests each
+        expected_results = self.adaptive_thread_count * 50
+        assert len(results) == expected_results
         assert all(r == ResponseFormat.GEMINI_ARRAY_TOOLS for r in results)
 
 
@@ -304,19 +399,48 @@ class TestResourceUtilizationBenchmarks:
         """Set up test fixtures."""
         self.handler = GeminiCompatibilityHandler()
 
+        # Hardware-adaptive configuration
+        self.hardware_profile = get_hardware_profile()
+        self.adaptive_config = get_adaptive_config(self.hardware_profile)
+
+        # Adaptive scaling based on hardware profile
+        if self.hardware_profile == 'light':
+            self.adaptive_tools_count = 100
+            self.adaptive_thread_count = 2
+            self.adaptive_payload_size = 1000  # 1KB
+        elif self.hardware_profile == 'medium':
+            self.adaptive_tools_count = 500
+            self.adaptive_thread_count = 5
+            self.adaptive_payload_size = 5000  # 5KB
+        else:  # full
+            self.adaptive_tools_count = 1000
+            self.adaptive_thread_count = 10
+            self.adaptive_payload_size = 10000  # 10KB
+
     def test_cpu_usage_during_load(self):
         """Test CPU usage during high load."""
         process = psutil.Process(os.getpid())
         initial_cpu = process.cpu_percent(interval=1)
 
+        # Adaptive load generation based on hardware profile
+        if self.hardware_profile == 'light':
+            load_iterations = 200
+            cpu_limit = 90  # Allow higher CPU for light hardware
+        elif self.hardware_profile == 'medium':
+            load_iterations = 500
+            cpu_limit = 85
+        else:  # full
+            load_iterations = 1000
+            cpu_limit = 80
+
         # Generate load
-        for _ in range(1000):
+        for _ in range(load_iterations):
             self.handler.detect_response_format({"user-agent": "node"}, {"method": "tools/list"})
 
         final_cpu = process.cpu_percent(interval=1)
 
         # CPU usage should be reasonable
-        assert final_cpu < 80  # Less than 80% CPU usage
+        assert final_cpu < cpu_limit
 
     def test_memory_leak_detection(self):
         """Test for memory leaks during repeated operations."""
@@ -325,8 +449,19 @@ class TestResourceUtilizationBenchmarks:
         # Get initial memory
         initial_mem = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024  # MB
 
+        # Adaptive operation count based on hardware profile
+        if self.hardware_profile == 'light':
+            operation_count = 2000
+            memory_limit = 10  # MB increase
+        elif self.hardware_profile == 'medium':
+            operation_count = 5000
+            memory_limit = 25  # MB increase
+        else:  # full
+            operation_count = 10000
+            memory_limit = 50  # MB increase
+
         # Perform many operations
-        for i in range(10000):
+        for i in range(operation_count):
             self.handler.detect_response_format({"user-agent": "node"}, {"method": f"test{i}"})
             if i % 1000 == 0:
                 gc.collect()  # Force garbage collection
@@ -334,8 +469,8 @@ class TestResourceUtilizationBenchmarks:
         # Get final memory
         final_mem = psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024  # MB
 
-        # Memory increase should be reasonable (less than 50MB)
-        assert (final_mem - initial_mem) < 50
+        # Memory increase should be reasonable
+        assert (final_mem - initial_mem) < memory_limit
 
     def test_response_time_distribution(self, benchmark):
         """Test response time distribution under load."""

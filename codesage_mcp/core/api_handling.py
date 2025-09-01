@@ -443,7 +443,7 @@ class MCPProtocol:
             return response
 
         except Exception as e:
-            self.logger.error("Failed to handle initialize request", error=str(e))
+            self.logger.exception("Failed to handle initialize request", error=str(e))
             raise
 
     def process_request(self, request: Dict[str, Any]) -> Dict[str, Any]:

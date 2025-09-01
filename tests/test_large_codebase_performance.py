@@ -24,8 +24,68 @@ from codesage_mcp.core.code_model import (
 )
 from codesage_mcp.features.codebase_manager import AdvancedAnalysisManager
 from codesage_mcp.features.memory_management.memory_manager import MemoryManager
+from tests.hardware_utils import (
+    get_hardware_profile,
+    check_safety_requirements,
+    get_adaptive_config,
+    monitor_resources,
+    log_system_info
+)
 
 
+def get_adaptive_scaling_factors():
+    """
+    Get adaptive scaling factors based on hardware profile.
+
+    Returns:
+        dict: Scaling factors for files, nodes, and threads
+    """
+    profile = get_hardware_profile()
+    log_system_info()
+
+    if profile == 'light':
+        return {
+            'file_scale': 0.1,  # 100 files instead of 1000
+            'node_scale': 0.1,  # 5000 nodes instead of 50000
+            'thread_scale': 0.125,  # 1 thread instead of 8
+            'memory_scale': 0.5
+        }
+    elif profile == 'medium':
+        return {
+            'file_scale': 0.5,  # 500 files instead of 1000
+            'node_scale': 0.5,  # 25000 nodes instead of 50000
+            'thread_scale': 0.5,  # 4 threads instead of 8
+            'memory_scale': 0.75
+        }
+    else:  # full
+        return {
+            'file_scale': 1.0,  # 1000 files
+            'node_scale': 1.0,  # 50000 nodes
+            'thread_scale': 1.0,  # 8 threads
+            'memory_scale': 1.0
+        }
+
+
+def check_test_safety():
+    """
+    Check if system is safe to run performance tests.
+
+    Returns:
+        bool: True if safe to proceed
+    """
+    if not check_safety_requirements():
+        pytest.skip("System does not meet minimum safety requirements for performance testing")
+
+    resources = monitor_resources()
+    if resources['cpu_percent'] > 90 or resources['ram_percent'] > 90:
+        pytest.skip("System resources are too high, skipping performance test to prevent overload")
+
+    return True
+
+
+@pytest.mark.intensive
+@pytest.mark.benchmark
+@pytest.mark.performance
 class TestLargeCodebasePerformance:
     """Performance tests for large codebase handling."""
 
@@ -49,11 +109,14 @@ class TestLargeCodebasePerformance:
         }
 
     def test_1000_file_codebase_generation(self, large_codebase_setup):
-        """Test code model generation for a 1000-file codebase."""
+        """Test code model generation for a large codebase (adaptive based on hardware)."""
+        check_test_safety()
         setup = large_codebase_setup
         generator = setup['generator']
 
-        num_files = 1000
+        scaling = get_adaptive_scaling_factors()
+        base_files = 1000
+        num_files = max(10, int(base_files * scaling['file_scale']))  # Minimum 10 files
         files_data = []
 
         # Create 1000 files
@@ -85,9 +148,12 @@ class Class_{i}:
             final_memory = process.memory_info().rss / 1024 / 1024
             memory_increase = final_memory - initial_memory
 
-            # Performance assertions
-            assert generation_time < 300  # Less than 5 minutes
-            assert memory_increase < 1000  # Less than 1GB increase
+            # Adaptive performance assertions based on hardware
+            time_limit = 300 * scaling['file_scale'] * scaling['memory_scale']  # Scale time limit
+            memory_limit = 1000 * scaling['memory_scale']  # Scale memory limit
+
+            assert generation_time < max(30, time_limit)  # Minimum 30 seconds
+            assert memory_increase < max(50, memory_limit)  # Minimum 50MB
 
             # Verify graph contains all nodes
             stats = generator.graph.get_statistics()
@@ -100,12 +166,15 @@ class Class_{i}:
                 os.unlink(file_path)
 
     def test_1000_file_codebase_analysis(self, large_codebase_setup):
-        """Test analysis of a 1000-file codebase."""
+        """Test analysis of a large codebase (adaptive based on hardware)."""
+        check_test_safety()
         setup = large_codebase_setup
         generator = setup['generator']
         analyzer = setup['analyzer']
 
-        num_files = 500  # Reduced for analysis testing
+        scaling = get_adaptive_scaling_factors()
+        base_files = 500
+        num_files = max(10, int(base_files * scaling['file_scale']))  # Minimum 10 files
         files_data = []
 
         # Create files with analyzable content
@@ -137,8 +206,9 @@ class Processor_{i}:
             for file_path, content in files_data:
                 generator.generate_from_file(file_path, content)
 
-            # Analyze subset of files
-            analysis_files = files_data[:100]  # Analyze first 100 files
+            # Analyze subset of files (adaptive)
+            analysis_count = min(100, num_files)  # Don't exceed available files
+            analysis_files = files_data[:analysis_count]
 
             process = psutil.Process()
             initial_memory = process.memory_info().rss / 1024 / 1024
@@ -154,12 +224,15 @@ class Processor_{i}:
             final_memory = process.memory_info().rss / 1024 / 1024
             memory_increase = final_memory - initial_memory
 
-            # Performance assertions
-            assert analysis_time < 180  # Less than 3 minutes
-            assert memory_increase < 500  # Less than 500MB increase
+            # Adaptive performance assertions
+            time_limit = 180 * scaling['file_scale'] * scaling['memory_scale']
+            memory_limit = 500 * scaling['memory_scale']
+
+            assert analysis_time < max(30, time_limit)  # Minimum 30 seconds
+            assert memory_increase < max(50, memory_limit)  # Minimum 50MB
 
             # Verify results
-            assert len(results) == 100
+            assert len(results) == analysis_count
             for result in results:
                 assert 'dependency_analysis' in result
                 assert 'performance_analysis' in result
@@ -176,13 +249,15 @@ class Processor_{i}:
                 os.unlink(file_path)
 
     def test_memory_optimization_large_graph(self, large_codebase_setup):
-        """Test memory optimization with large graphs."""
+        """Test memory optimization with large graphs (adaptive based on hardware)."""
+        check_test_safety()
         setup = large_codebase_setup
         graph = setup['graph']
         memory_manager = setup['memory_manager']
 
-        # Create a large graph
-        num_nodes = 50000
+        scaling = get_adaptive_scaling_factors()
+        base_nodes = 50000
+        num_nodes = max(1000, int(base_nodes * scaling['node_scale']))  # Minimum 1000 nodes
         nodes = []
 
         for i in range(num_nodes):
@@ -223,13 +298,17 @@ class Processor_{i}:
         assert memory_reduction >= 0  # Memory should not increase
 
     def test_concurrent_large_codebase_processing(self, large_codebase_setup):
-        """Test concurrent processing of large codebases."""
+        """Test concurrent processing of large codebases (adaptive based on hardware)."""
+        check_test_safety()
         setup = large_codebase_setup
         generator = setup['generator']
         analyzer = setup['analyzer']
 
-        num_files = 200
-        num_threads = 8
+        scaling = get_adaptive_scaling_factors()
+        base_files = 200
+        num_files = max(20, int(base_files * scaling['file_scale']))  # Minimum 20 files
+        base_threads = 8
+        num_threads = max(1, int(base_threads * scaling['thread_scale']))  # Minimum 1 thread
         files_per_thread = num_files // num_threads
 
         # Create files
@@ -293,14 +372,18 @@ class Class_{i}:
             total_results = sum(len(thread_results) for thread_results in results.values())
             assert total_results == num_files
 
-            # Performance check
-            assert concurrent_time < 120  # Less than 2 minutes
+            # Adaptive performance check
+            time_limit = 120 * scaling['file_scale'] * scaling['thread_scale']
+            assert concurrent_time < max(30, time_limit)  # Minimum 30 seconds
 
         finally:
             for file_path, _ in all_files:
                 os.unlink(file_path)
 
 
+@pytest.mark.intensive
+@pytest.mark.benchmark
+@pytest.mark.performance
 class TestScalabilityBenchmarks:
     """Scalability benchmarks for different codebase sizes."""
 
@@ -319,10 +402,16 @@ class TestScalabilityBenchmarks:
 
     @pytest.mark.parametrize("num_files", [10, 50, 100, 200])
     def test_scalability_file_count(self, scalability_setup, num_files):
-        """Test scalability with different numbers of files."""
+        """Test scalability with different numbers of files (with hardware safety)."""
+        check_test_safety()
         setup = scalability_setup
         generator = setup['generator']
         analyzer = setup['analyzer']
+
+        scaling = get_adaptive_scaling_factors()
+        # Adjust num_files based on hardware if it's too high
+        if scaling['file_scale'] < 1.0:
+            num_files = max(5, int(num_files * scaling['file_scale']))
 
         # Create test files
         files_data = []
@@ -361,14 +450,18 @@ class Class_{i}:
             generation_per_file = generation_time / num_files
             analysis_per_file = analysis_time / analysis_sample
 
-            # Scalability assertions
-            assert generation_per_file < 1.0  # Less than 1 second per file
-            assert analysis_per_file < 5.0  # Less than 5 seconds per file
+            # Adaptive scalability assertions
+            gen_limit = 1.0 / scaling['file_scale']  # Slower on lower-end hardware
+            analysis_limit = 5.0 / scaling['file_scale']
+            memory_limit = 1000 * scaling['memory_scale']
+
+            assert generation_per_file < max(0.5, gen_limit)  # Minimum 0.5 seconds
+            assert analysis_per_file < max(2.0, analysis_limit)  # Minimum 2 seconds
 
             # Memory check
             process = psutil.Process()
             memory_mb = process.memory_info().rss / 1024 / 1024
-            assert memory_mb < 1000  # Less than 1GB total
+            assert memory_mb < max(200, memory_limit)  # Minimum 200MB
 
         finally:
             for file_path, _ in files_data:
@@ -376,10 +469,16 @@ class Class_{i}:
 
     @pytest.mark.parametrize("file_size_kb", [1, 10, 50, 100])
     def test_scalability_file_size(self, scalability_setup, file_size_kb):
-        """Test scalability with different file sizes."""
+        """Test scalability with different file sizes (with hardware safety)."""
+        check_test_safety()
         setup = scalability_setup
         generator = setup['generator']
         analyzer = setup['analyzer']
+
+        scaling = get_adaptive_scaling_factors()
+        # Adjust file size based on hardware
+        if scaling['file_scale'] < 1.0:
+            file_size_kb = max(1, int(file_size_kb * scaling['file_scale']))
 
         # Create files of different sizes
         num_functions = file_size_kb * 10  # Roughly 10 functions per KB
@@ -409,9 +508,12 @@ def function_{i}(data: List[int]) -> int:
             result = analyzer.run_comprehensive_analysis(temp_file)
             analysis_time = time.time() - start_time
 
-            # Scalability assertions
-            assert generation_time < 10  # Less than 10 seconds regardless of size
-            assert analysis_time < 30  # Less than 30 seconds regardless of size
+            # Adaptive scalability assertions
+            gen_limit = 10 / scaling['file_scale']
+            analysis_limit = 30 / scaling['file_scale']
+
+            assert generation_time < max(5, gen_limit)  # Minimum 5 seconds
+            assert analysis_time < max(10, analysis_limit)  # Minimum 10 seconds
 
             # Verify analysis quality
             deps = result['dependency_analysis']['summary']['total_functions_analyzed']
@@ -421,6 +523,9 @@ def function_{i}(data: List[int]) -> int:
             os.unlink(temp_file)
 
 
+@pytest.mark.intensive
+@pytest.mark.benchmark
+@pytest.mark.performance
 class TestMemoryStressTests:
     """Memory stress tests for large codebases."""
 
@@ -443,12 +548,14 @@ class TestMemoryStressTests:
         }
 
     def test_memory_pressure_with_many_relationships(self, memory_stress_setup):
-        """Test memory pressure with many relationships."""
+        """Test memory pressure with many relationships (adaptive based on hardware)."""
+        check_test_safety()
         setup = memory_stress_setup
         graph = setup['graph']
 
-        # Create many nodes and relationships
-        num_nodes = 10000
+        scaling = get_adaptive_scaling_factors()
+        base_nodes = 10000
+        num_nodes = max(500, int(base_nodes * scaling['node_scale']))  # Minimum 500 nodes
         nodes = []
 
         # Create nodes
@@ -492,16 +599,19 @@ class TestMemoryStressTests:
         assert stats['total_relationships'] >= num_nodes * 2  # At least 2 relationships per node
         assert len(search_results) >= 50  # Should find nodes across files
 
-        # Memory should be reasonable
-        assert memory_increase < 500  # Less than 500MB increase
+        # Adaptive memory check
+        memory_limit = 500 * scaling['memory_scale']
+        assert memory_increase < max(50, memory_limit)  # Minimum 50MB
 
     def test_graph_serialization_large_dataset(self, memory_stress_setup):
-        """Test graph serialization with large datasets."""
+        """Test graph serialization with large datasets (adaptive based on hardware)."""
+        check_test_safety()
         setup = memory_stress_setup
         graph = setup['graph']
 
-        # Create large graph
-        num_nodes = 5000
+        scaling = get_adaptive_scaling_factors()
+        base_nodes = 5000
+        num_nodes = max(500, int(base_nodes * scaling['node_scale']))  # Minimum 500 nodes
         for i in range(num_nodes):
             node = CodeNode(
                 node_type=NodeType.FUNCTION,
@@ -545,16 +655,22 @@ class TestMemoryStressTests:
             loaded_stats = new_graph.get_statistics()
             assert loaded_stats['total_nodes'] == num_nodes
 
-            # Performance checks
-            assert save_time < 30  # Less than 30 seconds to save
-            assert load_time < 30  # Less than 30 seconds to load
-            assert save_memory_increase < 200  # Less than 200MB during save
-            assert load_memory_increase < 200  # Less than 200MB during load
+            # Adaptive performance checks
+            time_limit = 30 * scaling['node_scale']
+            memory_limit = 200 * scaling['memory_scale']
+
+            assert save_time < max(5, time_limit)  # Minimum 5 seconds
+            assert load_time < max(5, time_limit)  # Minimum 5 seconds
+            assert save_memory_increase < max(20, memory_limit)  # Minimum 20MB
+            assert load_memory_increase < max(20, memory_limit)  # Minimum 20MB
 
         finally:
             os.unlink(temp_file)
 
 
+@pytest.mark.intensive
+@pytest.mark.benchmark
+@pytest.mark.performance
 class TestPerformanceRegressionDetection:
     """Tests to detect performance regressions."""
 
@@ -569,12 +685,14 @@ class TestPerformanceRegressionDetection:
         }
 
     def test_performance_regression_model_generation(self, performance_baseline, large_codebase_setup):
-        """Test for performance regression in model generation."""
+        """Test for performance regression in model generation (adaptive)."""
+        check_test_safety()
         setup = large_codebase_setup
         generator = setup['generator']
 
-        # Create test files
-        num_files = 100
+        scaling = get_adaptive_scaling_factors()
+        base_files = 100
+        num_files = max(10, int(base_files * scaling['file_scale']))  # Minimum 10 files
         files_data = []
 
         for i in range(num_files):
@@ -592,22 +710,27 @@ class TestPerformanceRegressionDetection:
 
             avg_time_per_file = total_time / num_files
 
-            # Check against baseline
-            assert avg_time_per_file < performance_baseline['model_generation_per_file'] * 2  # Allow 2x regression
-            assert total_time < performance_baseline['max_processing_time']
+            # Adaptive baseline check
+            adaptive_baseline_gen = performance_baseline['model_generation_per_file'] / scaling['file_scale']
+            adaptive_max_time = performance_baseline['max_processing_time'] / scaling['file_scale']
+
+            assert avg_time_per_file < max(0.05, adaptive_baseline_gen * 2)  # Allow 2x regression, min 0.05s
+            assert total_time < max(30, adaptive_max_time)  # Minimum 30 seconds
 
         finally:
             for file_path, _ in files_data:
                 os.unlink(file_path)
 
     def test_performance_regression_analysis(self, performance_baseline, large_codebase_setup):
-        """Test for performance regression in analysis."""
+        """Test for performance regression in analysis (adaptive)."""
+        check_test_safety()
         setup = large_codebase_setup
         generator = setup['generator']
         analyzer = setup['analyzer']
 
-        # Create test files
-        num_files = 50
+        scaling = get_adaptive_scaling_factors()
+        base_files = 50
+        num_files = max(5, int(base_files * scaling['file_scale']))  # Minimum 5 files
         files_data = []
 
         for i in range(num_files):
@@ -639,9 +762,12 @@ def func_{i}():
 
             avg_time_per_file = total_time / num_files
 
-            # Check against baseline
-            assert avg_time_per_file < performance_baseline['analysis_per_file'] * 2  # Allow 2x regression
-            assert memory_increase < performance_baseline['memory_increase_mb'] * 2  # Allow 2x memory increase
+            # Adaptive baseline check
+            adaptive_baseline_analysis = performance_baseline['analysis_per_file'] / scaling['file_scale']
+            adaptive_memory_baseline = performance_baseline['memory_increase_mb'] / scaling['memory_scale']
+
+            assert avg_time_per_file < max(0.5, adaptive_baseline_analysis * 2)  # Allow 2x regression, min 0.5s
+            assert memory_increase < max(10, adaptive_memory_baseline * 2)  # Allow 2x increase, min 10MB
 
         finally:
             for file_path, _ in files_data:

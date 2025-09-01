@@ -315,7 +315,7 @@ def get_cache_memory_efficiency_tool() -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"Error analyzing cache memory efficiency: {e}")
+        logger.exception(f"Error analyzing cache memory efficiency: {e}")
         return {
             "error": f"Failed to analyze cache memory efficiency: {str(e)}"
         }

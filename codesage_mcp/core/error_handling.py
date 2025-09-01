@@ -337,7 +337,7 @@ class ErrorReporter:
                 self._send_to_endpoint(error_details)
 
         except Exception as e:
-            self.logger.error(f"Failed to report error: {e}")
+            self.logger.exception(f"Failed to report error: {e}")
 
     def report_batch(self, errors: List[Dict[str, Any]]) -> None:
         """
@@ -482,4 +482,4 @@ class ErrorReporter:
                     continue
                 else:
                     self.logger.error(f"Error reporting failed after {max_retries + 1} attempts: {e}")
-                    raise
+                    raise                 raise

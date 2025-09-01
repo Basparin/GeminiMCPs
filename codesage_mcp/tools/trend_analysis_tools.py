@@ -141,7 +141,7 @@ def get_optimization_opportunities_tool() -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"Error getting optimization opportunities: {e}")
+        logger.exception(f"Error getting optimization opportunities: {e}")
         return {
             "error": f"Failed to get optimization opportunities: {str(e)}"
         }

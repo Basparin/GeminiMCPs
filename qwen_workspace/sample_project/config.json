@@ -1,0 +1,5 @@
+{
+    "data_source": "qwen_workspace/sample_project/data/input.csv",
+    "output_dir": "qwen_workspace/sample_project/output/",
+    "log_level": "DEBUG"
+}

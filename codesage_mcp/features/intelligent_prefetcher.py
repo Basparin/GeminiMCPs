@@ -467,7 +467,7 @@ class IntelligentPrefetcher:
                 logger.debug(f"Prefetched file: {candidate.file_path} (confidence: {candidate.confidence_score:.2f})")
 
             except Exception as e:
-                logger.warning(f"Failed to prefetch {candidate.file_path}: {e}")
+                logger.exception(f"Failed to prefetch {candidate.file_path}: {e}")
                 self.prefetch_metrics.failed_prefetches += 1
 
     def _prefetch_file(self, candidate: PrefetchCandidate) -> None:
@@ -615,4 +615,4 @@ def get_intelligent_prefetcher() -> IntelligentPrefetcher:
     global _intelligent_prefetcher
     if _intelligent_prefetcher is None:
         _intelligent_prefetcher = IntelligentPrefetcher()
-    return _intelligent_prefetcher
+    return _intelligent_prefetcherer

@@ -393,7 +393,7 @@ def update_pattern_recognition_configuration_tool(config_updates: Dict[str, Any]
         return results
 
     except Exception as e:
-        logger.error(f"Error updating pattern recognition configuration: {e}")
+        logger.exception(f"Error updating pattern recognition configuration: {e}")
         return {
             "error": f"Failed to update pattern recognition configuration: {str(e)}"
         }

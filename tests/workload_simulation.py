@@ -22,6 +22,9 @@ import requests
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
 
+# Import hardware detection utilities
+from .hardware_utils import get_hardware_profile, get_adaptive_config, log_system_info
+
 
 @dataclass
 class SimulationConfig:
@@ -48,6 +51,63 @@ class SimulationConfig:
                 "get_performance_metrics": 0.05,
                 "get_cache_statistics": 0.05
             }
+
+
+def get_adaptive_simulation_config(hardware_profile: str) -> Dict[str, Any]:
+    """
+    Get adaptive simulation configuration based on detected hardware capabilities.
+
+    Args:
+        hardware_profile: Hardware profile ('light', 'medium', 'full')
+
+    Returns:
+        Dict with adaptive values for concurrent_users, target_rps, duration_seconds
+    """
+    # Base configurations for each hardware profile
+    configs = {
+        'light': {
+            'concurrent_users': 2,      # Reduced for low-end hardware
+            'target_rps': 1.0,          # Lower RPS to prevent overload
+            'duration_seconds': 30      # Shorter duration for resource conservation
+        },
+        'medium': {
+            'concurrent_users': 5,      # Moderate concurrent users
+            'target_rps': 2.5,          # Balanced RPS
+            'duration_seconds': 45      # Medium duration
+        },
+        'full': {
+            'concurrent_users': 10,     # Full capacity for high-end hardware
+            'target_rps': 5.0,          # Higher RPS for powerful systems
+            'duration_seconds': 60      # Standard duration
+        }
+    }
+
+    return configs.get(hardware_profile, configs['medium'])  # Default to medium if unknown
+
+
+def apply_hardware_adaptive_config(config: SimulationConfig, hardware_profile: str) -> SimulationConfig:
+    """
+    Apply hardware-adaptive adjustments to the simulation configuration.
+
+    Args:
+        config: Original simulation configuration
+        hardware_profile: Detected hardware profile
+
+    Returns:
+        SimulationConfig: Updated configuration with adaptive settings
+    """
+    adaptive_config = get_adaptive_simulation_config(hardware_profile)
+
+    # Only adjust if the config uses default values (not overridden by command line)
+    # We'll assume defaults are being used unless explicitly set differently
+    if config.concurrent_users == 10:  # Default value
+        config.concurrent_users = adaptive_config['concurrent_users']
+    if config.target_rps == 5.0:  # Default value
+        config.target_rps = adaptive_config['target_rps']
+    if config.duration_seconds == 60:  # Default value
+        config.duration_seconds = adaptive_config['duration_seconds']
+
+    return config
 
 
 class OperationType(Enum):
@@ -463,6 +523,11 @@ def run_simulation(config: SimulationConfig) -> Dict[str, Any]:
         "usage_pattern": config.usage_pattern
     }
 
+    # Add hardware profile information to results
+    hardware_profile = get_hardware_profile()
+    results["hardware_profile"] = hardware_profile
+    results["adaptive_config_applied"] = True
+
     return results
 
 
@@ -470,22 +535,28 @@ def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description="CodeSage MCP Server Workload Simulator")
     parser.add_argument("--server-url", default="http://localhost:8000/mcp",
-                       help="MCP server URL")
+                        help="MCP server URL")
     parser.add_argument("--users", type=int, default=10,
-                       help="Number of concurrent users")
+                        help="Number of concurrent users")
     parser.add_argument("--rps", type=float, default=5.0,
-                       help="Target requests per second")
+                        help="Target requests per second")
     parser.add_argument("--duration", type=int, default=60,
-                       help="Simulation duration in seconds")
+                        help="Simulation duration in seconds")
     parser.add_argument("--scenario", choices=["ramp_up", "bursty", "sustained", "stress", "pattern_recognition"],
-                       default="sustained", help="Load scenario")
+                        default="sustained", help="Load scenario")
     parser.add_argument("--pattern", choices=["development", "code_review", "refactoring", "onboarding", "ci_cd"],
-                       default="development", help="Usage pattern")
+                        default="development", help="Usage pattern")
     parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-                       default="INFO", help="Logging level")
+                        default="INFO", help="Logging level")
     parser.add_argument("--output", help="Output file for results (JSON)")
+    parser.add_argument("--no-adaptive", action="store_true",
+                        help="Disable hardware-adaptive configuration")
 
     args = parser.parse_args()
+
+    # Detect hardware and log system info
+    hardware_profile = get_hardware_profile()
+    log_system_info()
 
     config = SimulationConfig(
         server_url=args.server_url,
@@ -498,6 +569,15 @@ def main():
         output_file=args.output
     )
 
+    # Apply hardware-adaptive configuration unless disabled
+    if not args.no_adaptive:
+        config = apply_hardware_adaptive_config(config, hardware_profile)
+        logging.info(f"Applied hardware-adaptive configuration for profile: {hardware_profile}")
+        logging.info(f"Adaptive settings: {config.concurrent_users} users, "
+                    f"{config.target_rps} RPS, {config.duration_seconds}s duration")
+    else:
+        logging.info("Hardware-adaptive configuration disabled")
+
     try:
         results = run_simulation(config)
 
@@ -505,6 +585,7 @@ def main():
         print("\n" + "="*60)
         print("WORKLOAD SIMULATION RESULTS")
         print("="*60)
+        print(f"Hardware Profile: {results.get('hardware_profile', 'unknown')}")
         print(f"Scenario: {results['config']['load_scenario']}")
         print(f"Pattern: {results['config']['usage_pattern']}")
         print(f"Duration: {results['config']['duration_seconds']}s")

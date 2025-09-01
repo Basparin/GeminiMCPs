@@ -654,7 +654,7 @@ class ASTGenerator:
             return self.graph
 
         except SyntaxError as e:
-            logger.warning(f"Syntax error in {file_path}: {e}")
+            logger.exception(f"Syntax error in {file_path}: {e}")
             raise
         except Exception as e:
             logger.warning(f"Error generating code model for {file_path}: {e}")

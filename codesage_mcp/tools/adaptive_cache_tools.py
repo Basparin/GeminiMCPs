@@ -273,7 +273,7 @@ def analyze_cache_adaptation_effectiveness_tool(time_window_hours: int = 24) -> 
         }
 
     except Exception as e:
-        logger.error(f"Error analyzing cache adaptation effectiveness: {e}")
+        logger.exception(f"Error analyzing cache adaptation effectiveness: {e}")
         return {
             "error": f"Failed to analyze cache adaptation effectiveness: {str(e)}"
         }

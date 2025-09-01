@@ -55,7 +55,7 @@ class GeminiCompatibilityHandler:
 
         # Handle None values and validate types by defaulting to empty dicts
         if request_headers is None or not isinstance(request_headers, dict):
-            logger.warning(f"Invalid request_headers type: {type(request_headers)}, defaulting to empty dict")
+            logger.exception(f"Invalid request_headers type: {type(request_headers)}, defaulting to empty dict")
             request_headers = {}
         if request_body is None or not isinstance(request_body, dict):
             logger.warning(f"Invalid request_body type: {type(request_body)}, defaulting to empty dict")

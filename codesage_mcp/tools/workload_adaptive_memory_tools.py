@@ -42,7 +42,7 @@ def get_workload_analysis_tool() -> Dict[str, Any]:
         return analysis
 
     except Exception as e:
-        logger.error(f"Error getting workload analysis: {e}")
+        logger.exception(f"Error getting workload analysis: {e}")
         return {
             "error": f"Failed to get workload analysis: {str(e)}"
         }

@@ -300,7 +300,7 @@ def chunk_file(file_path: str, chunk_size_tokens: int = None) -> List[DocumentCh
         return chunker.split_into_chunks(content, file_path)
 
     except Exception as e:
-        logger.warning(f"Could not chunk file {file_path}: {e}")
+        logger.exception(f"Could not chunk file {file_path}: {e}")
         return []
 
 

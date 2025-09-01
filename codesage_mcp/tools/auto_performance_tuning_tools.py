@@ -332,7 +332,7 @@ def get_tuning_configuration_tool() -> Dict[str, Any]:
         return config_analysis
 
     except Exception as e:
-        logger.error(f"Error getting tuning configuration: {e}")
+        logger.exception(f"Error getting tuning configuration: {e}")
         return {
             "error": f"Failed to get tuning configuration: {str(e)}"
         }

@@ -148,7 +148,7 @@ def log_exception(
     if extra_context:
         context.update(extra_context)
 
-    logger.error("Exception occurred", **context)
+    logger.exception("Exception occurred", **context)
 
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:

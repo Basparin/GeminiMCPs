@@ -481,7 +481,7 @@ class IncrementalUpdater:
                     self.document_map[doc_id] = start_idx + i
 
         except Exception as e:
-            logger.error(f"Failed to add documents incrementally: {e}")
+            logger.exception(f"Failed to add documents incrementally: {e}")
             raise
 
     def process_documents(self, documents: List[Dict[str, Any]]) -> None:

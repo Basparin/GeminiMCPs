@@ -1,13 +1,29 @@
 """
-Performance Benchmarking Framework for CodeSage MCP Server.
+Hardware-Adaptive Performance Benchmarking Framework for CodeSage MCP Server.
 
-This module provides comprehensive performance benchmarking capabilities to measure
-and validate the performance targets specified in the testing plan:
+This module provides comprehensive performance benchmarking capabilities with automatic
+hardware detection and adaptive scaling to ensure benchmarks run appropriately on
+different hardware configurations. The framework detects CPU cores, available RAM,
+and generates hardware profiles ('light', 'medium', 'full') to scale benchmark
+parameters accordingly.
 
-- Indexing: 3-5x faster than baseline
-- Memory: 50-70% reduction through optimization
-- Cache Hit Rate: >70% for frequently accessed content
-- Response Time: <2s for typical operations
+Performance targets (hardware-adapted):
+- Indexing: 3-5x faster than baseline (scaled by hardware capabilities)
+- Memory: 50-70% reduction through optimization (adaptive memory limits)
+- Cache Hit Rate: >70% for frequently accessed content (adaptive cache sizes)
+- Response Time: <2s for typical operations (adaptive query loads)
+
+Hardware Profiles:
+- 'light': ≤2 CPU cores or ≤4GB RAM - Reduced resource usage (30% of full scale)
+- 'medium': ≤8 CPU cores or ≤16GB RAM - Moderate scaling (70% of full scale)
+- 'full': >8 CPU cores and >16GB RAM - Full scale benchmarks
+
+Adaptive Parameters:
+- Codebase sizes: Files and line counts scaled by hardware profile
+- Query counts: Search operations scaled by hardware profile
+- Cache operations: Cache hit/miss tests scaled by hardware profile
+- Monitoring duration: Resource monitoring time scaled by hardware profile
+- Concurrent users: Throughput tests adapted to hardware capabilities
 """
 
 import time
@@ -29,6 +45,16 @@ from codesage_mcp.core.searching import SearchingManager
 from codesage_mcp.features.memory_management.memory_manager import MemoryManager
 from codesage_mcp.features.caching.intelligent_cache import IntelligentCache
 from codesage_mcp.core.chunking import DocumentChunker
+
+# Hardware-adaptive imports
+from tests.hardware_utils import (
+    get_hardware_profile,
+    get_adaptive_config,
+    check_safety_requirements,
+    log_system_info,
+    detect_cpu_cores,
+    detect_available_ram
+)
 
 
 @dataclass
@@ -53,22 +79,75 @@ class PerformanceReport:
 
 
 class PerformanceBenchmarker:
-    """Main class for running performance benchmarks."""
+    """Hardware-adaptive performance benchmarking framework for CodeSage MCP Server.
+
+    This class automatically detects system hardware capabilities and adapts benchmark
+    parameters to ensure appropriate resource usage across different hardware profiles:
+
+    - Light hardware (≤2 cores, ≤4GB RAM): 30% of full scale operations
+    - Medium hardware (≤8 cores, ≤16GB RAM): 70% of full scale operations
+    - Full hardware (>8 cores, >16GB RAM): 100% scale operations
+
+    Adaptive scaling includes:
+    - Codebase sizes (files and line counts)
+    - Search query counts
+    - Cache operation volumes
+    - Resource monitoring durations
+    - Concurrent user loads
+    - Test suite composition (skips resource-intensive tests on low-end hardware)
+
+    All benchmark results include hardware profile metadata for result interpretation.
+    """
 
     def __init__(self, output_dir: str = "benchmark_results"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         self.process = psutil.Process()
 
+        # Hardware-adaptive configuration
+        self.hardware_profile = get_hardware_profile()
+        self.adaptive_config = get_adaptive_config(self.hardware_profile)
+        self.cpu_cores = detect_cpu_cores()
+        self.available_ram = detect_available_ram()
+
+        # Log system information
+        log_system_info()
+
+        # Check safety requirements
+        if not check_safety_requirements(self.hardware_profile):
+            print(f"WARNING: System does not meet minimum safety requirements for hardware profile '{self.hardware_profile}'")
+            print("Benchmarks may be resource-intensive or fail on this system.")
+
+        print(f"Hardware Profile: {self.hardware_profile} (CPU: {self.cpu_cores}, RAM: {self.available_ram:.1f}GB)")
+        print(f"Adaptive Config: {self.adaptive_config}")
+
     def create_test_codebase(self, size: str = "small") -> Path:
-        """Create a test codebase of specified size."""
-        size_configs = {
+        """Create a test codebase of specified size with hardware-adaptive scaling."""
+        # Base configurations
+        base_configs = {
             "small": {"files": 10, "avg_lines": 50},
             "medium": {"files": 50, "avg_lines": 100},
             "large": {"files": 200, "avg_lines": 200}
         }
 
-        config = size_configs[size]
+        # Adaptive scaling factors based on hardware profile
+        scaling_factors = {
+            'light': 0.3,   # Reduce resource usage on low-end hardware
+            'medium': 0.7,  # Moderate scaling for mid-range hardware
+            'full': 1.0     # Full scale on high-end hardware
+        }
+
+        scaling_factor = scaling_factors.get(self.hardware_profile, 1.0)
+        base_config = base_configs[size]
+
+        # Apply adaptive scaling
+        config = {
+            "files": max(5, int(base_config["files"] * scaling_factor)),
+            "avg_lines": max(30, int(base_config["avg_lines"] * scaling_factor))
+        }
+
+        print(f"Creating {size} codebase with {config['files']} files ({config['avg_lines']} avg lines) - "
+              f"Scaled by {scaling_factor:.1f}x for {self.hardware_profile} hardware")
 
         # Create temporary directory that persists until explicitly cleaned up
         temp_dir = Path(tempfile.mkdtemp())
@@ -148,9 +227,18 @@ def additional_function_{j}() -> str:
         file_path.write_text(content)
 
     def benchmark_indexing_performance(self, codebase_sizes: List[str] = None) -> List[BenchmarkResult]:
-        """Benchmark indexing performance across different codebase sizes."""
+        """Benchmark indexing performance across different codebase sizes with hardware adaptation."""
         if codebase_sizes is None:
-            codebase_sizes = ["small", "medium"]
+            # Adaptive codebase size selection based on hardware profile
+            if self.hardware_profile == 'light':
+                codebase_sizes = ["small"]  # Only test small codebase on low-end hardware
+            elif self.hardware_profile == 'medium':
+                codebase_sizes = ["small", "medium"]  # Test small and medium on mid-range hardware
+            else:  # 'full'
+                codebase_sizes = ["small", "medium", "large"]  # Test all sizes on high-end hardware
+
+        print(f"Benchmarking indexing performance for {codebase_sizes} codebases "
+              f"(adapted for {self.hardware_profile} hardware)")
 
         results = []
 
@@ -195,7 +283,7 @@ def additional_function_{j}() -> str:
                     unit="seconds",
                     target=30.0,  # Should complete within 30 seconds
                     achieved=indexing_time <= 30.0,
-                    metadata={"codebase_size": size, "files_indexed": len(indexed_files)}
+                    metadata={"codebase_size": size, "files_indexed": len(indexed_files), "hardware_profile": self.hardware_profile}
                 ),
                 BenchmarkResult(
                     test_name=f"indexing_{size}",
@@ -204,7 +292,7 @@ def additional_function_{j}() -> str:
                     unit="MB",
                     target=500.0,  # Should use less than 500MB
                     achieved=memory_used <= 500.0,
-                    metadata={"codebase_size": size}
+                    metadata={"codebase_size": size, "hardware_profile": self.hardware_profile}
                 ),
                 BenchmarkResult(
                     test_name=f"indexing_{size}",
@@ -213,7 +301,7 @@ def additional_function_{j}() -> str:
                     unit="files/sec",
                     target=5.0,  # At least 5 files per second
                     achieved=(len(indexed_files) / indexing_time) >= 5.0,
-                    metadata={"codebase_size": size, "total_files": len(indexed_files)}
+                    metadata={"codebase_size": size, "total_files": len(indexed_files), "hardware_profile": self.hardware_profile}
                 )
             ])
 
@@ -223,11 +311,30 @@ def additional_function_{j}() -> str:
         return results
 
     def benchmark_search_performance(self, num_queries: int = 100) -> List[BenchmarkResult]:
-        """Benchmark search performance."""
+        """Benchmark search performance with hardware-adaptive query counts."""
         results = []
 
-        # Create test codebase
-        codebase_dir = self.create_test_codebase("medium")
+        # Adaptive scaling for query counts based on hardware profile
+        query_scaling_factors = {
+            'light': 0.2,   # Reduce queries significantly on low-end hardware
+            'medium': 0.5,  # Moderate reduction for mid-range hardware
+            'full': 1.0     # Full query count on high-end hardware
+        }
+
+        scaling_factor = query_scaling_factors.get(self.hardware_profile, 1.0)
+        adaptive_num_queries = max(10, int(num_queries * scaling_factor))
+
+        print(f"Benchmarking search performance with {adaptive_num_queries} queries "
+              f"(scaled by {scaling_factor:.1f}x for {self.hardware_profile} hardware)")
+
+        # Create test codebase (adaptive size)
+        if self.hardware_profile == 'light':
+            search_codebase_size = "small"
+        else:
+            search_codebase_size = "medium"
+
+        print(f"Creating {search_codebase_size} test codebase for search performance testing")
+        codebase_dir = self.create_test_codebase(search_codebase_size)
 
         try:
             # Set up components
@@ -250,7 +357,7 @@ def additional_function_{j}() -> str:
 
             # Benchmark semantic search
             semantic_times = []
-            for i in range(num_queries):
+            for i in range(adaptive_num_queries):
                 query = f"test query {i}"
                 start_time = time.time()
                 results_search = searching_manager.semantic_search_codebase(
@@ -263,7 +370,7 @@ def additional_function_{j}() -> str:
 
             # Benchmark text search
             text_times = []
-            for i in range(num_queries):
+            for i in range(adaptive_num_queries):
                 pattern = f"def.*function_{i % 10}"
                 start_time = time.time()
                 text_results = searching_manager.search_codebase(
@@ -283,7 +390,7 @@ def additional_function_{j}() -> str:
                     unit="seconds",
                     target=2.0,
                     achieved=avg_semantic_time <= 2.0,
-                    metadata={"queries": num_queries}
+                    metadata={"queries": adaptive_num_queries, "original_queries": num_queries, "codebase_size": search_codebase_size, "hardware_profile": self.hardware_profile}
                 ),
                 BenchmarkResult(
                     test_name="search_performance",
@@ -292,7 +399,7 @@ def additional_function_{j}() -> str:
                     unit="seconds",
                     target=5.0,
                     achieved=p95_semantic_time <= 5.0,
-                    metadata={"queries": num_queries}
+                    metadata={"queries": adaptive_num_queries, "original_queries": num_queries, "codebase_size": search_codebase_size, "hardware_profile": self.hardware_profile}
                 ),
                 BenchmarkResult(
                     test_name="search_performance",
@@ -301,7 +408,7 @@ def additional_function_{j}() -> str:
                     unit="seconds",
                     target=1.0,
                     achieved=avg_text_time <= 1.0,
-                    metadata={"queries": num_queries}
+                    metadata={"queries": adaptive_num_queries, "original_queries": num_queries, "codebase_size": search_codebase_size, "hardware_profile": self.hardware_profile}
                 ),
                 BenchmarkResult(
                     test_name="search_performance",
@@ -310,7 +417,7 @@ def additional_function_{j}() -> str:
                     unit="seconds",
                     target=3.0,
                     achieved=p95_text_time <= 3.0,
-                    metadata={"queries": num_queries}
+                    metadata={"queries": adaptive_num_queries, "original_queries": num_queries, "codebase_size": search_codebase_size, "hardware_profile": self.hardware_profile}
                 )
             ])
 
@@ -321,14 +428,28 @@ def additional_function_{j}() -> str:
         return results
 
     def benchmark_cache_performance(self, num_operations: int = 1000) -> List[BenchmarkResult]:
-        """Benchmark cache performance and hit rates."""
+        """Benchmark cache performance and hit rates with hardware-adaptive operations."""
         results = []
+
+        # Adaptive scaling for cache operations based on hardware profile
+        cache_scaling_factors = {
+            'light': 0.2,   # Reduce operations significantly on low-end hardware
+            'medium': 0.5,  # Moderate reduction for mid-range hardware
+            'full': 1.0     # Full operations on high-end hardware
+        }
+
+        scaling_factor = cache_scaling_factors.get(self.hardware_profile, 1.0)
+        adaptive_num_operations = max(50, int(num_operations * scaling_factor))
+        adaptive_cache_size = max(20, int(100 * scaling_factor))
+
+        print(f"Benchmarking cache performance with {adaptive_num_operations} operations "
+              f"(scaled by {scaling_factor:.1f}x for {self.hardware_profile} hardware)")
 
         cache = IntelligentCache()
 
-        # Pre-populate cache with some data
+        # Pre-populate cache with adaptive data size
         test_data = {}
-        for i in range(100):
+        for i in range(adaptive_cache_size):
             key = f"test_key_{i}"
             content = f"test content {i}"
             embedding = np.random.rand(128).astype(np.float32)
@@ -347,8 +468,8 @@ def additional_function_{j}() -> str:
         file_times = []
 
         # Test embedding cache
-        for i in range(num_operations):
-            key = f"test_key_{i % 100}"
+        for i in range(adaptive_num_operations):
+            key = f"test_key_{i % adaptive_cache_size}"
             content = test_data[key]
 
             start_time = time.time()
@@ -361,8 +482,8 @@ def additional_function_{j}() -> str:
                 embedding_misses += 1
 
         # Test file content cache
-        for i in range(num_operations):
-            key = f"test_key_{i % 100}"
+        for i in range(adaptive_num_operations):
+            key = f"test_key_{i % adaptive_cache_size}"
             content = test_data[key]
 
             start_time = time.time()
@@ -390,7 +511,7 @@ def additional_function_{j}() -> str:
                 unit="percent",
                 target=70.0,
                 achieved=embedding_hit_rate >= 0.7,
-                metadata={"operations": num_operations}
+                metadata={"operations": adaptive_num_operations, "original_operations": num_operations, "hardware_profile": self.hardware_profile}
             ),
             BenchmarkResult(
                 test_name="cache_performance",
@@ -399,7 +520,7 @@ def additional_function_{j}() -> str:
                 unit="percent",
                 target=70.0,
                 achieved=file_hit_rate >= 0.7,
-                metadata={"operations": num_operations}
+                metadata={"operations": adaptive_num_operations, "original_operations": num_operations, "hardware_profile": self.hardware_profile}
             ),
             BenchmarkResult(
                 test_name="cache_performance",
@@ -408,7 +529,7 @@ def additional_function_{j}() -> str:
                 unit="milliseconds",
                 target=10.0,  # Less than 10ms
                 achieved=avg_embedding_time <= 0.01,
-                metadata={"operations": num_operations}
+                metadata={"operations": adaptive_num_operations, "original_operations": num_operations, "hardware_profile": self.hardware_profile}
             ),
             BenchmarkResult(
                 test_name="cache_performance",
@@ -417,7 +538,7 @@ def additional_function_{j}() -> str:
                 unit="milliseconds",
                 target=5.0,  # Less than 5ms
                 achieved=avg_file_time <= 0.005,
-                metadata={"operations": num_operations}
+                metadata={"operations": adaptive_num_operations, "original_operations": num_operations, "hardware_profile": self.hardware_profile}
             )
         ])
 
@@ -616,8 +737,14 @@ class Class_{i}:
         if tools_to_test is None:
             tools_to_test = ["read_code_file", "search_codebase", "get_file_structure"]
 
-        # Create test codebase for tool testing
-        codebase_dir = self.create_test_codebase("medium")
+        # Create test codebase for tool testing (adaptive size)
+        if self.hardware_profile == 'light':
+            test_codebase_size = "small"
+        else:
+            test_codebase_size = "medium"
+
+        print(f"Creating {test_codebase_size} test codebase for tool execution testing")
+        codebase_dir = self.create_test_codebase(test_codebase_size)
 
         try:
             # Test each tool
@@ -660,7 +787,7 @@ class Class_{i}:
                             unit="milliseconds",
                             target=5000.0,  # Should complete within 5 seconds
                             achieved=avg_time <= 5000.0,
-                            metadata={"tool": tool_name, "requests": len(latencies)}
+                            metadata={"tool": tool_name, "requests": len(latencies), "codebase_size": test_codebase_size, "hardware_profile": self.hardware_profile}
                         ),
                         BenchmarkResult(
                             test_name=f"tool_execution_{tool_name}",
@@ -669,7 +796,7 @@ class Class_{i}:
                             unit="milliseconds",
                             target=10000.0,  # Max should be under 10 seconds
                             achieved=max_time <= 10000.0,
-                            metadata={"tool": tool_name, "requests": len(latencies)}
+                            metadata={"tool": tool_name, "requests": len(latencies), "codebase_size": test_codebase_size, "hardware_profile": self.hardware_profile}
                         )
                     ])
 
@@ -701,10 +828,23 @@ class Class_{i}:
             return {}
 
     def benchmark_resource_utilization(self, duration_seconds: int = 60) -> List[BenchmarkResult]:
-        """Benchmark resource utilization during load."""
+        """Benchmark resource utilization during load with hardware-adaptive duration."""
         results = []
 
-        # Monitor resources for the specified duration
+        # Adaptive scaling for monitoring duration based on hardware profile
+        duration_scaling_factors = {
+            'light': 0.3,   # Shorter monitoring on low-end hardware
+            'medium': 0.6,  # Moderate duration for mid-range hardware
+            'full': 1.0     # Full duration on high-end hardware
+        }
+
+        scaling_factor = duration_scaling_factors.get(self.hardware_profile, 1.0)
+        adaptive_duration = max(10, int(duration_seconds * scaling_factor))
+
+        print(f"Benchmarking resource utilization for {adaptive_duration} seconds "
+              f"(scaled by {scaling_factor:.1f}x for {self.hardware_profile} hardware)")
+
+        # Monitor resources for the adaptive duration
         cpu_percentages = []
         memory_percentages = []
         disk_io_read = []
@@ -715,7 +855,7 @@ class Class_{i}:
         start_time = time.time()
         initial_net = psutil.net_io_counters()
 
-        while time.time() - start_time < duration_seconds:
+        while time.time() - start_time < adaptive_duration:
             # CPU usage
             cpu_percentages.append(self.process.cpu_percent(interval=1))
 
@@ -746,7 +886,7 @@ class Class_{i}:
                     unit="percent",
                     target=80.0,  # Should stay under 80%
                     achieved=avg_cpu <= 80.0,
-                    metadata={"duration": duration_seconds}
+                    metadata={"duration": adaptive_duration, "original_duration": duration_seconds, "hardware_profile": self.hardware_profile}
                 ),
                 BenchmarkResult(
                     test_name="resource_utilization",
@@ -755,7 +895,7 @@ class Class_{i}:
                     unit="percent",
                     target=90.0,  # Peak should be under 90%
                     achieved=max_cpu <= 90.0,
-                    metadata={"duration": duration_seconds}
+                    metadata={"duration": adaptive_duration, "original_duration": duration_seconds, "hardware_profile": self.hardware_profile}
                 )
             ])
 
@@ -771,7 +911,7 @@ class Class_{i}:
                     unit="percent",
                     target=85.0,  # Should stay under 85%
                     achieved=avg_memory <= 85.0,
-                    metadata={"duration": duration_seconds}
+                    metadata={"duration": adaptive_duration, "original_duration": duration_seconds, "hardware_profile": self.hardware_profile}
                 ),
                 BenchmarkResult(
                     test_name="resource_utilization",
@@ -780,19 +920,28 @@ class Class_{i}:
                     unit="percent",
                     target=95.0,  # Peak should be under 95%
                     achieved=max_memory <= 95.0,
-                    metadata={"duration": duration_seconds}
+                    metadata={"duration": adaptive_duration, "original_duration": duration_seconds, "hardware_profile": self.hardware_profile}
                 )
             ])
 
         return results
 
     def benchmark_throughput_and_scalability(self, server_url: str = "http://localhost:8000/mcp",
-                                             concurrent_users: List[int] = None) -> List[BenchmarkResult]:
-        """Benchmark throughput and scalability with different concurrent user loads."""
+                                              concurrent_users: List[int] = None) -> List[BenchmarkResult]:
+        """Benchmark throughput and scalability with different concurrent user loads, hardware-adapted."""
         results = []
 
         if concurrent_users is None:
-            concurrent_users = [1, 5, 10, 20]
+            # Adaptive concurrent user selection based on hardware profile
+            if self.hardware_profile == 'light':
+                concurrent_users = [1, 2]  # Limited concurrency on low-end hardware
+            elif self.hardware_profile == 'medium':
+                concurrent_users = [1, 3, 5]  # Moderate concurrency on mid-range hardware
+            else:  # 'full'
+                concurrent_users = [1, 5, 10, 20]  # Full concurrency test on high-end hardware
+
+        print(f"Benchmarking throughput with {concurrent_users} concurrent users "
+              f"(adapted for {self.hardware_profile} hardware)")
 
         for num_users in concurrent_users:
             print(f"Benchmarking with {num_users} concurrent users...")
@@ -856,7 +1005,7 @@ class Class_{i}:
                         unit="rps",
                         target=50.0,  # At least 50 RPS
                         achieved=throughput_rps >= 50.0,
-                        metadata={"concurrent_users": num_users, "duration": duration}
+                        metadata={"concurrent_users": num_users, "duration": duration, "hardware_profile": self.hardware_profile}
                     ),
                     BenchmarkResult(
                         test_name=f"throughput_scalability_{num_users}_users",
@@ -865,7 +1014,7 @@ class Class_{i}:
                         unit="milliseconds",
                         target=1000.0,  # Under 1 second
                         achieved=avg_latency <= 1000.0,
-                        metadata={"concurrent_users": num_users, "total_requests": total_requests}
+                        metadata={"concurrent_users": num_users, "total_requests": total_requests, "hardware_profile": self.hardware_profile}
                     ),
                     BenchmarkResult(
                         test_name=f"throughput_scalability_{num_users}_users",
@@ -874,7 +1023,7 @@ class Class_{i}:
                         unit="milliseconds",
                         target=2000.0,  # 95th percentile under 2 seconds
                         achieved=p95_latency <= 2000.0,
-                        metadata={"concurrent_users": num_users, "total_requests": total_requests}
+                        metadata={"concurrent_users": num_users, "total_requests": total_requests, "hardware_profile": self.hardware_profile}
                     )
                 ])
 
@@ -884,41 +1033,48 @@ class Class_{i}:
         """Benchmark edge cases like large codebases, network failures, and malformed requests."""
         results = []
 
-        # Test 1: Large codebase handling
+        # Test 1: Large codebase handling (adaptive based on hardware)
         print("Testing large codebase handling...")
-        large_codebase_dir = self.create_test_codebase("large")
+        if self.hardware_profile == 'light':
+            # Skip large codebase test on low-end hardware
+            print("Skipping large codebase test on light hardware profile")
+            large_codebase_dir = None
+        else:
+            # Use adaptive large codebase for medium/full hardware
+            large_codebase_dir = self.create_test_codebase("large")
 
-        try:
-            # Index large codebase
-            start_time = time.time()
-            request_data = {
-                "jsonrpc": "2.0",
-                "method": "tools/call",
-                "id": 1,
-                "params": {
-                    "name": "index_codebase",
-                    "arguments": {"path": str(large_codebase_dir)}
+        if large_codebase_dir is not None:
+            try:
+                # Index large codebase
+                start_time = time.time()
+                request_data = {
+                    "jsonrpc": "2.0",
+                    "method": "tools/call",
+                    "id": 1,
+                    "params": {
+                        "name": "index_codebase",
+                        "arguments": {"path": str(large_codebase_dir)}
+                    }
                 }
-            }
 
-            response = requests.post(server_url, json=request_data, timeout=120)
-            large_indexing_time = (time.time() - start_time) * 1000
+                response = requests.post(server_url, json=request_data, timeout=120)
+                large_indexing_time = (time.time() - start_time) * 1000
 
-            if response.status_code == 200:
-                results.append(BenchmarkResult(
-                    test_name="edge_cases_large_codebase",
-                    metric_name="large_codebase_indexing_time",
-                    value=large_indexing_time,
-                    unit="milliseconds",
-                    target=60000.0,  # Should complete within 60 seconds
-                    achieved=large_indexing_time <= 60000.0,
-                    metadata={"codebase_size": "large", "files": 200}
-                ))
+                if response.status_code == 200:
+                    results.append(BenchmarkResult(
+                        test_name="edge_cases_large_codebase",
+                        metric_name="large_codebase_indexing_time",
+                        value=large_indexing_time,
+                        unit="milliseconds",
+                        target=60000.0,  # Should complete within 60 seconds
+                        achieved=large_indexing_time <= 60000.0,
+                        metadata={"codebase_size": "large", "files": 200, "hardware_profile": self.hardware_profile}
+                    ))
 
-        except Exception as e:
-            print(f"Large codebase test failed: {e}")
-        finally:
-            shutil.rmtree(large_codebase_dir)
+            except Exception as e:
+                print(f"Large codebase test failed: {e}")
+            finally:
+                shutil.rmtree(large_codebase_dir)
 
         # Test 2: Network failure simulation (timeout)
         print("Testing network timeout handling...")
@@ -1042,12 +1198,18 @@ class Class_{i}:
         # Generate summary
         summary = self._generate_summary(all_results)
 
-        # Create report
+        # Create report with hardware information
         report = PerformanceReport(
-            test_suite="CodeSage MCP Performance Benchmark",
+            test_suite=f"CodeSage MCP Performance Benchmark ({self.hardware_profile} hardware)",
             timestamp=time.strftime("%Y-%m-%d %H:%M:%S"),
             results=all_results,
-            summary=summary
+            summary={
+                **summary,
+                "hardware_profile": self.hardware_profile,
+                "cpu_cores": self.cpu_cores,
+                "available_ram_gb": self.available_ram,
+                "adaptive_config": self.adaptive_config
+            }
         )
 
         # Save report
@@ -1117,7 +1279,10 @@ class Class_{i}:
         summary_file = self.output_dir / f"benchmark_summary_{int(time.time())}.txt"
         with open(summary_file, 'w') as f:
             f.write("CodeSage MCP Performance Benchmark Report\n")
-            f.write(f"Generated: {report.timestamp}\n\n")
+            f.write(f"Generated: {report.timestamp}\n")
+            f.write(f"Hardware Profile: {self.hardware_profile}\n")
+            f.write(f"CPU Cores: {self.cpu_cores}\n")
+            f.write(f"Available RAM: {self.available_ram:.1f}GB\n\n")
 
             f.write("SUMMARY\n")
             f.write("=" * 50 + "\n")
@@ -1152,6 +1317,9 @@ class Class_{i}:
         print("CODESAGE MCP PERFORMANCE BENCHMARK REPORT")
         print("=" * 80)
         print(f"Generated: {report.timestamp}")
+        print(f"Hardware Profile: {report.summary.get('hardware_profile', 'unknown')}")
+        print(f"CPU Cores: {report.summary.get('cpu_cores', 'unknown')}")
+        print(f"Available RAM: {report.summary.get('available_ram_gb', 'unknown')}GB")
         print()
 
         summary = report.summary
@@ -1191,12 +1359,15 @@ class Class_{i}:
 
 
 def run_performance_benchmarks(server_url: str = "http://localhost:8000/mcp"):
-    """Run the complete performance benchmark suite."""
+    """Run the complete performance benchmark suite with hardware-adaptive configurations."""
     benchmarker = PerformanceBenchmarker()
 
     print("CodeSage MCP Performance Benchmark Suite")
     print("=========================================")
     print(f"Server URL: {server_url}")
+    print(f"Hardware Profile: {benchmarker.hardware_profile}")
+    print(f"CPU Cores: {benchmarker.cpu_cores}")
+    print(f"Available RAM: {benchmarker.available_ram:.1f}GB")
     print()
 
     # Run benchmarks

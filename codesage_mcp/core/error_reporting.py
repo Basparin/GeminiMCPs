@@ -233,7 +233,7 @@ class ErrorReporter:
                         if response.status >= 400:
                             self.logger.warning(f"Webhook failed: {url}, status: {response.status}")
                 except Exception as webhook_error:
-                    self.logger.error(f"Webhook error for {url}", error=str(webhook_error))
+                    self.logger.exception(f"Webhook error for {url}", error=str(webhook_error))
 
     def _format_slack_alert(self, alert_data: Dict[str, Any]) -> Dict[str, Any]:
         """Format alert data for Slack webhook."""

@@ -408,7 +408,7 @@ def detect_performance_regressions_tool(current_results: Dict[str, Any] = None) 
                                     "timestamp": report_data.get("timestamp")
                                 }
                     except Exception as e:
-                        logger.warning(f"Failed to load benchmark report: {e}")
+                        logger.exception(f"Failed to load benchmark report: {e}")
 
         if not current_results:
             return {
@@ -460,4 +460,4 @@ def detect_performance_regressions_tool(current_results: Dict[str, Any] = None) 
             "recommendations": ["Investigate the error and try again"],
             "timestamp": None
         }
-    return alerts
+    return alertsts

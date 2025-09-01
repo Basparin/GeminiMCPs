@@ -296,7 +296,7 @@ class EnvVarHandler:
             else:
                 return value
         except (ValueError, TypeError):
-            logger.warning(f"Failed to convert environment variable {full_key} to {var_type.__name__}, using default")
+            logger.exception(f"Failed to convert environment variable {full_key} to {var_type.__name__}, using default")
             return default
 
     def set(self, key: str, value: Any) -> None:

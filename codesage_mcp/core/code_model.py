@@ -570,7 +570,7 @@ class CodeModelGenerator:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
             except Exception as e:
-                logger.warning(f"Could not read file {file_path}: {e}")
+                logger.exception(f"Could not read file {file_path}: {e}")
                 return []
 
         # Check cache first (using file cache for code models)

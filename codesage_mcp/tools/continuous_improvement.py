@@ -74,7 +74,7 @@ def analyze_continuous_improvement_opportunities_tool() -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"Error analyzing continuous improvement opportunities: {e}")
+        logger.exception(f"Error analyzing continuous improvement opportunities: {e}")
         return {
             "error": f"Failed to analyze continuous improvement opportunities: {str(e)}",
             "timestamp": datetime.now().isoformat()

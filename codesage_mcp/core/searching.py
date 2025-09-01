@@ -129,7 +129,7 @@ class SearchingManager:
                 logger.warning(f"File not found during search: {file_path}. Skipping.")
                 continue
             except Exception as e:
-                logger.error(f"Error processing file {file_path}: {e}. Skipping.")
+                logger.exception(f"Error processing file {file_path}: {e}. Skipping.")
                 continue
         return search_results
 

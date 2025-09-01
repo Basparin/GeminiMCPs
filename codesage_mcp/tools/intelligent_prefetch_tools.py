@@ -317,7 +317,7 @@ def update_prefetch_configuration_tool(config_updates: Dict[str, Any]) -> Dict[s
         return results
 
     except Exception as e:
-        logger.error(f"Error updating prefetch configuration: {e}")
+        logger.exception(f"Error updating prefetch configuration: {e}")
         return {
             "error": f"Failed to update prefetch configuration: {str(e)}"
         }
