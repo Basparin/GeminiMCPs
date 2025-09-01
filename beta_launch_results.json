@@ -1,0 +1,28 @@
+{
+  "program_id": "community_beta_1756750887",
+  "status": "launched",
+  "participants": 15,
+  "monitoring": {
+    "status": "active",
+    "program_status": {
+      "program_id": "community_beta_1756750887",
+      "name": "CES Community Beta Program - Phase 5 Launch",
+      "status": "active",
+      "participants": 15,
+      "target": 20,
+      "progress_percentage": 75.0
+    },
+    "monitoring_metrics": [
+      "participant_engagement",
+      "feedback_volume",
+      "test_completion_rate"
+    ]
+  },
+  "launch_timestamp": "2025-09-01T14:21:27.164882",
+  "next_steps": [
+    "Send welcome emails to participants",
+    "Setup feedback collection channels",
+    "Monitor engagement metrics",
+    "Schedule weekly check-ins"
+  ]
+}

@@ -1,16 +1,18 @@
 """
-Beta Testing Framework - CES Phase 2 Enhancement
+Beta Testing Framework - CES Phase 5 Launch & Optimization
 
-Phase 2 Implementation: Comprehensive beta testing framework with user feedback collection,
-automated testing scenarios, and performance validation for enhanced features.
+Phase 5 Implementation: Enterprise-grade beta testing framework for public launch preparation,
+community engagement, and comprehensive validation of all CES features.
 
-Key Phase 2 Features:
-- Automated beta testing scenarios for all Phase 2 enhancements
-- User feedback collection and analysis system
-- Performance benchmarking for enhanced features
-- A/B testing capabilities for feature validation
-- User experience analytics and improvement tracking
-- Comprehensive testing reports and validation metrics
+Key Phase 5 Features:
+- Community beta program management (10-20 users)
+- Real-time feedback collection and analysis
+- Automated testing scenarios for launch validation
+- Performance benchmarking for production readiness
+- A/B testing capabilities for feature optimization
+- User experience analytics and engagement tracking
+- Comprehensive testing reports and launch readiness validation
+- Community engagement and user onboarding integration
 """
 
 import asyncio
@@ -33,6 +35,13 @@ class TestScenario(Enum):
     USER_EXPERIENCE = "user_experience"
     INTEGRATION_TESTING = "integration_testing"
     STRESS_TESTING = "stress_testing"
+    # Phase 5 Launch Scenarios
+    COMMUNITY_ENGAGEMENT = "community_engagement"
+    PUBLIC_LAUNCH_VALIDATION = "public_launch_validation"
+    ENTERPRISE_FEATURES = "enterprise_features"
+    GLOBAL_PERFORMANCE = "global_performance"
+    USER_ONBOARDING = "user_onboarding"
+    API_MARKETPLACE = "api_marketplace"
 
 
 class FeedbackCategory(Enum):
@@ -98,6 +107,39 @@ class ABTest:
     results: Dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class CommunityBetaParticipant:
+    """Community beta program participant"""
+    user_id: str
+    email: str
+    name: str
+    company: Optional[str] = None
+    role: str = "user"
+    joined_date: datetime = field(default_factory=datetime.now)
+    engagement_score: float = 0.0
+    feedback_count: int = 0
+    test_completion_rate: float = 0.0
+    last_activity: Optional[datetime] = None
+    preferences: Dict[str, Any] = field(default_factory=dict)
+    achievements: List[str] = field(default_factory=list)
+
+
+@dataclass
+class CommunityBetaProgram:
+    """Community beta program management"""
+    program_id: str
+    name: str
+    description: str
+    target_participants: int = 20
+    current_participants: int = 0
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    status: str = "planning"
+    participants: Dict[str, CommunityBetaParticipant] = field(default_factory=dict)
+    engagement_metrics: Dict[str, Any] = field(default_factory=dict)
+    success_criteria: Dict[str, Any] = field(default_factory=dict)
+
+
 class BetaTestingFramework:
     """
     Phase 2: Comprehensive beta testing framework
@@ -130,7 +172,12 @@ class BetaTestingFramework:
         self.performance_baselines: Dict[str, Dict[str, Any]] = {}
         self.benchmark_results: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
-        self.logger.info("Phase 2 Beta Testing Framework initialized")
+        # Phase 5: Community Beta Program
+        self.community_programs: Dict[str, CommunityBetaProgram] = {}
+        self.beta_participants: Dict[str, CommunityBetaParticipant] = {}
+        self.community_engagement_metrics: Dict[str, Any] = {}
+
+        self.logger.info("Phase 5 Beta Testing Framework initialized with Community Program support")
 
     def _load_test_templates(self) -> Dict[TestScenario, Dict[str, Any]]:
         """Load predefined test scenario templates"""
@@ -208,6 +255,121 @@ class BetaTestingFramework:
                         'description': 'Test optimized workflow suggestions',
                         'steps': ['track_usage', 'identify_patterns', 'suggest_improvements'],
                         'expected_outcomes': ['useful_suggestions', 'efficiency_gains']
+                    }
+                ]
+            },
+            # Phase 5 Launch Scenarios
+            TestScenario.COMMUNITY_ENGAGEMENT: {
+                'name': 'Community Engagement Beta Test',
+                'description': 'Test community features and user engagement mechanisms',
+                'duration_minutes': 60,
+                'test_cases': [
+                    {
+                        'name': 'beta_community_onboarding',
+                        'description': 'Test community beta participant onboarding flow',
+                        'steps': ['register_participant', 'send_welcome_email', 'setup_profile', 'first_interaction'],
+                        'expected_outcomes': ['successful_registration', 'engaged_participants', 'positive_feedback']
+                    },
+                    {
+                        'name': 'engagement_tracking',
+                        'description': 'Test user engagement tracking and analytics',
+                        'steps': ['track_user_activity', 'calculate_engagement_score', 'generate_insights'],
+                        'expected_outcomes': ['accurate_tracking', 'meaningful_insights', 'actionable_metrics']
+                    }
+                ]
+            },
+            TestScenario.PUBLIC_LAUNCH_VALIDATION: {
+                'name': 'Public Launch Validation',
+                'description': 'Validate all components for public launch readiness',
+                'duration_minutes': 90,
+                'test_cases': [
+                    {
+                        'name': 'launch_infrastructure',
+                        'description': 'Test production infrastructure and deployment',
+                        'steps': ['validate_deployment', 'test_scaling', 'check_monitoring', 'verify_security'],
+                        'expected_outcomes': ['stable_deployment', 'successful_scaling', 'comprehensive_monitoring', 'secure_system']
+                    },
+                    {
+                        'name': 'user_onboarding_flow',
+                        'description': 'Test complete user onboarding and activation',
+                        'steps': ['test_registration', 'validate_onboarding', 'check_tutorial_flow', 'measure_activation'],
+                        'expected_outcomes': ['smooth_registration', 'effective_onboarding', 'engaging_tutorials', 'high_activation_rate']
+                    }
+                ]
+            },
+            TestScenario.ENTERPRISE_FEATURES: {
+                'name': 'Enterprise Features Validation',
+                'description': 'Test enterprise-grade features and integrations',
+                'duration_minutes': 120,
+                'test_cases': [
+                    {
+                        'name': 'enterprise_collaboration',
+                        'description': 'Test enterprise collaboration and team features',
+                        'steps': ['create_team_workspace', 'test_permissions', 'validate_sharing', 'check_audit_trail'],
+                        'expected_outcomes': ['functional_workspaces', 'proper_permissions', 'secure_sharing', 'complete_auditing']
+                    },
+                    {
+                        'name': 'enterprise_security',
+                        'description': 'Test enterprise security and compliance features',
+                        'steps': ['validate_authentication', 'test_authorization', 'check_encryption', 'verify_compliance'],
+                        'expected_outcomes': ['secure_authentication', 'proper_authorization', 'data_encryption', 'compliance_ready']
+                    }
+                ]
+            },
+            TestScenario.GLOBAL_PERFORMANCE: {
+                'name': 'Global Performance Testing',
+                'description': 'Test performance across global infrastructure',
+                'duration_minutes': 180,
+                'test_cases': [
+                    {
+                        'name': 'global_latency',
+                        'description': 'Test response times across global regions',
+                        'steps': ['test_regional_latency', 'validate_cdn_performance', 'check_edge_computing', 'measure_global_p95'],
+                        'expected_outcomes': ['acceptable_latency', 'effective_cdn', 'optimal_edge_usage', 'global_performance_targets']
+                    },
+                    {
+                        'name': 'scalability_under_load',
+                        'description': 'Test system scalability with global user load',
+                        'steps': ['simulate_global_load', 'test_auto_scaling', 'validate_failover', 'measure_performance_degradation'],
+                        'expected_outcomes': ['successful_scaling', 'automatic_scaling', 'reliable_failover', 'minimal_degradation']
+                    }
+                ]
+            },
+            TestScenario.USER_ONBOARDING: {
+                'name': 'User Onboarding Validation',
+                'description': 'Test comprehensive user onboarding and support systems',
+                'duration_minutes': 75,
+                'test_cases': [
+                    {
+                        'name': 'onboarding_flow',
+                        'description': 'Test complete user onboarding experience',
+                        'steps': ['test_registration', 'validate_tutorial_flow', 'check_progress_tracking', 'measure_completion_rate'],
+                        'expected_outcomes': ['smooth_registration', 'engaging_tutorials', 'accurate_tracking', 'high_completion_rate']
+                    },
+                    {
+                        'name': 'support_system',
+                        'description': 'Test user support and help systems',
+                        'steps': ['test_help_desk', 'validate_documentation', 'check_community_support', 'measure_resolution_time'],
+                        'expected_outcomes': ['responsive_support', 'helpful_documentation', 'active_community', 'quick_resolution']
+                    }
+                ]
+            },
+            TestScenario.API_MARKETPLACE: {
+                'name': 'API Marketplace Validation',
+                'description': 'Test API marketplace and third-party integrations',
+                'duration_minutes': 100,
+                'test_cases': [
+                    {
+                        'name': 'marketplace_functionality',
+                        'description': 'Test API marketplace core functionality',
+                        'steps': ['test_api_discovery', 'validate_integration_flow', 'check_billing_system', 'measure_developer_engagement'],
+                        'expected_outcomes': ['easy_discovery', 'smooth_integration', 'accurate_billing', 'high_engagement']
+                    },
+                    {
+                        'name': 'third_party_integrations',
+                        'description': 'Test third-party service integrations',
+                        'steps': ['test_popular_integrations', 'validate_webhooks', 'check_data_sync', 'measure_integration_success'],
+                        'expected_outcomes': ['working_integrations', 'reliable_webhooks', 'accurate_sync', 'successful_integrations']
                     }
                 ]
             }
@@ -475,6 +637,239 @@ class BetaTestingFramework:
             recommendations.append(f"Address issues in {len(failed_tests)} failed test cases")
 
         return recommendations
+
+    # Phase 5: Community Beta Program Management
+
+    async def create_community_beta_program(self, name: str, description: str,
+                                          target_participants: int = 20,
+                                          success_criteria: Dict[str, Any] = None) -> str:
+        """
+        Create a new community beta program
+
+        Args:
+            name: Program name
+            description: Program description
+            target_participants: Target number of participants
+            success_criteria: Success criteria for the program
+
+        Returns:
+            Program ID
+        """
+        program_id = f"community_beta_{int(datetime.now().timestamp())}"
+
+        program = CommunityBetaProgram(
+            program_id=program_id,
+            name=name,
+            description=description,
+            target_participants=target_participants,
+            success_criteria=success_criteria or {
+                'min_participants': 10,
+                'engagement_rate': 0.7,
+                'feedback_completion_rate': 0.8,
+                'satisfaction_score': 4.0
+            }
+        )
+
+        self.community_programs[program_id] = program
+
+        self.logger.info(f"Created community beta program: {program_id} - {name}")
+        return program_id
+
+    async def register_beta_participant(self, program_id: str, user_id: str, email: str, name: str,
+                                      company: str = None, role: str = "user") -> Dict[str, Any]:
+        """
+        Register a participant for the community beta program
+
+        Args:
+            program_id: Community beta program ID
+            user_id: User ID
+            email: User email
+            name: User name
+            company: User company (optional)
+            role: User role
+
+        Returns:
+            Registration result
+        """
+        if program_id not in self.community_programs:
+            return {"status": "error", "error": "Program not found"}
+
+        program = self.community_programs[program_id]
+
+        if program.current_participants >= program.target_participants:
+            return {"status": "error", "error": "Program at capacity"}
+
+        # Create participant
+        participant = CommunityBetaParticipant(
+            user_id=user_id,
+            email=email,
+            name=name,
+            company=company,
+            role=role
+        )
+
+        # Add to program
+        program.participants[user_id] = participant
+        program.current_participants += 1
+
+        # Store globally
+        self.beta_participants[user_id] = participant
+
+        # Start program if we have minimum participants
+        if program.current_participants >= 10 and program.status == "planning":
+            program.status = "active"
+            program.start_date = datetime.now()
+
+        self.logger.info(f"Registered beta participant: {user_id} for program: {program_id}")
+        return {
+            "status": "registered",
+            "participant_id": user_id,
+            "program_id": program_id,
+            "welcome_message": self._generate_welcome_message(participant, program)
+        }
+
+    async def update_participant_engagement(self, user_id: str, activity_type: str,
+                                         activity_data: Dict[str, Any] = None) -> Dict[str, Any]:
+        """
+        Update participant engagement metrics
+
+        Args:
+            user_id: Participant user ID
+            activity_type: Type of activity (feedback, test_completion, etc.)
+            activity_data: Additional activity data
+
+        Returns:
+            Updated engagement metrics
+        """
+        if user_id not in self.beta_participants:
+            return {"status": "error", "error": "Participant not found"}
+
+        participant = self.beta_participants[user_id]
+
+        # Update activity
+        participant.last_activity = datetime.now()
+
+        # Update engagement based on activity type
+        engagement_points = {
+            'feedback_submitted': 10,
+            'test_completed': 15,
+            'bug_reported': 8,
+            'feature_suggestion': 12,
+            'session_participated': 5,
+            'tutorial_completed': 20
+        }
+
+        points = engagement_points.get(activity_type, 5)
+        participant.engagement_score += points
+
+        # Update specific metrics
+        if activity_type == 'feedback_submitted':
+            participant.feedback_count += 1
+        elif activity_type == 'test_completed':
+            participant.test_completion_rate = min(1.0, participant.test_completion_rate + 0.1)
+
+        # Update program-level metrics
+        await self._update_program_engagement_metrics()
+
+        return {
+            "status": "updated",
+            "engagement_score": participant.engagement_score,
+            "feedback_count": participant.feedback_count,
+            "test_completion_rate": participant.test_completion_rate
+        }
+
+    async def get_community_beta_status(self, program_id: str = None) -> Dict[str, Any]:
+        """
+        Get community beta program status
+
+        Args:
+            program_id: Specific program ID (optional)
+
+        Returns:
+            Program status and metrics
+        """
+        if program_id:
+            if program_id not in self.community_programs:
+                return {"status": "error", "error": "Program not found"}
+
+            program = self.community_programs[program_id]
+            return {
+                "program_id": program_id,
+                "name": program.name,
+                "status": program.status,
+                "participants": program.current_participants,
+                "target": program.target_participants,
+                "engagement_metrics": program.engagement_metrics,
+                "success_criteria": program.success_criteria,
+                "progress_percentage": (program.current_participants / program.target_participants) * 100
+            }
+
+        # Return all programs
+        programs_status = {}
+        for pid, program in self.community_programs.items():
+            programs_status[pid] = {
+                "name": program.name,
+                "status": program.status,
+                "participants": program.current_participants,
+                "target": program.target_participants,
+                "progress": (program.current_participants / program.target_participants) * 100
+            }
+
+        return {
+            "total_programs": len(self.community_programs),
+            "active_programs": len([p for p in self.community_programs.values() if p.status == "active"]),
+            "programs": programs_status,
+            "overall_metrics": self.community_engagement_metrics
+        }
+
+    def _generate_welcome_message(self, participant: CommunityBetaParticipant,
+                                program: CommunityBetaProgram) -> str:
+        """Generate personalized welcome message for beta participant"""
+        return f"""
+Welcome to the CES Community Beta Program, {participant.name}!
+
+Thank you for joining our beta testing community. As a {participant.role} at {participant.company or 'your organization'}, your feedback will be invaluable in shaping the future of CES.
+
+Program Details:
+- Program: {program.name}
+- Your Role: {participant.role}
+- Start Date: {datetime.now().strftime('%Y-%m-%d')}
+
+What to expect:
+1. Access to the latest CES features
+2. Regular updates and new releases
+3. Direct communication with the development team
+4. Opportunity to influence product direction
+
+Please complete your onboarding and start exploring CES. We're excited to have you as part of our community!
+
+Best regards,
+CES Beta Team
+"""
+
+    async def _update_program_engagement_metrics(self):
+        """Update overall program engagement metrics"""
+        if not self.beta_participants:
+            return
+
+        total_participants = len(self.beta_participants)
+        active_participants = len([p for p in self.beta_participants.values()
+                                 if p.last_activity and
+                                 (datetime.now() - p.last_activity).days <= 7])
+
+        avg_engagement = sum(p.engagement_score for p in self.beta_participants.values()) / total_participants
+        avg_feedback_rate = sum(p.feedback_count for p in self.beta_participants.values()) / total_participants
+        avg_completion_rate = sum(p.test_completion_rate for p in self.beta_participants.values()) / total_participants
+
+        self.community_engagement_metrics = {
+            'total_participants': total_participants,
+            'active_participants': active_participants,
+            'activity_rate': active_participants / total_participants if total_participants > 0 else 0,
+            'average_engagement_score': avg_engagement,
+            'average_feedback_count': avg_feedback_rate,
+            'average_test_completion_rate': avg_completion_rate,
+            'last_updated': datetime.now().isoformat()
+        }
 
     async def collect_user_feedback(self, user_id: str, category: FeedbackCategory,
                                   rating: int, comments: str, feature_context: str,

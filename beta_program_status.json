@@ -1,0 +1,16 @@
+{
+  "status": "active",
+  "program_info": {
+    "total_programs": 1,
+    "programs": {
+      "community_beta_1756750887": {
+        "name": "CES Community Beta Program - Phase 5 Launch",
+        "status": "active",
+        "participants": 15,
+        "target": 20,
+        "progress": 75.0
+      }
+    }
+  },
+  "timestamp": "2025-09-01T14:21:27.165164"
+}
