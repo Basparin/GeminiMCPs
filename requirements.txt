@@ -30,3 +30,4 @@ matplotlib
 click
 rich
 pyyaml
+aiofiles

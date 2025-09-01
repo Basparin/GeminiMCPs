@@ -12,6 +12,7 @@ import subprocess
 import json
 
 from .cli_integration import AIAssistantManager, APIResult, CLIResult
+from .specialization import specialization_manager
 
 
 class AIOrchestrator:
@@ -88,9 +89,9 @@ class AIOrchestrator:
         return recommendations
 
     async def execute_task(self, task_description: str, context: Optional[Dict[str, Any]] = None,
-                          assistant_preferences: Optional[List[str]] = None) -> Dict[str, Any]:
+                           assistant_preferences: Optional[List[str]] = None) -> Dict[str, Any]:
         """
-        Execute a task using the most appropriate AI assistant
+        Execute a task using the most appropriate AI assistant with specialization
 
         Args:
             task_description: Task to execute
@@ -102,13 +103,29 @@ class AIOrchestrator:
         """
         start_time = datetime.now()
 
-        # Select assistant
-        assistant = self._select_assistant(task_description, assistant_preferences)
+        # Analyze task with specialization manager
+        task_analysis = specialization_manager.analyze_task(task_description)
+
+        # Get available assistants
+        available_assistants = [name for name, info in self.assistants.items()
+                               if self._is_assistant_available(name)]
+
+        # Select optimal assistant using specialization
+        if assistant_preferences:
+            # Filter by preferences but use specialization for ranking
+            preferred_available = [pref for pref in assistant_preferences if pref in available_assistants]
+            if preferred_available:
+                assistant = specialization_manager.select_optimal_assistant(task_analysis, preferred_available)
+            else:
+                assistant = specialization_manager.select_optimal_assistant(task_analysis, available_assistants)
+        else:
+            assistant = specialization_manager.select_optimal_assistant(task_analysis, available_assistants)
 
         if not assistant:
             return {
                 "status": "failed",
                 "error": "No suitable AI assistant available",
+                "task_analysis": task_analysis,
                 "timestamp": start_time.isoformat()
             }
 
@@ -117,22 +134,42 @@ class AIOrchestrator:
             result = await self._execute_with_assistant(assistant, task_description, context)
             execution_time = (datetime.now() - start_time).total_seconds()
 
+            # Record result for learning
+            success = "error" not in str(result).lower() and len(str(result)) > 10
+            await specialization_manager.record_task_result(
+                task_description=task_description,
+                assistant_name=assistant,
+                success=success,
+                response_time=execution_time
+            )
+
             return {
                 "status": "completed",
                 "assistant_used": assistant,
                 "result": result,
                 "execution_time": execution_time,
+                "task_analysis": task_analysis,
                 "timestamp": start_time.isoformat()
             }
 
         except Exception as e:
             execution_time = (datetime.now() - start_time).total_seconds()
             self.logger.error(f"Task execution failed with {assistant}: {e}")
+
+            # Record failed result for learning
+            await specialization_manager.record_task_result(
+                task_description=task_description,
+                assistant_name=assistant,
+                success=False,
+                response_time=execution_time
+            )
+
             return {
                 "status": "failed",
                 "assistant_used": assistant,
                 "error": str(e),
                 "execution_time": execution_time,
+                "task_analysis": task_analysis,
                 "timestamp": start_time.isoformat()
             }
 
@@ -218,17 +255,49 @@ class AIOrchestrator:
             return f"Execution failed: {str(e)}"
 
     def get_available_assistants(self) -> List[Dict[str, Any]]:
-        """Get list of available AI assistants"""
+        """Get list of available AI assistants with specialization info"""
         available = []
         for name, info in self.assistants.items():
             if self._is_assistant_available(name):
-                available.append({
+                # Get specialization data
+                profile = specialization_manager.assistant_profiles.get(name)
+                assistant_info = {
                     "name": name,
                     "display_name": info["name"],
                     "capabilities": info["capabilities"],
                     "strengths": info["strengths"]
-                })
+                }
+
+                if profile:
+                    assistant_info.update({
+                        "performance_score": profile.performance_score,
+                        "task_count": profile.task_count,
+                        "success_rate": profile.success_rate,
+                        "average_response_time": profile.average_response_time,
+                        "specializations": profile.specializations
+                    })
+
+                available.append(assistant_info)
         return available
+
+    def get_task_recommendations(self, task_description: str) -> Dict[str, Any]:
+        """
+        Get detailed recommendations for a task including specialization analysis
+
+        Args:
+            task_description: Description of the task
+
+        Returns:
+            Detailed task analysis and recommendations
+        """
+        analysis = specialization_manager.analyze_task(task_description)
+        recommendations = specialization_manager.get_assistant_recommendations(task_description)
+
+        return {
+            "task_analysis": analysis,
+            "assistant_recommendations": recommendations,
+            "specialization_status": specialization_manager.get_specialization_status()
+        }
 
     async def test_assistant_connection(self, assistant_name: str) -> Dict[str, Any]:
         """
@@ -261,9 +330,10 @@ class AIOrchestrator:
             }
 
     def get_status(self) -> Dict[str, Any]:
-        """Get AI orchestrator status"""
+        """Get AI orchestrator status with specialization info"""
         available_count = len(self.get_available_assistants())
         cli_status = self.cli_manager.get_all_status()
+        specialization_status = specialization_manager.get_specialization_status()
 
         return {
             "status": "operational",
@@ -271,7 +341,23 @@ class AIOrchestrator:
             "available_assistants": available_count,
             "assistants": list(self.assistants.keys()),
             "cli_integration_status": cli_status,
+            "specialization_status": specialization_status,
             "last_check": datetime.now().isoformat()
+        }
+
+    def get_performance_report(self) -> Dict[str, Any]:
+        """
+        Get comprehensive performance report including specialization metrics
+
+        Returns:
+            Performance report with specialization data
+        """
+        specialization_report = specialization_manager.get_performance_report()
+
+        return {
+            "orchestrator_status": self.get_status(),
+            "specialization_metrics": specialization_report,
+            "generated_at": datetime.now().isoformat()
         }
 
     def health_check(self) -> Dict[str, Any]:

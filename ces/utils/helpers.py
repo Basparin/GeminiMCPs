@@ -6,9 +6,11 @@ Common utility functions and helpers used throughout the CES system.
 
 import logging
 import sys
+import platform
 from typing import Dict, Any, Optional
 from pathlib import Path
 import json
+import psutil
 
 
 def setup_logging(level: str = "INFO", debug_mode: bool = False) -> logging.Logger:
@@ -239,3 +241,36 @@ def get_file_size_mb(file_path: Path) -> float:
         return file_path.stat().st_size / (1024 * 1024)
     except (OSError, FileNotFoundError):
         return 0.0
+
+
+def get_system_info() -> Dict[str, Any]:
+    """
+    Get comprehensive system information
+
+    Returns:
+        Dictionary with system information
+    """
+    try:
+        return {
+            "platform": platform.system(),
+            "platform_version": platform.version(),
+            "architecture": platform.machine(),
+            "processor": platform.processor(),
+            "python_version": platform.python_version(),
+            "cpu_count": psutil.cpu_count(),
+            "cpu_percent": psutil.cpu_percent(interval=1),
+            "memory_total": psutil.virtual_memory().total,
+            "memory_available": psutil.virtual_memory().available,
+            "memory_percent": psutil.virtual_memory().percent,
+            "disk_total": psutil.disk_usage('/').total,
+            "disk_free": psutil.disk_usage('/').free,
+            "disk_percent": psutil.disk_usage('/').percent,
+            "network_interfaces": len(psutil.net_if_addrs())
+        }
+    except Exception as e:
+        logging.warning(f"Failed to get system info: {e}")
+        return {
+            "platform": platform.system(),
+            "python_version": platform.python_version(),
+            "error": str(e)
+        }
