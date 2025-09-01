@@ -1431,7 +1431,7 @@ class PerformanceReportGenerator:
             return html_file
 
         except Exception as e:
-            logger.error(f"Failed to export HTML report securely: {e}")
+            logger.exception(f"Failed to export HTML report securely: {e}")
             if html_file.exists():
                 html_file.unlink()  # Clean up on failure
             raise

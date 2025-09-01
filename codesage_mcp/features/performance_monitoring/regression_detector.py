@@ -528,7 +528,7 @@ class RegressionDetector:
                 await self.github_integration.create_issues(report)
 
         except Exception as e:
-            self.logger.error("Failed to handle regressions", error=str(e))
+            self.logger.exception("Failed to handle regressions", error=str(e))
 
     async def _trigger_rollback(self, report: RegressionReport):
         """Trigger automated rollback for critical regressions."""

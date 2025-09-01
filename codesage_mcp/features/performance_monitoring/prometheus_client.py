@@ -463,7 +463,7 @@ class PrometheusMetricsCollector:
                     logger.debug("Successfully pushed metrics to Pushgateway")
 
         except Exception as e:
-            logger.error(f"Failed to push metrics to Pushgateway: {e}")
+            logger.exception(f"Failed to push metrics to Pushgateway: {e}")
 
     def _format_metrics_exposition(self, metrics: Dict[str, Any],
                                  grouping_key: Optional[Dict[str, str]] = None) -> str:

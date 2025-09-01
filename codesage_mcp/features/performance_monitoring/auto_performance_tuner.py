@@ -250,7 +250,7 @@ class AutoPerformanceTuner:
                 self._perform_tuning_cycle()
                 time.sleep(self.tuning_interval_minutes * 60)
             except Exception as e:
-                logger.error(f"Error in automatic tuning loop: {e}")
+                logger.exception(f"Error in automatic tuning loop: {e}")
                 time.sleep(60)
 
     def _perform_tuning_cycle(self) -> None:

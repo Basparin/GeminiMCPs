@@ -412,7 +412,7 @@ class WorkloadPatternRecognition:
                     logger.debug(f"Applied allocation: {allocation.resource_type.value} = {allocation.recommended_allocation}")
 
             except Exception as e:
-                logger.warning(f"Failed to apply allocation {allocation.resource_type.value}: {e}")
+                logger.exception(f"Failed to apply allocation {allocation.resource_type.value}: {e}")
 
         return applied_allocations
 
@@ -1122,4 +1122,4 @@ def get_workload_pattern_recognition() -> WorkloadPatternRecognition:
     global _workload_pattern_recognition
     if _workload_pattern_recognition is None:
         _workload_pattern_recognition = WorkloadPatternRecognition()
-    return _workload_pattern_recognition
+    return _workload_pattern_recognitionon

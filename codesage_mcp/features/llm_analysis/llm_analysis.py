@@ -286,7 +286,7 @@ class LLMAnalysisManager:
                             delay = HTTP_RETRY_BACKOFF_FACTOR * (2 ** attempt)
                             delay = min(delay, 60)  # Cap at 60 seconds
 
-                            logger.warning(f"LLM API call failed (attempt {attempt + 1}/{HTTP_MAX_RETRIES + 1}): {e}. Retrying in {delay:.2f}s...")
+                            logger.exception(f"LLM API call failed (attempt {attempt + 1}/{HTTP_MAX_RETRIES + 1}): {e}. Retrying in {delay:.2f}s...")
                             await asyncio.sleep(delay)
                             continue
 

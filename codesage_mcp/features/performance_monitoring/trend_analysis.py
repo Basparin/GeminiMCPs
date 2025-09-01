@@ -167,7 +167,7 @@ class TrendAnalyzer:
                 return trend
 
             except Exception as e:
-                logger.warning(f"Error analyzing trend for {metric_name}: {e}")
+                logger.exception(f"Error analyzing trend for {metric_name}: {e}")
                 return None
 
     def get_all_trends(self, analysis_window_days: Optional[int] = None) -> Dict[str, PerformanceTrend]:
