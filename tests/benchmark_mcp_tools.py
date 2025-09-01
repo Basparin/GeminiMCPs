@@ -7,16 +7,14 @@ and edge cases to ensure comprehensive performance validation.
 """
 
 import time
-import json
 import statistics
 import requests
 import tempfile
 import shutil
 from pathlib import Path
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, field
+from typing import Dict, List, Any
+from dataclasses import dataclass
 import concurrent.futures
-import threading
 
 from benchmark_performance import BenchmarkResult, PerformanceBenchmarker
 

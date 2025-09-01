@@ -118,6 +118,9 @@ Searches for a pattern within indexed code files, with optional exclusion patter
 - `pattern` (str, required)
 - `file_types` (list[str], optional): If None, all file types are included.
 - `exclude_patterns` (list[str], optional): Files matching these patterns will be skipped.
+- `search_mode` (str, optional): Search mode - "regex", "semantic", or "graph". Default: "regex".
+- `context_depth` (int, optional): Depth of related code to include (1-3). Default: 1.
+- `include_dependencies` (bool, optional): Whether to include dependency information. Default: True.
 
 **Example Usage:**
 ```json
@@ -357,29 +360,6 @@ Parses the content of an LLM response, extracting and validating JSON data.
           or an 'error' key with a message if parsing fails.
 
 
-### profile_code_performance
-Profiles the performance of a specific function or the entire file using cProfile to measure execution time and resource usage.
-
-**Parameters:**
-- `file_path` (str, required): The absolute path to the file.
-- `function_name` (str, optional): If None, profiles the entire file.
-
-**Example Usage:**
-```json
-{
-  "name": "profile_code_performance",
-  "arguments": {
-    "file_path": "src/performance_critical.py",
-    "function_name": "heavy_computation"
-  }
-}
-```
-
-**Returns:**
-    dict: Profiling results including execution time, function calls, and
-        performance bottlenecks.
-
-
 ### resolve_todo_fixme
 Analyzes a TODO/FIXME comment and suggests potential resolutions using LLMs.
 
@@ -514,6 +494,156 @@ None
 **Returns:**
     dict: Statistics about the advanced analysis system including supported analyses and performance metrics.
 
+
+### get_adaptive_cache_status
+Get the current status of adaptive cache management.
+
+**Parameters:**
+None
+
+**Example Usage:**
+```json
+{
+  "name": "get_adaptive_cache_status",
+  "arguments": {}
+}
+```
+
+### trigger_cache_adaptation
+Trigger manual cache adaptation for specified cache type or all caches.
+
+**Parameters:**
+- `cache_type` (str, optional): Optional specific cache type to adapt ("embedding", "search", "file")
+- `strategy` (str, optional): Adaptation strategy to use ("performance_based", "usage_pattern_based", "load_aware", "predictive", "hybrid"). Default: "hybrid".
+
+**Example Usage:**
+```json
+{
+  "name": "trigger_cache_adaptation",
+  "arguments": {
+    "cache_type": "embedding",
+    "strategy": "performance_based"
+  }
+}
+```
+
+### get_cache_sizing_recommendations
+Get cache sizing recommendations for a specific cache type using different strategies.
+
+**Parameters:**
+- `cache_type` (str, required): Cache type to analyze ("embedding", "search", "file")
+- `strategy` (str, optional): Sizing strategy to use ("performance_based", "usage_pattern_based", "load_aware", "predictive", "hybrid"). Default: "hybrid".
+
+**Example Usage:**
+```json
+{
+  "name": "get_cache_sizing_recommendations",
+  "arguments": {
+    "cache_type": "embedding",
+    "strategy": "predictive"
+  }
+}
+```
+
+### analyze_cache_adaptation_effectiveness
+Analyze the effectiveness of cache adaptations over time.
+
+**Parameters:**
+- `time_window_hours` (int, optional): Number of hours to analyze (default: 24)
+
+**Example Usage:**
+```json
+{
+  "name": "analyze_cache_adaptation_effectiveness",
+  "arguments": {
+    "time_window_hours": 48
+  }
+}
+```
+
+### get_cache_adaptation_rules
+Get information about cache adaptation rules and their performance.
+
+**Parameters:**
+None
+
+**Example Usage:**
+```json
+{
+  "name": "get_cache_adaptation_rules",
+  "arguments": {}
+}
+```
+
+### get_performance_metrics
+Get current real-time performance metrics.
+
+**Parameters:**
+None
+
+**Example Usage:**
+```json
+{
+  "name": "get_performance_metrics",
+  "arguments": {}
+}
+```
+
+### get_performance_report
+Generate a comprehensive performance report.
+
+**Parameters:**
+None
+
+**Example Usage:**
+```json
+{
+  "name": "get_performance_report",
+  "arguments": {}
+}
+```
+
+### get_usage_patterns
+Analyze and return usage patterns across different user profiles.
+
+**Parameters:**
+None
+
+**Example Usage:**
+```json
+{
+  "name": "get_usage_patterns",
+  "arguments": {}
+}
+```
+
+### get_predictive_analytics
+Get predictive analytics for performance optimization.
+
+**Parameters:**
+None
+
+**Example Usage:**
+```json
+{
+  "name": "get_predictive_analytics",
+  "arguments": {}
+}
+```
+
+### detect_performance_regressions
+Detect performance regressions by comparing current results against baseline.
+
+**Parameters:**
+- `current_results` (dict, optional): Current benchmark results to analyze. If None, uses latest available results.
+
+**Example Usage:**
+```json
+{
+  "name": "detect_performance_regressions",
+  "arguments": {}
+}
+```
 
 ## Configuration Tools
 

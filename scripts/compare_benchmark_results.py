@@ -9,8 +9,7 @@ to detect performance regressions and improvements.
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
-import statistics
+from typing import Dict, List, Any, Optional
 from datetime import datetime
 import glob
 

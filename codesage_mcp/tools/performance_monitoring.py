@@ -7,7 +7,7 @@ including real-time metrics, usage patterns, and predictive analytics.
 
 import logging
 from typing import Dict, Any, List
-from codesage_mcp.performance_monitor import (
+from codesage_mcp.features.performance_monitoring.performance_monitor import (
     get_performance_monitor,
     get_usage_analyzer,
     get_predictive_analytics
@@ -379,14 +379,13 @@ def detect_performance_regressions_tool(current_results: Dict[str, Any] = None) 
         - Alert status and actions taken
     """
     try:
-        from codesage_mcp.regression_detector import get_regression_detector
+        from codesage_mcp.features.performance_monitoring.regression_detector import get_regression_detector
 
         detector = get_regression_detector()
 
         # If no current results provided, try to get from recent benchmark results
         if current_results is None:
             # Try to load from benchmark_results directory
-            import os
             from pathlib import Path
             import json
 

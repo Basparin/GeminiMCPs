@@ -37,4 +37,4 @@ echo "✅ Environment variables loaded successfully"
 echo "🔧 Starting server on http://127.0.0.1:8002"
 
 # Start the server
-uvicorn codesage_mcp.main:app --host 127.0.0.1 --port 8002
+uvicorn codesage_mcp.main:app --host 127.0.0.1 --port 8000

@@ -17,23 +17,59 @@ This document defines the required folder structure for the CodeSage MCP Server 
 ├── codesage_mcp/
 │   ├── __init__.py             # Python package initializer
 │   ├── main.py                 # Main FastAPI application entry point
-│   ├── tools/                  # Directory for individual MCP tool implementations
+│   ├── config/                 # Configuration related files
 │   │   ├── __init__.py
-│   │   └── ... (e.g., read_code_file.py, index_codebase.py)
-│   ├── config.py               # Application configuration settings
-│   ├── codebase_manager.py     # Core logic for codebase interaction (indexing, searching)
-│   ├── indexing.py             # Logic for codebase indexing (e.g., FAISS integration)
-│   ├── caching.py              # Caching system implementation
-│   ├── llm_analysis.py         # LLM integration and analysis logic
-│   ├── memory_manager.py       # Memory optimization and management
-│   └── ... (other core application modules)
+│   │   └── config.py
+│   ├── core/                   # Proposed: Core structural components (currently at top-level codesage_mcp)
+│   │   ├── __init__.py
+│   │   └── ... (e.g., gemini_compatibility.py, exceptions.py, utils.py)
+│   ├── features/               # Proposed: Directory for distinct features
+│   │   ├── __init__.py
+│   │   ├── caching/            # Proposed: Caching system feature
+│   │   │   ├── __init__.py
+│   │   │   └── ... (e.g., cache.py, adaptive_cache_manager.py)
+│   │   ├── memory_management/  # Proposed: Memory management feature
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   ├── performance_monitoring/ # Proposed: Performance monitoring feature
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   ├── codebase_manager/   # Proposed: Codebase manager feature
+│   │   │   ├── __init__.py
+│   │   │   └── codebase_manager.py
+│   │   └── llm_analysis/       # Proposed: LLM analysis feature
+│   │       ├── __init__.py
+│   │       └── llm_analysis.py
+│   ├── tools/                  # Directory for individual MCP tool implementations (already exists)
+│   │   ├── __init__.py
+│   │   └── ... (e.g., codebase_analysis.py, llm_analysis.py, configuration.py)
+│   └── ... (other top-level structural files that don't fit in 'core' or 'config')
 ├── tests/
 │   ├── __init__.py
-│   ├── test_main.py            # Tests for main application logic
-│   ├── test_tools.py           # Tests for MCP tools
-│   ├── test_codebase_manager.py# Tests for codebase manager
-│   ├── benchmark_performance.py# Performance benchmark tests
-│   └── ... (other test files)
+│   ├── structural_base/        # Proposed: Tests for the core structural components
+│   │   ├── __init__.py
+│   │   └── ...
+│   ├── features/               # Proposed: Tests for distinct features
+│   │   ├── __init__.py
+│   │   ├── caching/
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   ├── memory_management/
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   ├── performance_monitoring/
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   ├── codebase_manager/
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   └── llm_analysis/
+│   │       ├── __init__.py
+│   │       └── ...
+│   ├── tools/                  # Proposed: Tests for individual MCP tool implementations
+│   │   ├── __init__.py
+│   │   └── ...
+│   └── ... (other top-level test files like conftest.py)
 ├── docs/
 │   ├── architecture.md         # High-level architectural overview
 │   ├── GEMINI.md               # Project overview for Gemini CLI

@@ -23,28 +23,40 @@ This document establishes comprehensive guidelines for modularity and dependenci
 ```
 codesage_mcp/
 ├── main.py                    # Entry point, heavy imports
-├── config.py                  # Configuration management
-├── exceptions.py              # Custom exceptions
-├── logging_config.py          # Logging setup
-├── utils.py                   # Utility functions
-├── cache.py                   # Complex caching system
-├── indexing.py                # FAISS indexing (large module)
-├── memory_manager.py          # Memory optimization
-├── chunking.py                # Document chunking
-├── codebase_manager.py        # Core business logic
-├── llm_analysis.py            # LLM integration
-├── searching.py               # Search functionality
+├── config/                    # Configuration management
+│   ├── __init__.py
+│   └── config.py
+├── core/                      # Proposed: Core structural components
+│   ├── __init__.py
+│   └── ... (e.g., exceptions.py, utils.py, gemini_compatibility.py)
+├── features/                  # Proposed: Directory for distinct features
+│   ├── __init__.py
+│   ├── caching/               # Caching system feature
+│   │   ├── __init__.py
+│   │   └── ...
+│   ├── memory_management/     # Memory management feature
+│   │   ├── __init__.py
+│   │   └── ...
+│   ├── performance_monitoring/ # Performance monitoring feature
+│   │   ├── __init__.py
+│   │   └── ...
+│   ├── codebase_manager/      # Codebase manager feature
+│   │   ├── __init__.py
+│   │   └── codebase_manager.py
+│   └── llm_analysis/          # LLM analysis feature
+│       ├── __init__.py
+│       └── llm_analysis.py
 ├── tools/                     # Tool implementations
-│   ├── __init__.py           # Heavy imports from all tools
-│   ├── *_tools.py            # Individual tool modules
+│   ├── __init__.py
+│   ├── *_tools.py             # Individual tool modules
 └── [additional modules...]
 ```
 
 ### Current Issues Identified
 
 1. **Heavy Interdependencies**: `main.py` imports from 20+ modules
-2. **Potential Circular Imports**: Complex import chains (e.g., indexing ↔ cache ↔ config)
-3. **Large Modules**: Some modules exceed 2000 lines (indexing.py, cache.py)
+2. **Potential Circular Imports**: Complex import chains (e.g., codesage_mcp/core/indexing ↔ codesage_mcp/features/caching/cache ↔ codesage_mcp/config/config)
+3. **Large Modules**: Some modules exceed 2000 lines (codesage_mcp/core/indexing.py, codesage_mcp/features/caching/cache.py)
 4. **Mixed Responsibilities**: Modules handle multiple concerns
 5. **Deep Import Hierarchies**: Tools import from core modules that import from tools
 
@@ -105,15 +117,15 @@ exceptions.py → (minimal imports)
 utils.py → (minimal imports)
 logging_config.py → exceptions.py, config.py
 
-cache.py → config.py, exceptions.py, utils.py
-indexing.py → config.py, exceptions.py, cache.py, memory_manager.py
-memory_manager.py → config.py, exceptions.py
+codesage_mcp/features/caching/cache.py → codesage_mcp/config/config.py, codesage_mcp/core/exceptions.py, codesage_mcp/core/utils.py
+codesage_mcp/core/indexing.py → codesage_mcp/config/config.py, codesage_mcp/core/exceptions.py, codesage_mcp/features/caching/cache.py, codesage_mcp/features/memory_management/memory_manager.py
+codesage_mcp/features/memory_management/memory_manager.py → codesage_mcp/config/config.py, codesage_mcp/core/exceptions.py
 
-codebase_manager.py → indexing.py, searching.py, llm_analysis.py
-llm_analysis.py → config.py, exceptions.py, utils.py
+codesage_mcp/features/codebase_manager/codebase_manager.py → codesage_mcp/core/indexing.py, codesage_mcp/core/searching.py, codesage_mcp/features/llm_analysis/llm_analysis.py
+codesage_mcp/features/llm_analysis/llm_analysis.py → codesage_mcp/config/config.py, codesage_mcp/core/exceptions.py, codesage_mcp/core/utils.py
 
-tools/*.py → codebase_manager.py, llm_analysis.py, utils.py
-main.py → tools/*.py, config.py, exceptions.py
+codesage_mcp/tools/*.py → codesage_mcp/features/codebase_manager/codebase_manager.py, codesage_mcp/features/llm_analysis/llm_analysis.py, codesage_mcp/core/utils.py
+codesage_mcp/main.py → codesage_mcp/tools/*.py, codesage_mcp/config/config.py, codesage_mcp/core/exceptions.py
 ```
 
 **Prohibited Import Directions:**
@@ -147,7 +159,7 @@ from .cache import get_cache_instance
 
 ```python
 # Good: Clear aliases for complex names
-from codesage_mcp.indexing import IndexingManager as IndexManager
+from codesage_mcp.core.indexing import IndexingManager as IndexManager
 
 # Bad: Unclear aliases
 from codesage_mcp.indexing import IndexingManager as IM
@@ -162,15 +174,15 @@ from codesage_mcp.indexing import IndexingManager as IM
    - `logging_config.py`, `prometheus_client.py`
 
 2. **Core Services Layer**
-   - `cache.py`, `memory_manager.py`
-   - `chunking.py`, `performance_monitor.py`
+    - `codesage_mcp/features/caching/cache.py`, `codesage_mcp/features/memory_management/memory_manager.py`
+    - `codesage_mcp/core/chunking.py`, `codesage_mcp/features/performance_monitoring/performance_monitor.py`
 
 3. **Business Logic Layer**
-   - `indexing.py`, `searching.py`, `llm_analysis.py`
-   - `codebase_manager.py`, `adaptive_cache_manager.py`
+    - `codesage_mcp/core/indexing.py`, `codesage_mcp/core/searching.py`, `codesage_mcp/features/llm_analysis/llm_analysis.py`
+    - `codesage_mcp/features/codebase_manager/codebase_manager.py`, `codesage_mcp/features/caching/adaptive_cache_manager.py`
 
 4. **Interface Layer** (Top)
-   - `tools/*.py`, `main.py`
+    - `codesage_mcp/tools/*.py`, `codesage_mcp/main.py`
 
 ### Hierarchical Import Rules
 
@@ -180,18 +192,18 @@ from .config import ENABLE_CACHING
 from .exceptions import BaseMCPError
 
 # Core Services → Infrastructure only
-from .config import MAX_MEMORY_MB
-from .exceptions import IndexingError
+from codesage_mcp.config.config import MAX_MEMORY_MB
+from codesage_mcp.core.exceptions import IndexingError
 
 # Business Logic → Core Services + Infrastructure
-from .cache import get_cache_instance
-from .memory_manager import get_memory_manager
-from .config import CHUNK_SIZE_TOKENS
+from codesage_mcp.features.caching.cache import get_cache_instance
+from codesage_mcp.features.memory_management.memory_manager import get_memory_manager
+from codesage_mcp.config.config import CHUNK_SIZE_TOKENS
 
 # Interface → Business Logic + Core Services + Infrastructure
-from .codebase_manager import get_llm_analysis_manager
-from .cache import IntelligentCache
-from .config import get_configuration_status
+from codesage_mcp.features.codebase_manager.codebase_manager import get_llm_analysis_manager
+from codesage_mcp.features.caching.cache import IntelligentCache
+from codesage_mcp.config.config import get_configuration_status
 ```
 
 ## Shared Components
@@ -248,10 +260,9 @@ class SearchResult:
 ### 3. Factory Pattern for Complex Objects
 
 ```python
-# codesage_mcp/factories.py
-from .interfaces import CacheInterface, IndexingInterface
-from .cache import IntelligentCache
-from .indexing import IndexingManager
+# codesage_mcp/core/factories.py
+from codesage_mcp.features.caching.cache import IntelligentCache
+from codesage_mcp.core.indexing import IndexingManager
 
 class ComponentFactory:
     _cache_instance: Optional[CacheInterface] = None
@@ -298,15 +309,15 @@ pylint codesage_mcp/ --disable=all --enable=imports
 
 **Before (Problematic):**
 ```python
-# indexing.py
-from .cache import get_cache_instance
+# codesage_mcp/core/indexing.py
+from codesage_mcp.features.caching.cache import get_cache_instance
 
 class IndexingManager:
     def __init__(self):
         self.cache = get_cache_instance()
 
-# cache.py
-from .indexing import IndexingManager
+# codesage_mcp/features/caching/cache.py
+from codesage_mcp.core.indexing import IndexingManager
 
 def get_cache_instance():
     indexer = IndexingManager()  # Circular!
@@ -315,12 +326,12 @@ def get_cache_instance():
 
 **After (Fixed):**
 ```python
-# indexing.py
+# codesage_mcp/core/indexing.py
 class IndexingManager:
     def __init__(self, cache: CacheInterface):
         self.cache = cache
 
-# cache.py
+# codesage_mcp/features/caching/cache.py
 def get_cache_instance() -> IntelligentCache:
     return IntelligentCache()
 
@@ -523,7 +534,7 @@ cache = ServiceLocator.get("cache", CacheInterface)
 
 **Before:**
 ```python
-# indexing.py (2000+ lines)
+# codesage_mcp/core/indexing.py (2000+ lines)
 class IndexingManager:
     # 15+ methods, multiple responsibilities
     def index_codebase(self): pass
@@ -547,7 +558,7 @@ class IndexingManager:
 class IndexingMemoryManager:
     def optimize_for_indexing(self): pass
 
-# indexing/cache.py
+# codesage_mcp/core/indexing_cache.py
 class IndexingCacheManager:
     def prefetch_for_indexing(self): pass
 ```
@@ -557,8 +568,8 @@ class IndexingCacheManager:
 **Before:**
 ```python
 # main.py
-from codesage_mcp.indexing import IndexingManager
-from codesage_mcp.cache import get_cache_instance
+from codesage_mcp.core.indexing import IndexingManager
+from codesage_mcp.features.caching.cache import get_cache_instance
 
 indexer = IndexingManager()
 cache = get_cache_instance()
@@ -567,10 +578,11 @@ cache = get_cache_instance()
 **After:**
 ```python
 # main.py
-from codesage_mcp.factories import ComponentFactory
+from codesage_mcp.features.caching.cache import get_cache_instance
+from codesage_mcp.core.indexing import IndexingManager
 
-cache = ComponentFactory.get_cache()
-indexer = ComponentFactory.get_indexer(cache=cache)
+cache = get_cache_instance()
+indexer = IndexingManager(cache=cache)
 ```
 
 ### Example 3: Event-Driven Communication

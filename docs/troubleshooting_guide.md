@@ -280,7 +280,7 @@ docker-compose restart codesage-mcp
 ```bash
 # Run index optimization
 docker-compose exec codesage-mcp python -c "
-from codesage_mcp.indexing import IndexingManager
+from codesage_mcp.core.indexing import IndexingManager
 manager = IndexingManager()
 manager.optimize_index_for_memory()
 "

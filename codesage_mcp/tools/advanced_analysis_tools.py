@@ -4,9 +4,9 @@ This module provides tools for advanced code analysis capabilities including
 enhanced dependency mapping and performance prediction.
 """
 
-from codesage_mcp.advanced_analysis import AdvancedAnalysisManager
-from codesage_mcp.code_model import CodeGraph
-from codesage_mcp.utils import tool_error_handler
+from codesage_mcp.features.codebase_manager import AdvancedAnalysisManager
+from codesage_mcp.core.code_model import CodeGraph
+from codesage_mcp.core.utils import tool_error_handler
 
 # Initialize the advanced analysis manager
 _advanced_analysis_manager = None

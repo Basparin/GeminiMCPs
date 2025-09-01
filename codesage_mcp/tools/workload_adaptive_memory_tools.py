@@ -7,9 +7,8 @@ strategies based on current workload patterns, system load, and performance requ
 
 import logging
 from typing import Dict, Any, List
-from codesage_mcp.workload_adaptive_memory import (
+from codesage_mcp.features.memory_management.workload_adaptive_memory import (
     get_workload_adaptive_memory_manager,
-    WorkloadType,
     MemoryAllocationStrategy
 )
 

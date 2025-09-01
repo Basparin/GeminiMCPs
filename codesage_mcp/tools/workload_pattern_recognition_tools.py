@@ -8,7 +8,7 @@ and predictive workload forecasting.
 
 import logging
 from typing import Dict, Any, List
-from codesage_mcp.workload_pattern_recognition import (
+from codesage_mcp.features.memory_management.workload_pattern_recognition import (
     get_workload_pattern_recognition,
     WorkloadPattern,
     ResourceType

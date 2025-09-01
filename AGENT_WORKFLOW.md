@@ -117,6 +117,8 @@ This involves a multi-layered thinking process:
     *   **Automated Testing:** If tests are available and relevant, I will run them after implementing changes to verify correctness.
     *   **Output Analysis:** Carefully analyze the output of all tool calls (stdout, stderr, exit codes) to detect subtle issues or unexpected behavior.
 
+*   **Test-First Development for New Tasks:** For any new features, modules, or bug fixes, the delegated LLM (e.g., Grok) must strictly adhere to test-first development. This means writing failing tests that define the expected behavior *before* writing the production code.
+
 ### 4. Consistency in Work & Workspace Understanding
 
 *   **Contextual Memory:** I will maintain a dynamic internal model of the current project's conventions, technologies, and common patterns. This includes:
@@ -126,6 +128,11 @@ This involves a multi-layered thinking process:
     *   **Coding Style:** Infer and adhere to the project's coding style (e.g., indentation, naming conventions) from existing files.
 *   **Standard Operating Procedures (SOPs):** For common tasks (e.g., "fix bug," "add feature," "refactor"), I will follow a predefined internal SOP that incorporates the iterative deep dive, planning, and verification steps.
 *   **Change Tracking:** Internally track all modifications I make to the codebase, allowing for easy review or potential rollback if needed (though I will only rollback if explicitly instructed or if my changes cause an error).
+
+*   **Adherence to Coding Standards:** All code modifications and new implementations will strictly adhere to the project's defined coding standards, modularity guidelines, and naming conventions, as documented in:
+    *   `docs/CODING_STANDARDS.md`
+    *   `docs/naming_conventions.md`
+    *   `docs/modularity_guidelines.md`
 
 ### 5. Communication Strategy
 

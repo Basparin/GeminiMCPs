@@ -7,7 +7,7 @@ including performance metrics, optimization recommendations, and cache tuning gu
 
 import logging
 from typing import Dict, Any, List
-from codesage_mcp.cache_analysis import (
+from codesage_mcp.features.caching.cache_analysis import (
     get_cache_effectiveness_analyzer,
     get_cache_optimization_recommender
 )

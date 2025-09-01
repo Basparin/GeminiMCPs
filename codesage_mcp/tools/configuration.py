@@ -1,9 +1,9 @@
 """Configuration Tools Module for CodeSage MCP Server."""
 
 import os
-from codesage_mcp.utils import create_error_response, tool_error_handler
-from codesage_mcp.config import ENABLE_CACHING
-from codesage_mcp.cache import get_cache_instance
+from codesage_mcp.core.utils import create_error_response, tool_error_handler
+from codesage_mcp.config.config import ENABLE_CACHING
+from codesage_mcp.features.caching.cache import get_cache_instance
 
 
 def configure_api_key_tool(llm_provider: str, api_key: str) -> dict:
@@ -44,7 +44,7 @@ def configure_api_key_tool(llm_provider: str, api_key: str) -> dict:
     os.environ[env_var_name] = api_key.strip()
 
     # Update the global variables in config module
-    import codesage_mcp.config as config_module
+    import codesage_mcp.config.config as config_module
 
     if env_var_name == "GROQ_API_KEY":
         config_module.GROQ_API_KEY = api_key.strip()
@@ -65,7 +65,7 @@ def configure_api_key_tool(llm_provider: str, api_key: str) -> dict:
 @tool_error_handler
 def get_configuration_tool() -> dict:
     """Returns the current configuration, with API keys masked for security."""
-    from codesage_mcp.config import (
+    from codesage_mcp.config.config import (
         GROQ_API_KEY,
         OPENROUTER_API_KEY,
         GOOGLE_API_KEY,

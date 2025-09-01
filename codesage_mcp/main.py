@@ -20,11 +20,11 @@ import json
 import time
 from typing import List, Dict, Any, Union, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ValidationError
 
-from .logging_config import setup_logging, get_logger, log_exception, log_errors
+from .core.logging_config import setup_logging, get_logger, log_exception, log_errors
 
 from codesage_mcp.tools import (
     read_code_file_tool,
@@ -116,23 +116,19 @@ from codesage_mcp.tools.advanced_analysis_tools import (
     run_comprehensive_advanced_analysis_tool,
     get_advanced_analysis_stats_tool,
 )
-from codesage_mcp.utils import create_error_response
-from codesage_mcp.gemini_compatibility import (
+from codesage_mcp.core.gemini_compatibility import (
     get_compatibility_handler,
     create_gemini_compatible_error_response,
-    adapt_response_for_gemini,
-    ResponseFormat,
-    GeminiCompatibilityHandler
+    ResponseFormat
 )
-from codesage_mcp.performance_monitor import get_performance_monitor, get_usage_analyzer
-from codesage_mcp.user_feedback import get_user_feedback_collector
-from codesage_mcp.trend_analysis import get_trend_analyzer
-from codesage_mcp.auto_performance_tuner import get_auto_performance_tuner
-from codesage_mcp.adaptive_cache_manager import get_adaptive_cache_manager
-from codesage_mcp.memory_manager import get_memory_manager
-from codesage_mcp.workload_pattern_recognition import get_workload_pattern_recognition
-from codesage_mcp.regression_detector import get_regression_detector
-from codesage_mcp.codebase_manager import get_llm_analysis_manager
+from codesage_mcp.features.performance_monitoring.performance_monitor import get_performance_monitor, get_usage_analyzer
+from codesage_mcp.features.user_feedback.user_feedback import get_user_feedback_collector
+from codesage_mcp.features.performance_monitoring.trend_analysis import get_trend_analyzer
+from codesage_mcp.features.performance_monitoring.auto_performance_tuner import get_auto_performance_tuner
+from codesage_mcp.features.caching.adaptive_cache_manager import get_adaptive_cache_manager
+from codesage_mcp.features.memory_management.memory_manager import get_memory_manager
+from codesage_mcp.features.memory_management.workload_pattern_recognition import get_workload_pattern_recognition
+from codesage_mcp.features.codebase_manager import get_llm_analysis_manager
 
 # Configure structured logging
 setup_logging(
@@ -1993,7 +1989,7 @@ async def handle_jsonrpc_request(request: Request):
         performance_monitor.record_request(
             response_time_ms=response_time_ms,
             success=success,
-            endpoint=f"/mcp",
+            endpoint="/mcp",
             user_id=user_id
         )
 

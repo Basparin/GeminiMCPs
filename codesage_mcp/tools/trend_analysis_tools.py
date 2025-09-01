@@ -7,7 +7,7 @@ identifying optimization opportunities, and generating predictive insights.
 
 import logging
 from typing import Dict, Any, List
-from codesage_mcp.trend_analysis import (
+from codesage_mcp.features.performance_monitoring.trend_analysis import (
     get_trend_analyzer,
     get_optimization_recommender,
     get_performance_predictor

@@ -18,7 +18,7 @@ def mock_chunk_file():
     """
     Pytest fixture that provides a mock for codesage_mcp.indexing.chunk_file.
     """
-    with patch('codesage_mcp.indexing.chunk_file') as mock_chunk:
+    with patch('codesage_mcp.core.indexing.chunk_file') as mock_chunk:
         mock_chunk.return_value = [
             MagicMock(content="mocked content", start_line=1, end_line=1)
         ]
@@ -30,10 +30,10 @@ def reset_global_cache():
     Fixture to reset the global cache instance before and after each test.
     This ensures test isolation for the IntelligentCache singleton.
     """
-    from codesage_mcp.cache import reset_cache_instance
-    reset_cache_instance() # Reset before test
+    from codesage_mcp.features.caching.cache import reset_cache_instances
+    reset_cache_instances() # Reset before test
     yield
-    reset_cache_instance() # Reset after test
+    reset_cache_instances() # Reset after test
 
 # Gemini Compatibility Fixtures
 @pytest.fixture
@@ -178,4 +178,52 @@ def mock_fastapi_response():
     response = MagicMock()
     response.status_code = 200
     response.headers = {"content-type": "application/json"}
+# Memory Manager Fixtures
+@pytest.fixture
+def memory_manager():
+    """Pytest fixture that provides a MemoryManager instance."""
+    from codesage_mcp.features.memory_management.memory_manager import MemoryManager
+    manager = MemoryManager()
+    yield manager
+    manager.cleanup()
+
+@pytest.fixture
+def model_cache():
+    """Pytest fixture that provides a ModelCache instance."""
+    from codesage_mcp.features.memory_management.memory_manager import ModelCache
+    cache = ModelCache(ttl_minutes=30)
+    yield cache
+
+@pytest.fixture
+def mock_model():
+    """Pytest fixture that provides a mock SentenceTransformer model."""
+    mock_model = MagicMock()
+    mock_model.encode.return_value = np.random.rand(128).astype(np.float32)
+    return mock_model
+
+@pytest.fixture
+def sample_embeddings():
+    """Pytest fixture that provides sample embeddings for testing."""
+    return np.random.rand(100, 128).astype(np.float32)
+
+@pytest.fixture
+def temp_faiss_index():
+    """Pytest fixture that creates a temporary FAISS index file."""
+    import tempfile
+    import faiss
+    import os
+
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(suffix='.faiss', delete=False) as tmp_file:
+        tmp_path = tmp_file.name
+
+    try:
+        # Create and save a simple FAISS index
+        dimension = 128
+        index = faiss.IndexFlatL2(dimension)
+        faiss.write_index(index, tmp_path)
+        yield tmp_path
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
     return response

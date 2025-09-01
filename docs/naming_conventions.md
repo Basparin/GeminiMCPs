@@ -18,9 +18,9 @@ This document defines the naming conventions for the CodeSage MCP Server codebas
 - **Convention**: Use lowercase with underscores (`snake_case`)
 - **Rationale**: Improves readability and follows PEP 8 standards
 - **Examples**:
-  - `cache.py`
-  - `memory_manager.py`
-  - `adaptive_cache_manager.py`
+  - `codesage_mcp/features/caching/cache.py`
+  - `codesage_mcp/features/memory_management/memory_manager.py`
+  - `codesage_mcp/features/caching/adaptive_cache_manager.py`
   - `performance_monitor.py`
 
 ### Directory Structure
@@ -47,9 +47,9 @@ This document defines the naming conventions for the CodeSage MCP Server codebas
 - **Convention**: `snake_case` matching the filename
 - **Rationale**: Direct correspondence between filename and module name
 - **Examples**:
-  - `import cache` (from `cache.py`)
-  - `import memory_manager` (from `memory_manager.py`)
-  - `from codesage_mcp import adaptive_cache_manager`
+  - `from codesage_mcp.features.caching import cache` (from `codesage_mcp/features/caching/cache.py`)
+  - `from codesage_mcp.features.memory_management import memory_manager` (from `codesage_mcp/features/memory_management/memory_manager.py`)
+  - `from codesage_mcp.features.caching.adaptive_cache_manager import AdaptiveCacheManager`
 
 ### Package Names
 - **Convention**: `snake_case` for package directories

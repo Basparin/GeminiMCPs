@@ -7,9 +7,8 @@ including performance summaries, trend analysis, and recommendations.
 """
 
 import json
-import os
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 import statistics
 from datetime import datetime
 import glob

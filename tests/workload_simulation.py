@@ -15,9 +15,9 @@ import random
 import statistics
 import threading
 import time
-from collections import defaultdict, deque
+from collections import deque
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any
 import requests
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum
@@ -377,7 +377,7 @@ async def worker_simulation(worker_id: int, config: SimulationConfig,
                 try:
                     response_data = response.json()
                     success = "error" not in response_data
-                except:
+                except (ValueError, json.JSONDecodeError):
                     success = False
 
             metrics.record_request(response_time, success)

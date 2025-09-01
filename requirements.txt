@@ -24,3 +24,4 @@ structlog
 scipy
 aiohttp
 python-json-logger
+matplotlib

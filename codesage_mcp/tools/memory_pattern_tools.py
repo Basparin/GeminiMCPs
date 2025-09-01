@@ -7,7 +7,7 @@ including adaptive memory management, load-aware optimization, and predictive me
 
 import logging
 from typing import Dict, Any, List
-from codesage_mcp.memory_pattern_monitor import (
+from codesage_mcp.features.memory_management.memory_pattern_monitor import (
     get_memory_pattern_monitor,
     get_adaptive_memory_manager,
     get_load_aware_optimizer,

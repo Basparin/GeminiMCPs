@@ -16,23 +16,19 @@ import statistics
 import psutil
 import shutil
 import requests
-import threading
 import concurrent.futures
 from pathlib import Path
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
 from unittest.mock import MagicMock, patch
 import tempfile
-import os
 import numpy as np
-import socket
-import subprocess
 
-from codesage_mcp.indexing import IndexingManager
-from codesage_mcp.searching import SearchingManager
-from codesage_mcp.memory_manager import MemoryManager
-from codesage_mcp.cache import IntelligentCache
-from codesage_mcp.chunking import DocumentChunker
+from codesage_mcp.core.indexing import IndexingManager
+from codesage_mcp.core.searching import SearchingManager
+from codesage_mcp.features.memory_management.memory_manager import MemoryManager
+from codesage_mcp.features.caching.intelligent_cache import IntelligentCache
+from codesage_mcp.core.chunking import DocumentChunker
 
 
 @dataclass
@@ -833,7 +829,7 @@ class Class_{i}:
 
                         request_id += 1
 
-                    except Exception as e:
+                    except Exception:
                         pass  # Ignore errors for throughput testing
 
                 return local_requests, local_latencies
@@ -1120,7 +1116,7 @@ class Class_{i}:
         # Also save a human-readable summary
         summary_file = self.output_dir / f"benchmark_summary_{int(time.time())}.txt"
         with open(summary_file, 'w') as f:
-            f.write(f"CodeSage MCP Performance Benchmark Report\n")
+            f.write("CodeSage MCP Performance Benchmark Report\n")
             f.write(f"Generated: {report.timestamp}\n\n")
 
             f.write("SUMMARY\n")

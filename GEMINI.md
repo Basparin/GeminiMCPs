@@ -1,14 +1,17 @@
 # Project: CodeSage MCP Server
-*Last Updated: 2025-08-31*
 
 ## Executive Summary
-[Brief summary of the document's purpose and key takeaways.]
+The CodeSage Model Context Protocol (MCP) Server is a high-performance, production-ready platform designed to revolutionize code analysis and search capabilities. It functions as an intermediary, enabling the Gemini CLI to interact with larger codebases and integrate with various Large Language Models (LLMs) for specialized tasks. It boasts exceptional performance metrics in indexing speed, search response, memory usage, and cache hit rate.
 
 ## Definitions
-[Glossary of key terms used in this document.]
+*   **MCP:** Model Context Protocol
+*   **LLM:** Large Language Model
+*   **FAISS:** Facebook AI Similarity Search
+*   **ASGI:** Asynchronous Server Gateway Interface
+*   **CLI:** Command Line Interface
 
 ## Project Overview
-The CodeSage Model Context Protocol (MCP) Server is a high-performance, production-ready platform designed to revolutionize code analysis and search capabilities. It functions as an intermediary, enabling the Gemini CLI to interact with larger codebases and integrate with various Large Language Models (LLMs) for specialized tasks.
+The server is a FastAPI application that exposes a JSON-RPC endpoint (`/mcp`). This endpoint handles requests for tool discovery (`initialize`, `tools/list`) and tool execution (`tools/call`). It integrates with a `CodebaseManager` for file system operations, codebase indexing, and LLM integration, enabling advanced features such as intelligent codebase indexing, semantic search, duplicate code detection, smart code summarization, memory optimization, multi-strategy caching, incremental indexing, parallel processing, index compression, adaptive cache sizing, smart prefetching, usage pattern learning, comprehensive monitoring, and enterprise security.
 
 **Key Technologies:**
 *   **Python:** The primary programming language.
@@ -24,15 +27,12 @@ The CodeSage Model Context Protocol (MCP) Server is a high-performance, producti
 *   **pytest:** For running the test suite.
 *   **Docker:** For containerization and easy deployment.
 
-**Architecture:**
-The server is a FastAPI application that exposes a JSON-RPC endpoint (`/mcp`). This endpoint handles requests for tool discovery (`initialize`, `tools/list`) and tool execution (`tools/call`). It integrates with advanced features such as intelligent codebase indexing, semantic search, duplicate code detection, smart code summarization, memory optimization, multi-strategy caching, incremental indexing, parallel processing, index compression, adaptive cache sizing, smart prefetching, usage pattern learning, comprehensive monitoring, and enterprise security.
-
 ## Building and Running
 
 ### Setup
 1.  **Clone the repository:**
     ```bash
-    git clone <repository_url>
+    git clone <repository_url> # Replace <repository_url> with the actual URL
     cd GeminiMCPs
     ```
 2.  **Install dependencies into the virtual environment:**
@@ -122,3 +122,39 @@ To use the pre-commit hooks, you need to install `pre-commit` and then run `pre-
 
 **Docstring Convention:**
 The project follows the Google docstring convention. More details can be found in `docs/docstring_standard.md`.
+
+**Code Structure:**
+*   **`codesage_mcp/main.py`**: Contains the main FastAPI application logic, handling JSON-RPC requests and routing them to the appropriate tool functions.
+*   **`codesage_mcp/tools.py`**: Defines the individual tool functions that the MCP server exposes to the Gemini CLI.
+*   **`codesage_mcp/codebase_manager.py`**: Manages file system operations, codebase indexing, and LLM integration.
+*   **`codesage_mcp/config.py`**: Loads API keys for various LLMs from environment variables.
+*   **`tests/`**: Contains the test suite for the project, with tests for the `CodebaseManager` and the FastAPI application.
+
+**Current Tools Implemented:**
+*   `read_code_file`: Reads and returns the content of a specified code file.
+*   `index_codebase`: Indexes a given codebase path for analysis. The index is persistent and respects `.gitignore`.
+*   `search_codebase`: Searches for a pattern within indexed code files.
+*   `get_file_structure`: Provides a high-level overview of a file's structure.
+*   `summarize_code_section`: Summarizes a specific section of code using the Groq, OpenRouter, or Google AI APIs.
+*   `semantic_search_codebase`: Performs a semantic search within the indexed codebase to find code snippets semantically similar to the given query.
+*   `find_duplicate_code`: Identifies duplicate or highly similar code sections within the indexed codebase using semantic similarity analysis.
+*   `list_undocumented_functions`: Identifies and lists Python functions in a specified file that are missing docstrings.
+*   `count_lines_of_code`: Counts lines of code (LOC) in the indexed codebase, providing a summary by file type.
+*   `get_dependencies_overview`: Analyzes Python files in the indexed codebase and extracts import statements, providing a high-level overview of internal and external dependencies.
+*   `configure_api_key`: Configures API keys for LLMs (e.g., Groq, OpenRouter, Google AI).
+*   `analyze_codebase_improvements`: Analyzes the codebase for potential improvements and suggestions.
+*   `auto_document_tool`: Automatically generates documentation for tools that lack detailed documentation.
+*   `generate_boilerplate`: Generates standardized boilerplate code for new modules, tools, or tests.
+*   `generate_llm_api_wrapper`: Generates Python wrapper code for interacting with various LLM APIs.
+*   `generate_unit_tests`: Generates unit tests for functions in a Python file.
+*   `parse_llm_response`: Parses the content of an LLM response, extracting and validating JSON data.
+*   `profile_code_performance`: Profiles the performance of a specific function or the entire file.
+*   `resolve_todo_fixme`: Analyzes a TODO/FIXME comment and suggests potential resolutions using LLMs.
+*   `suggest_code_improvements`: Analyzes a code section and suggests improvements by consulting external LLMs.
+*   `analyze_function_dependencies`: Analyzes function-level dependencies for a specific function or all functions in a file.
+*   `analyze_external_library_usage`: Analyzes external library usage across files or a specific file.
+*   `predict_performance_bottlenecks`: Predicts potential performance bottlenecks in code based on structural analysis.
+*   `run_comprehensive_advanced_analysis`: Runs comprehensive advanced analysis combining dependency mapping and performance prediction.
+*   `get_advanced_analysis_stats`: Gets statistics about the advanced analysis capabilities and current state.
+*   `get_configuration`: Returns the current configuration, with API keys masked for security.
+*   `get_cache_statistics`: Returns comprehensive statistics about the intelligent caching system.

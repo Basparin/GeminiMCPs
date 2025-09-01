@@ -1,7 +1,7 @@
 """
 Comprehensive unit tests for structured logging configuration.
 
-This module tests the logging configuration functionality in codesage_mcp.logging_config,
+This module tests the logging configuration functionality in codesage_mcp.core.logging_config,
 focusing on structured logging setup, exception logging with context, logger creation,
 and the error logging decorator for both sync and async functions.
 """
@@ -11,20 +11,18 @@ import json
 import logging
 import tempfile
 import os
-from datetime import datetime
-from unittest.mock import patch, MagicMock, mock_open
-from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 import structlog
 
-from codesage_mcp.logging_config import (
+from codesage_mcp.core.logging_config import (
     setup_logging,
     log_exception,
     get_logger,
     log_errors,
     get_environment_info,
 )
-from codesage_mcp.exceptions import BaseMCPError, ToolExecutionError
+from codesage_mcp.core.exceptions import ToolExecutionError
 
 
 class TestSetupLogging:
@@ -276,7 +274,7 @@ class TestLogErrorsDecorator:
 
     def test_log_errors_sync_function_no_error(self):
         """Test log_errors decorator on sync function with no error."""
-        with patch('codesage_mcp.logging_config.get_logger') as mock_get_logger:
+        with patch('codesage_mcp.core.logging_config.get_logger') as mock_get_logger:
             mock_logger = MagicMock()
             mock_get_logger.return_value = mock_logger
 
@@ -292,7 +290,7 @@ class TestLogErrorsDecorator:
 
     def test_log_errors_sync_function_with_error(self):
         """Test log_errors decorator on sync function that raises error."""
-        with patch('codesage_mcp.logging_config.get_logger') as mock_get_logger:
+        with patch('codesage_mcp.core.logging_config.get_logger') as mock_get_logger:
             mock_logger = MagicMock()
             mock_get_logger.return_value = mock_logger
 
@@ -314,7 +312,7 @@ class TestLogErrorsDecorator:
 
     def test_log_errors_sync_function_with_request_id_param(self):
         """Test log_errors decorator with request_id parameter extraction."""
-        with patch('codesage_mcp.logging_config.get_logger') as mock_get_logger:
+        with patch('codesage_mcp.core.logging_config.get_logger') as mock_get_logger:
             mock_logger = MagicMock()
             mock_get_logger.return_value = mock_logger
 
@@ -332,7 +330,7 @@ class TestLogErrorsDecorator:
 
     def test_log_errors_sync_function_with_session_param(self):
         """Test log_errors decorator with session parameter extraction."""
-        with patch('codesage_mcp.logging_config.get_logger') as mock_get_logger:
+        with patch('codesage_mcp.core.logging_config.get_logger') as mock_get_logger:
             mock_logger = MagicMock()
             mock_get_logger.return_value = mock_logger
 
@@ -352,7 +350,7 @@ class TestLogErrorsDecorator:
 
     def test_log_errors_sync_function_with_object_attribute(self):
         """Test log_errors decorator extracting params from object attributes."""
-        with patch('codesage_mcp.logging_config.get_logger') as mock_get_logger:
+        with patch('codesage_mcp.core.logging_config.get_logger') as mock_get_logger:
             mock_logger = MagicMock()
             mock_get_logger.return_value = mock_logger
 
@@ -379,7 +377,7 @@ class TestLogErrorsDecorator:
     @pytest.mark.asyncio
     async def test_log_errors_async_function_no_error(self):
         """Test log_errors decorator on async function with no error."""
-        with patch('codesage_mcp.logging_config.get_logger') as mock_get_logger:
+        with patch('codesage_mcp.core.logging_config.get_logger') as mock_get_logger:
                 mock_logger = MagicMock()
                 mock_get_logger.return_value = mock_logger
 
@@ -395,7 +393,7 @@ class TestLogErrorsDecorator:
     @pytest.mark.asyncio
     async def test_log_errors_async_function_with_error(self):
         """Test log_errors decorator on async function that raises error."""
-        with patch('codesage_mcp.logging_config.get_logger') as mock_get_logger:
+        with patch('codesage_mcp.core.logging_config.get_logger') as mock_get_logger:
             mock_logger = MagicMock()
             mock_get_logger.return_value = mock_logger
 
@@ -418,7 +416,7 @@ class TestLogErrorsDecorator:
     @pytest.mark.asyncio
     async def test_log_errors_async_function_with_params(self):
         """Test log_errors decorator on async function with parameter extraction."""
-        with patch('codesage_mcp.logging_config.get_logger') as mock_get_logger:
+        with patch('codesage_mcp.core.logging_config.get_logger') as mock_get_logger:
             mock_logger = MagicMock()
             mock_get_logger.return_value = mock_logger
 
@@ -495,7 +493,7 @@ class TestLoggingIntegration:
 
     def test_decorator_with_full_context(self):
         """Test decorator with full context extraction."""
-        with patch('codesage_mcp.logging_config.get_logger') as mock_get_logger:
+        with patch('codesage_mcp.core.logging_config.get_logger') as mock_get_logger:
             mock_logger = MagicMock()
             mock_get_logger.return_value = mock_logger
 

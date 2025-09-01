@@ -312,7 +312,7 @@ docker run --rm -v codesage_cache:/data -v $(pwd):/backup alpine tar xzf /backup
    ./scripts/health_check.sh --memory
 
    # Optimize memory settings
-   docker-compose exec codesage-mcp python -c "from codesage_mcp.memory_manager import get_memory_manager; print(get_memory_manager().get_memory_optimization_recommendations())"
+   docker-compose exec codesage-mcp python -c "from codesage_mcp.features.memory_management.memory_manager import get_memory_manager; print(get_memory_manager().get_memory_optimization_recommendations())"
    ```
 
 3. **Rate Limiting**

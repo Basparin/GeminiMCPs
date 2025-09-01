@@ -7,7 +7,7 @@ to drive continuous improvement based on user needs and satisfaction.
 
 import logging
 from typing import Dict, Any, List
-from codesage_mcp.user_feedback import (
+from codesage_mcp.features.user_feedback.user_feedback import (
     get_user_feedback_collector,
     get_feedback_analyzer,
     FeedbackType,

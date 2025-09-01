@@ -7,10 +7,9 @@ performance metrics, and system behavior to automatically optimize performance p
 
 import logging
 from typing import Dict, Any, List
-from codesage_mcp.auto_performance_tuner import (
+from codesage_mcp.features.performance_monitoring.auto_performance_tuner import (
     get_auto_performance_tuner,
-    TuningStrategy,
-    PerformanceMetric
+    TuningStrategy
 )
 
 logger = logging.getLogger(__name__)

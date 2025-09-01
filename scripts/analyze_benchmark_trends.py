@@ -9,10 +9,9 @@ performance patterns and predict future performance.
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 import statistics
-from datetime import datetime, timedelta
-import glob
+from datetime import datetime
 
 
 class BenchmarkTrendsAnalyzer:

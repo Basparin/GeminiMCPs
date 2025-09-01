@@ -335,7 +335,7 @@ if health['needs_optimization']:
 ### Profiling Tools
 
 #### Code Performance Profiling
-- **Tool**: `profile_code_performance`
+- **Tool**: (Removed as it no longer exists in the codebase)
 - **Features**: cProfile integration with detailed analysis
 - **Usage**: Identify bottlenecks in custom code
 
@@ -403,15 +403,11 @@ python tests/benchmark_performance.py --report
 
 #### Custom Benchmarking
 ```python
-from codesage_mcp.tools.performance import benchmark_operation
+from codesage_mcp.tools.performance_monitoring import get_performance_metrics_tool
 
-# Benchmark search performance
-results = benchmark_operation(
-    operation="search",
-    codebase_path="/path/to/codebase",
-    iterations=100
-)
-print(f"Average response time: {results['avg_time']:.3f}s")
+# Get current performance metrics
+metrics = get_performance_metrics_tool()
+print(f"Current response time: {metrics['current_metrics'].get('avg_response_time', 'N/A')}")
 ```
 
 ### Load Testing

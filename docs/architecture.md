@@ -49,7 +49,7 @@ The system follows a modular architecture with clear separation of concerns:
 
 ### 2. Core Components
 
-#### Memory Management System (`memory_manager.py`)
+#### Memory Management System (`codesage_mcp/features/memory_management/memory_manager.py`)
 
 **Intelligent Memory Optimization**
 - **Memory Monitoring**: Real-time memory usage tracking with psutil
@@ -63,7 +63,7 @@ The system follows a modular architecture with clear separation of concerns:
 - `ModelCache`: Model loading and caching with TTL
 - `get_memory_manager()`: Global singleton instance
 
-#### Intelligent Caching System (`cache.py`)
+#### Intelligent Caching System (`codesage_mcp/features/caching/cache.py`)
 
 **Multi-Strategy Caching Architecture**
 - **Embedding Cache**: File-based invalidation for embeddings
@@ -79,7 +79,7 @@ The system follows a modular architecture with clear separation of concerns:
 - `SearchResultCache`: Similarity-based search result cache
 - `FileContentCache`: File content cache with size limits
 
-#### Indexing System (`indexing.py`)
+#### Indexing System (`codesage_mcp/core/indexing.py`)
 
 **Advanced Codebase Indexing**
 - **Incremental Indexing**: Dependency tracking with intelligent change detection
@@ -92,6 +92,111 @@ The system follows a modular architecture with clear separation of concerns:
 **Key Classes:**
 - `IndexingManager`: Main indexing orchestrator
 - `DocumentChunker`: Intelligent document chunking
+
+## Recent Modularization Changes
+
+### 📁 Updated Module Structure
+
+Following the recent modularization effort, the codebase has been reorganized into a clear hierarchical structure under the `codesage_mcp` package:
+
+```
+codesage_mcp/
+├── __init__.py
+├── main.py                    # Main server entry point
+├── configuration.py           # Configuration management
+├── config/                    # Configuration modules
+│   ├── __init__.py
+│   └── config.py
+├── core/                      # Core system components
+│   ├── __init__.py
+│   ├── api_handling.py
+│   ├── chunking.py
+│   ├── code_model.py
+│   ├── data_structures.py
+│   ├── error_handling.py
+│   ├── error_reporting.py
+│   ├── exceptions.py
+│   ├── gemini_compatibility.py
+│   ├── indexing_search.py
+│   ├── indexing.py
+│   ├── logging_config.py
+│   ├── searching.py
+│   └── utils.py
+├── features/                  # Feature-specific modules
+│   ├── __init__.py
+│   ├── intelligent_prefetcher.py
+│   ├── caching/
+│   │   ├── __init__.py
+│   │   ├── adaptive_cache_manager.py
+│   │   ├── cache_analysis.py
+│   │   ├── cache_components.py
+│   │   ├── cache.py
+│   │   └── intelligent_cache.py
+│   ├── codebase_manager/
+│   │   ├── __init__.py
+│   │   ├── advanced_analysis.py
+│   │   └── codebase_manager.py
+│   ├── llm_analysis/
+│   │   ├── __init__.py
+│   │   └── llm_analysis.py
+│   ├── memory_management/
+│   │   ├── __init__.py
+│   │   ├── memory_manager.py
+│   │   ├── memory_pattern_monitor.py
+│   │   ├── workload_adaptive_memory.py
+│   │   └── workload_pattern_recognition.py
+│   ├── performance_monitoring/
+│   │   ├── __init__.py
+│   │   ├── auto_performance_tuner.py
+│   │   ├── performance_monitor.py
+│   │   ├── performance_report_generator.py
+│   │   └── prometheus_client.py
+│   └── user_feedback/
+│       ├── __init__.py
+│       └── user_feedback.py
+└── tools/                     # Tool implementations
+    ├── __init__.py
+    ├── adaptive_cache_tools.py
+    ├── advanced_analysis_tools.py
+    ├── auto_performance_tuning_tools.py
+    ├── cache_analysis_tools.py
+    ├── code_generation.py
+    ├── codebase_analysis.py
+    ├── configuration.py
+    ├── continuous_improvement.py
+    ├── intelligent_prefetch_tools.py
+    ├── llm_analysis.py
+    ├── memory_pattern_tools.py
+    ├── performance_monitoring.py
+    ├── trend_analysis_tools.py
+    └── user_feedback_tools.py
+```
+
+### 🔧 Import Path Updates
+
+All import statements have been updated to use absolute paths from the `codesage_mcp` package root:
+
+**Before (old structure):**
+```python
+from indexing import IndexingManager
+from cache import get_cache_instance
+from memory_manager import get_memory_manager
+```
+
+**After (new modular structure):**
+```python
+from codesage_mcp.core.indexing import IndexingManager
+from codesage_mcp.features.caching.cache import get_cache_instance
+from codesage_mcp.features.memory_management.memory_manager import get_memory_manager
+```
+
+### 📋 Module Organization Benefits
+
+- **Clear Separation**: Core functionality separated from feature-specific code
+- **Scalability**: Easy to add new features without affecting core components
+- **Maintainability**: Reduced circular dependencies and improved code organization
+- **Testability**: Isolated modules enable better unit testing
+- **Import Clarity**: Absolute imports prevent ambiguity and improve IDE support
 
 ### 3. Tool Layer
 

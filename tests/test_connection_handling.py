@@ -8,10 +8,9 @@ to validate that the implemented fixes work correctly.
 
 import asyncio
 import aiohttp
-import json
 import time
 import statistics
-from typing import List, Dict, Any
+from typing import Dict, Any
 import logging
 
 # Configure logging
@@ -310,7 +309,7 @@ async def main():
 
         # Overall assessment
         assessment = results["overall_assessment"]
-        print(f"\nOVERALL ASSESSMENT:")
+        print("\nOVERALL ASSESSMENT:")
         print(f"  Tests Passed: {assessment['all_tests_passed']}")
         print(f"  Tests Run: {assessment['tests_run']}")
 

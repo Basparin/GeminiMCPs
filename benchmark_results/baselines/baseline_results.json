@@ -1,0 +1,42 @@
+{
+  "p50_response_time": {
+    "value": 200,
+    "samples": [
+      195,
+      200,
+      205,
+      198,
+      202
+    ]
+  },
+  "p95_response_time": {
+    "value": 500,
+    "samples": [
+      495,
+      500,
+      505,
+      498,
+      502
+    ]
+  },
+  "p99_response_time": {
+    "value": 1000,
+    "samples": [
+      995,
+      1000,
+      1005,
+      998,
+      1002
+    ]
+  },
+  "requests_per_second": {
+    "value": 100,
+    "samples": [
+      98,
+      100,
+      102,
+      99,
+      101
+    ]
+  }
+}

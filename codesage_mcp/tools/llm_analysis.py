@@ -11,9 +11,9 @@ Tools included:
 """
 
 import ast
-from codesage_mcp.codebase_manager import codebase_manager
-from codesage_mcp.advanced_analysis import AdvancedAnalysisManager
-from codesage_mcp.utils import tool_error_handler
+from codesage_mcp.features.codebase_manager import codebase_manager
+from codesage_mcp.features.codebase_manager import AdvancedAnalysisManager
+from codesage_mcp.core.utils import tool_error_handler
 
 
 @tool_error_handler

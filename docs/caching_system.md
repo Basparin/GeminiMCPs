@@ -35,7 +35,7 @@ CodeSage MCP Server implements a **sophisticated multi-level caching system** th
   - Automatic eviction policies
   - Content size validation
 
-#### 4. Model Cache (`ModelCache`)
+#### 4. Model Cache (`codesage_mcp/features/caching/cache.py`)
 **Purpose**: Caches loaded sentence transformers
 - **Implementation**: TTL-based caching with quantization support
 - **Features**:

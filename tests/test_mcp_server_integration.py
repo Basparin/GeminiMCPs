@@ -6,11 +6,6 @@ This simulates actual Gemini CLI requests to ensure proper error handling.
 
 import json
 import sys
-import os
-import subprocess
-import time
-import socket
-import threading
 
 # Add the project root to Python path
 sys.path.insert(0, '/home/basparin/Escritorio/GeminiMCPs')

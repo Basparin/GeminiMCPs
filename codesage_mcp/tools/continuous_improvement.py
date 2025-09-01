@@ -8,10 +8,10 @@ optimization opportunity identification, and implementation of improvements.
 import logging
 from typing import Dict, Any, List
 from datetime import datetime, timedelta
-from codesage_mcp.performance_monitor import get_performance_monitor
-from codesage_mcp.trend_analysis import get_trend_analyzer
-from codesage_mcp.user_feedback import get_user_feedback_collector, get_feedback_analyzer
-from codesage_mcp.auto_performance_tuner import get_auto_performance_tuner
+from codesage_mcp.features.performance_monitoring.performance_monitor import get_performance_monitor
+from codesage_mcp.features.performance_monitoring.trend_analysis import get_trend_analyzer
+from codesage_mcp.features.user_feedback.user_feedback import get_user_feedback_collector, get_feedback_analyzer
+from codesage_mcp.features.performance_monitoring.auto_performance_tuner import get_auto_performance_tuner
 
 logger = logging.getLogger(__name__)
 

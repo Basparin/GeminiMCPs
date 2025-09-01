@@ -43,7 +43,7 @@ except ValueError:
 ```
 - **Assessment**: Good - provides defaults and handles missing configuration gracefully
 
-#### 2. File Operations (indexing.py, llm_analysis.py)
+#### 2. File Operations (codesage_mcp/core/indexing.py, codesage_mcp/features/llm_analysis/llm_analysis.py)
 - **Pattern**: Try-except around file reading/writing operations
 - **Example**:
 ```python
@@ -103,7 +103,7 @@ except (json.JSONDecodeError, ValidationError) as e:
 - Good logging of request details
 
 ### 3. Indexing Operations
-**Location**: `indexing.py`
+**Location**: `codesage_mcp/core/indexing.py`
 **Risk Level**: High
 **Findings**:
 - Extensive error handling for FAISS operations and file processing
@@ -112,7 +112,7 @@ except (json.JSONDecodeError, ValidationError) as e:
 - Good recovery mechanisms for corrupted indexes
 
 ### 4. LLM Analysis
-**Location**: `llm_analysis.py`
+**Location**: `codesage_mcp/features/llm_analysis/llm_analysis.py`
 **Risk Level**: Medium-High
 **Findings**:
 - Excellent retry logic and rate limiting
@@ -124,7 +124,7 @@ except (json.JSONDecodeError, ValidationError) as e:
 
 ### 1. Bare Except Clauses
 **Severity**: Medium
-**Locations**: `indexing.py` (multiple), `config.py`, `memory_manager.py`
+**Locations**: `codesage_mcp/core/indexing.py` (multiple), `codesage_mcp/config/config.py`, `codesage_mcp/features/memory_management/memory_manager.py`
 **Issue**: Using `except:` without specifying exception type can catch system exceptions like `KeyboardInterrupt`
 **Example**:
 ```python
@@ -136,7 +136,7 @@ except:  # Should specify exception type
 
 ### 2. Swallowed Exceptions
 **Severity**: Medium
-**Locations**: `indexing.py`, `cache.py`, `memory_manager.py`
+**Locations**: `codesage_mcp/core/indexing.py`, `codesage_mcp/features/caching/cache.py`, `codesage_mcp/features/memory_management/memory_manager.py`
 **Issue**: Some exceptions are caught but not properly handled or logged
 **Example**:
 ```python

@@ -6,13 +6,12 @@ This script simulates actual JSON-RPC requests and examines the raw responses.
 
 import json
 import sys
-import os
 
 # Add the project root to Python path
 sys.path.insert(0, '/home/basparin/Escritorio/GeminiMCPs')
 
 from codesage_mcp.main import JSONRPCResponse
-from codesage_mcp.gemini_compatibility import create_gemini_compatible_error_response
+from codesage_mcp.core.gemini_compatibility import create_gemini_compatible_error_response
 
 def test_direct_response_creation():
     """Test direct creation of JSON-RPC responses."""

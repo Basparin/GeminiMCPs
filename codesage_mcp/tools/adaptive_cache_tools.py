@@ -7,7 +7,7 @@ performance metrics, and system load conditions.
 
 import logging
 from typing import Dict, Any, List
-from codesage_mcp.adaptive_cache_manager import (
+from codesage_mcp.features.caching.adaptive_cache_manager import (
     get_adaptive_cache_manager,
     AdaptationStrategy,
     CacheSizingStrategy
@@ -713,7 +713,7 @@ def _generate_rule_tuning_recommendations(rules_info: List[Dict[str, Any]],
 
     high_priority_ineffective = [r for r in rules_info if r["priority"] >= 8 and r["success_rate"] < 0.6]
     if high_priority_ineffective:
-        recommendations.append(f"High-priority rules with low success rates need immediate attention")
+        recommendations.append("High-priority rules with low success rates need immediate attention")
 
     avg_success_rate = effectiveness.get("avg_success_rate", 0)
     if avg_success_rate < 0.6:

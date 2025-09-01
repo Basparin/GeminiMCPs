@@ -25,20 +25,65 @@ This comprehensive document compiles all guidelines for workspace organization, 
 The CodeSage MCP Server follows a structured workspace organization to ensure consistency and ease of navigation:
 
 ```
+```
 project_root/
 ├── codesage_mcp/                 # Main Python package
 │   ├── __init__.py               # Package initializer
 │   ├── main.py                   # FastAPI application entry point
-│   ├── tools/                    # MCP tool implementations
+│   ├── config/                   # Configuration related files
+│   │   ├── __init__.py
+│   │   └── config.py
+│   ├── core/                     # Proposed: Core structural components
+│   │   ├── __init__.py
+│   │   └── ...
+│   ├── features/                 # Proposed: Directory for distinct features
+│   │   ├── __init__.py
+│   │   ├── caching/              # Caching system feature
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   ├── memory_management/    # Memory management feature
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   ├── performance_monitoring/ # Performance monitoring feature
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   ├── codebase_manager/     # Codebase manager feature
+│   │   │   ├── __init__.py
+│   │   │   └── codebase_manager.py
+│   │   └── llm_analysis/         # LLM analysis feature
+│   │       ├── __init__.py
+│   │       └── llm_analysis.py
+│   ├── tools/                    # Directory for individual MCP tool implementations
 │   │   ├── __init__.py
 │   │   └── *_tools.py            # Individual tool modules
-│   ├── config.py                 # Configuration management
-│   ├── exceptions.py             # Custom exceptions
-│   └── [core modules...]         # Business logic modules
+│   └── ...
 ├── tests/                        # Test suite
 │   ├── __init__.py
-│   ├── test_*.py                 # Unit and integration tests
-│   └── conftest.py               # Test configuration
+│   ├── structural_base/          # Proposed: Tests for the core structural components
+│   │   ├── __init__.py
+│   │   └── ...
+│   ├── features/                 # Proposed: Tests for distinct features
+│   │   ├── __init__.py
+│   │   ├── caching/
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   ├── memory_management/
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   ├── performance_monitoring/
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   ├── codebase_manager/
+│   │   │   ├── __init__.py
+│   │   │   └── ...
+│   │   └── llm_analysis/
+│   │       ├── __init__.py
+│   │       └── ...
+│   ├── tools/                    # Proposed: Tests for individual MCP tool implementations
+│   │   ├── __init__.py
+│   │   └── ...
+│   └── ...
+```
 ├── docs/                         # Documentation
 │   ├── *.md                      # Markdown documentation files
 │   └── CODING_STANDARDS.md       # This file
@@ -86,12 +131,12 @@ Infrastructure Layer (Bottom)
 ├── logging_config.py, prometheus_client.py
 
 Core Services Layer
-├── cache.py, memory_manager.py
-├── chunking.py, performance_monitor.py
+├── codesage_mcp/features/caching/cache.py, codesage_mcp/features/memory_management/memory_manager.py
+├── codesage_mcp/core/chunking.py, codesage_mcp/features/performance_monitoring/performance_monitor.py
 
 Business Logic Layer
-├── indexing.py, searching.py, llm_analysis.py
-├── codebase_manager.py, adaptive_cache_manager.py
+├── codesage_mcp/core/indexing.py, codesage_mcp/core/searching.py, codesage_mcp/features/llm_analysis/llm_analysis.py
+├── codesage_mcp/features/codebase_manager/codebase_manager.py, codesage_mcp/features/caching/adaptive_cache_manager.py
 
 Interface Layer (Top)
 ├── tools/*.py, main.py
@@ -143,7 +188,7 @@ class IndexingManager:
 
 ### Files and Directories
 
-- **Python Files**: `snake_case` (e.g., `cache.py`, `memory_manager.py`)
+- **Python Files**: `snake_case` (e.g., `codesage_mcp/features/caching/cache.py`, `codesage_mcp/features/memory_management/memory_manager.py`)
 - **Directories**: `snake_case` (e.g., `codesage_mcp/`, `benchmark_results/`)
 - **Configuration Files**: Lowercase with underscores or hyphens (e.g., `pyproject.toml`)
 

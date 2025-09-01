@@ -11,22 +11,19 @@ import tempfile
 import os
 import time
 import threading
-from pathlib import Path
-from unittest.mock import Mock, patch
 import psutil
-import numpy as np
-from typing import Dict, List, Any, Optional
 
-from codesage_mcp.code_model import (
+from codesage_mcp.core.code_model import (
     CodeGraph,
     CodeModelGenerator,
     CodeNode,
     NodeType,
+    Relationship,
     RelationshipType,
     LayerType
 )
-from codesage_mcp.advanced_analysis import AdvancedAnalysisManager
-from codesage_mcp.memory_manager import MemoryManager
+from codesage_mcp.features.codebase_manager import AdvancedAnalysisManager
+from codesage_mcp.features.memory_management.memory_manager import MemoryManager
 
 
 class TestLargeCodebasePerformance:

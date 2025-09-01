@@ -11,17 +11,17 @@ import json
 import tempfile
 import shutil
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
-import time
+from unittest.mock import Mock, patch
 import statistics
 
 from benchmark_performance import (
     PerformanceBenchmarker,
-    BenchmarkResult,
+    BenchmarkResult
+)
+from benchmark_mcp_tools import (
     ModularBenchmarkConfig,
     ModularMCPToolBenchmarker
 )
-from benchmark_mcp_tools import ModularMCPToolBenchmarker as ModularToolBenchmarker
 
 
 class TestBenchmarkResult:

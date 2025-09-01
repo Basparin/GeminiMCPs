@@ -7,7 +7,7 @@ including pattern analysis, prefetching control, and performance optimization.
 
 import logging
 from typing import Dict, Any, List
-from codesage_mcp.intelligent_prefetcher import (
+from codesage_mcp.features.intelligent_prefetcher import (
     get_intelligent_prefetcher,
     PrefetchStrategy,
     AccessPattern
