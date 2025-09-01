@@ -424,7 +424,7 @@ class AdaptiveCacheManager:
             return False
 
         except Exception as e:
-            logger.warning(f"Error evaluating condition '{condition}': {e}")
+            logger.exception(f"Error evaluating condition '{condition}': {e}")
             return False
 
     def _check_usage_trend(self, cache_type: str) -> str:
@@ -920,4 +920,4 @@ def get_adaptive_cache_manager() -> AdaptiveCacheManager:
     global _adaptive_cache_manager
     if _adaptive_cache_manager is None:
         _adaptive_cache_manager = AdaptiveCacheManager()
-    return _adaptive_cache_manager
+    return _adaptive_cache_managerer

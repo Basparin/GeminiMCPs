@@ -213,7 +213,7 @@ class EmbeddingCache:
             np.save(self.embeddings_file, embeddings_data)
 
         except Exception as e:
-            logger.warning(f"Could not save persistent embedding cache: {e}")
+            logger.exception(f"Could not save persistent embedding cache: {e}")
 
     def stats(self) -> Dict[str, Any]:
         """Get embedding cache statistics."""

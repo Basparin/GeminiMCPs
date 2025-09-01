@@ -550,7 +550,7 @@ class WorkloadAdaptiveMemoryManager:
             return True
 
         except Exception as e:
-            logger.error(f"Error applying memory allocation plan: {e}")
+            logger.exception(f"Error applying memory allocation plan: {e}")
             return False
 
     def _cleanup_history(self) -> None:

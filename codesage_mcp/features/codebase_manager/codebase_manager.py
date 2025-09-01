@@ -260,7 +260,7 @@ class CodebaseManager:
                 self.google_ai_client = genai.GenerativeModel("gemini-2.0-flash")
                 logger.info("Google AI client initialized successfully.")
             except Exception as e:
-                logger.error(f"Failed to initialize Google AI client: {e}")
+                logger.exception(f"Failed to initialize Google AI client: {e}")
         else:
             logger.warning(
                 "Google API key not configured - Google AI features will be unavailable."

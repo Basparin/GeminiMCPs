@@ -494,7 +494,7 @@ class IntelligentCache:
                     skipped += 1
 
             except Exception as e:
-                logger.warning(f"Could not prefetch {file_path}: {e}")
+                logger.exception(f"Could not prefetch {file_path}: {e}")
                 skipped += 1
 
         return {"prefetched": prefetched, "skipped": skipped}

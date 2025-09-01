@@ -199,7 +199,7 @@ class MemoryManager:
                     model = self._quantize_model(model)
                     logger.info(f"Applied quantization to model '{model_name}'")
                 except Exception as e:
-                    logger.warning(f"Could not quantize model '{model_name}': {e}")
+                    logger.exception(f"Could not quantize model '{model_name}': {e}")
 
             # Cache the model
             self.model_cache.store_model(model_name, model)
@@ -355,3 +355,4 @@ def get_memory_manager() -> MemoryManager:
                 _memory_manager_instance = MemoryManager()
 
     return _memory_manager_instance
+e

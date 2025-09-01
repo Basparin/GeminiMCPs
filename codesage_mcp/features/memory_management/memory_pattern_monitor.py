@@ -172,7 +172,7 @@ class MemoryPatternMonitor:
                 self.snapshots.popleft()
 
         except Exception as e:
-            logger.warning(f"Error capturing memory snapshot: {e}")
+            logger.exception(f"Error capturing memory snapshot: {e}")
 
     def _determine_load_level(self) -> LoadLevel:
         """Determine current system load level."""
@@ -736,4 +736,4 @@ def get_load_aware_optimizer() -> LoadAwareMemoryOptimizer:
         _memory_pattern_monitor = MemoryPatternMonitor()
     if _load_aware_optimizer is None:
         _load_aware_optimizer = LoadAwareMemoryOptimizer(_memory_pattern_monitor)
-    return _load_aware_optimizer
+    return _load_aware_optimizerer

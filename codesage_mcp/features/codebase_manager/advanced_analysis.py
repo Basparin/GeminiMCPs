@@ -366,7 +366,7 @@ class PerformancePredictor:
                 bottlenecks.extend(func_bottlenecks)
 
         except Exception as e:
-            logger.warning(f"Could not analyze bottlenecks for {file_path}: {e}")
+            logger.exception(f"Could not analyze bottlenecks for {file_path}: {e}")
 
         return bottlenecks
 
@@ -595,4 +595,4 @@ class AdvancedAnalysisManager:
                 "performance_bottleneck_prediction",
                 "comprehensive_code_analysis"
             ]
-        }
+        } }
