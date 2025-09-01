@@ -28,6 +28,8 @@ CodeSage MCP Server is a **high-performance**, **production-ready** Model Contex
 *   **Semantic Search:** AI-powered code understanding with context-aware search capabilities
 *   **Duplicate Code Detection:** Advanced similarity analysis using semantic embeddings
 *   **Smart Code Summarization:** LLM-powered code analysis and documentation generation
+*   **Enhanced Dependency Mapping:** Function-level dependency analysis with external library usage tracking
+*   **Performance Bottleneck Prediction:** Structural analysis to identify computationally intensive code sections
 
 ### ⚡ High-Performance Architecture
 *   **Memory Optimization System:** Intelligent memory management with monitoring and cleanup

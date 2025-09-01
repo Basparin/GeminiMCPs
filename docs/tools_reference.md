@@ -415,6 +415,106 @@ Analyzes a code section and suggests improvements by consulting external LLMs. I
     dict: Analysis results with suggestions for improvements, or an error message.
 
 
+### analyze_function_dependencies
+Analyzes function-level dependencies for a specific function or all functions in a file. Provides detailed dependency mapping including direct calls, indirect calls, external libraries, and complexity scoring based on dependency patterns.
+
+**Parameters:**
+- `file_path` (str, required): Path to the Python file to analyze.
+- `function_name` (str, optional): Specific function name to analyze. If None, analyzes all functions.
+
+**Example Usage:**
+```json
+{
+  "name": "analyze_function_dependencies",
+  "arguments": {
+    "file_path": "/path/to/your/code/file.py",
+    "function_name": "process_data"
+  }
+}
+```
+
+**Returns:**
+    dict: Dependency analysis results with function dependencies, external libraries, and complexity scores.
+
+
+### analyze_external_library_usage
+Analyzes external library usage across files or a specific file. Identifies which external libraries are used, their frequency, and usage patterns.
+
+**Parameters:**
+- `file_path` (str, optional): Specific file path to analyze. If None, analyzes all files.
+
+**Example Usage:**
+```json
+{
+  "name": "analyze_external_library_usage",
+  "arguments": {
+    "file_path": "/path/to/your/code/file.py"
+  }
+}
+```
+
+**Returns:**
+    dict: External library usage analysis with library statistics and usage patterns.
+
+
+### predict_performance_bottlenecks
+Predicts potential performance bottlenecks in code based on structural analysis. Identifies nested loops, inefficient operations, large data structures, and other performance-critical patterns with severity scoring and recommendations.
+
+**Parameters:**
+- `file_path` (str, optional): Specific file path to analyze. If None, analyzes all files.
+
+**Example Usage:**
+```json
+{
+  "name": "predict_performance_bottlenecks",
+  "arguments": {
+    "file_path": "/path/to/your/code/file.py"
+  }
+}
+```
+
+**Returns:**
+    dict: Performance bottleneck predictions with severity scores and recommendations.
+
+
+### run_comprehensive_advanced_analysis
+Runs comprehensive advanced analysis combining dependency mapping and performance prediction. Provides a complete analysis including function dependencies, external library usage, performance bottlenecks, and actionable insights.
+
+**Parameters:**
+- `file_path` (str, optional): Specific file path to analyze. If None, analyzes all files.
+
+**Example Usage:**
+```json
+{
+  "name": "run_comprehensive_advanced_analysis",
+  "arguments": {
+    "file_path": "/path/to/your/code/file.py"
+  }
+}
+```
+
+**Returns:**
+    dict: Comprehensive analysis results including dependencies, libraries, and performance insights.
+
+
+### get_advanced_analysis_stats
+Gets statistics about the advanced analysis capabilities and current state. Provides information about supported analyses, graph statistics, and system performance.
+
+**Parameters:**
+None
+
+**Example Usage:**
+```json
+{
+  "name": "get_advanced_analysis_stats",
+  "arguments": {}
+}
+```
+
+**Returns:**
+    dict: Statistics about the advanced analysis system including supported analyses and performance metrics.
+
+
 ## Configuration Tools
 
 ### configure_api_key

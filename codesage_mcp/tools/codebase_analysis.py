@@ -19,6 +19,8 @@ import ast
 import os
 from collections import defaultdict
 from codesage_mcp.codebase_manager import codebase_manager
+from codesage_mcp.advanced_analysis import AdvancedAnalysisManager
+from codesage_mcp.code_model import LayerType, NodeType, RelationshipType
 from codesage_mcp.utils import (
     _count_todo_fixme_comments,
     tool_error_handler,
@@ -38,27 +40,97 @@ def search_codebase_tool(
     pattern: str,
     file_types: list[str] = None,
     exclude_patterns: list[str] = None,
+    search_mode: str = "regex",
+    context_depth: int = 1,
+    include_dependencies: bool = True,
 ) -> dict:
-    """Searches for a pattern within indexed code files, with optional exclusion patterns.
+    """Enhanced search tool with graph-based semantic search and dependency-aware results.
 
     Args:
         codebase_path (str): Path to the indexed codebase.
-        pattern (str): Regex pattern to search for.
+        pattern (str): Search pattern (regex for regex mode, natural language for semantic mode).
         file_types (list[str], optional): List of file extensions to include in the search.
             If None, all file types are included.
         exclude_patterns (list[str], optional): List of patterns to exclude from the search.
             Files matching these patterns will be skipped.
+        search_mode (str): Search mode - "regex", "semantic", or "graph". Default: "regex".
+        context_depth (int): Depth of related code to include (1-3). Default: 1.
+        include_dependencies (bool): Whether to include dependency information. Default: True.
 
     Returns:
-        dict: Search results with matches and metadata, or an error message.
+        dict: Enhanced search results with matches, dependencies, and metadata.
     """
-    search_results = codebase_manager.searching_manager.search_codebase(
-        codebase_path, pattern, file_types, exclude_patterns
-    )
-    return {
-        "message": f"Found {len(search_results)} matches for pattern '{pattern}'.",
-        "results": search_results,
-    }
+    # Initialize advanced analysis manager
+    advanced_manager = AdvancedAnalysisManager(codebase_manager.code_model)
+
+    if search_mode == "regex":
+        # Use existing regex search
+        search_results = codebase_manager.searching_manager.search_codebase(
+            codebase_path, pattern, file_types, exclude_patterns
+        )
+
+        if include_dependencies:
+            # Enhance results with dependency information
+            enhanced_results = []
+            for result in search_results:
+                enhanced_result = result.copy()
+                enhanced_result["dependencies"] = _get_code_dependencies(
+                    result.get("file", ""), result.get("line", 0), advanced_manager
+                )
+                enhanced_results.append(enhanced_result)
+            search_results = enhanced_results
+
+        return {
+            "message": f"Found {len(search_results)} matches for pattern '{pattern}' using regex search.",
+            "search_mode": "regex",
+            "results": search_results,
+        }
+
+    elif search_mode == "semantic":
+        # Use semantic search via LLM analysis manager
+        semantic_results = codebase_manager.llm_analysis_manager.semantic_search_codebase(
+            pattern, codebase_manager.sentence_transformer_model, top_k=10
+        )
+
+        if isinstance(semantic_results, dict) and "error" in semantic_results:
+            return semantic_results
+
+        # Enhance semantic results with dependencies
+        enhanced_results = []
+        for result in semantic_results:
+            enhanced_result = result.copy()
+            if include_dependencies:
+                file_path = result.get("file", "")
+                line = result.get("line", 0)
+                enhanced_result["dependencies"] = _get_code_dependencies(
+                    file_path, line, advanced_manager
+                )
+            enhanced_results.append(enhanced_result)
+
+        return {
+            "message": f"Found {len(enhanced_results)} semantically similar code snippets for '{pattern}'.",
+            "search_mode": "semantic",
+            "results": enhanced_results,
+        }
+
+    elif search_mode == "graph":
+        # Use graph-based search
+        graph_results = _graph_based_search(
+            codebase_path, pattern, advanced_manager, context_depth, file_types, exclude_patterns
+        )
+
+        return {
+            "message": f"Found {len(graph_results)} graph-based matches for '{pattern}'.",
+            "search_mode": "graph",
+            "context_depth": context_depth,
+            "results": graph_results,
+        }
+
+    else:
+        return {
+            "error": f"Invalid search_mode: {search_mode}. Supported modes: 'regex', 'semantic', 'graph'",
+            "results": []
+        }
 
 
 def get_file_structure_tool(codebase_path: str, file_path: str) -> dict:
@@ -470,3 +542,131 @@ def _generate_suggestions_based_on_analysis(analysis: dict) -> list[str]:
     )
 
     return suggestions
+
+
+def _get_code_dependencies(file_path: str, line_number: int, advanced_manager: AdvancedAnalysisManager) -> dict:
+    """Get dependency information for code at a specific location."""
+    try:
+        # Find the function or class containing this line
+        file_nodes = advanced_manager.graph.get_file_nodes(file_path, LayerType.SEMANTIC)
+        containing_node = None
+
+        for node in file_nodes:
+            if (node.node_type in [NodeType.FUNCTION, NodeType.CLASS, NodeType.METHOD] and
+                node.start_line <= line_number <= node.end_line):
+                containing_node = node
+                break
+
+        if not containing_node:
+            return {"error": "No containing function or class found"}
+
+        # Get dependency analysis for the containing node
+        if containing_node.node_type == NodeType.FUNCTION:
+            deps = advanced_manager.dependency_analyzer.analyze_function_dependencies(
+                file_path, containing_node.name
+            )
+        else:
+            # For classes, analyze all methods
+            deps = advanced_manager.dependency_analyzer.analyze_function_dependencies(file_path)
+
+        return {
+            "containing_element": {
+                "type": containing_node.node_type.value,
+                "name": containing_node.name,
+                "line_range": f"{containing_node.start_line}-{containing_node.end_line}"
+            },
+            "dependencies": deps.get("dependencies", {}),
+            "summary": deps.get("summary", {})
+        }
+
+    except Exception as e:
+        return {"error": f"Failed to analyze dependencies: {str(e)}"}
+
+
+def _graph_based_search(
+    codebase_path: str,
+    pattern: str,
+    advanced_manager: AdvancedAnalysisManager,
+    context_depth: int,
+    file_types: list[str] = None,
+    exclude_patterns: list[str] = None
+) -> list[dict]:
+    """Perform graph-based search using code relationships."""
+    results = []
+
+    try:
+        # Find nodes matching the pattern
+        matching_nodes = advanced_manager.graph.find_nodes_by_name(pattern)
+
+        # Filter by file types if specified
+        if file_types:
+            file_extensions = set(f".{ext.lstrip('.')}" for ext in file_types)
+            matching_nodes = [
+                node for node in matching_nodes
+                if any(node.file_path.endswith(ext) for ext in file_extensions)
+            ]
+
+        # Filter by exclude patterns if specified
+        if exclude_patterns:
+            filtered_nodes = []
+            for node in matching_nodes:
+                excluded = False
+                for pattern in exclude_patterns:
+                    if pattern in node.file_path:
+                        excluded = True
+                        break
+                if not excluded:
+                    filtered_nodes.append(node)
+            matching_nodes = filtered_nodes
+
+        # For each matching node, get related nodes based on context depth
+        for node in matching_nodes:
+            result = {
+                "file": node.file_path,
+                "line": node.start_line,
+                "type": node.node_type.value,
+                "name": node.name,
+                "content": node.content[:200] + "..." if len(node.content) > 200 else node.content,
+                "related_elements": []
+            }
+
+            # Get related elements based on relationships
+            relationships = advanced_manager.graph.get_node_relationships(node.id)
+
+            for rel in relationships[:context_depth * 5]:  # Limit relationships per depth
+                related_node = advanced_manager.graph.get_node(rel.target_id)
+                if related_node:
+                    result["related_elements"].append({
+                        "type": related_node.node_type.value,
+                        "name": related_node.name,
+                        "file": related_node.file_path,
+                        "relationship": rel.relationship_type.value,
+                        "line": related_node.start_line
+                    })
+
+            # Add performance insights if it's a function
+            if node.node_type == NodeType.FUNCTION:
+                perf_analysis = advanced_manager.performance_predictor.predict_bottlenecks(node.file_path)
+                if perf_analysis.get("bottlenecks"):
+                    # Find bottlenecks related to this function
+                    func_bottlenecks = [
+                        b for b in perf_analysis["bottlenecks"]
+                        if b.get("function") == node.name
+                    ]
+                    if func_bottlenecks:
+                        result["performance_insights"] = func_bottlenecks[:3]  # Top 3 bottlenecks
+
+            results.append(result)
+
+    except Exception as e:
+        results.append({
+            "error": f"Graph-based search failed: {str(e)}",
+            "file": "",
+            "line": 0,
+            "type": "error",
+            "name": "search_error",
+            "content": "",
+            "related_elements": []
+        })
+
+    return results

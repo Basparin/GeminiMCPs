@@ -109,6 +109,13 @@ from codesage_mcp.tools import (
     monitor_improvement_effectiveness_tool,
     detect_performance_regressions_tool,  # Import the new regression detection tool
 )
+from codesage_mcp.tools.advanced_analysis_tools import (
+    analyze_function_dependencies_tool,
+    analyze_external_library_usage_tool,
+    predict_performance_bottlenecks_tool,
+    run_comprehensive_advanced_analysis_tool,
+    get_advanced_analysis_stats_tool,
+)
 from codesage_mcp.utils import create_error_response
 from codesage_mcp.gemini_compatibility import (
     get_compatibility_handler,
@@ -269,8 +276,8 @@ def get_all_tools_definitions_as_object():
         "search_codebase": {
             "name": "search_codebase",
             "description": (
-                "Searches for a pattern within indexed code files, "
-                "with optional exclusion patterns."
+                "Enhanced search tool with graph-based semantic search and dependency-aware results. "
+                "Supports regex, semantic, and graph-based search modes with configurable context depth."
             ),
             "inputSchema": {
                 "type": "object",
@@ -279,6 +286,13 @@ def get_all_tools_definitions_as_object():
                     "pattern": {"type": "string"},
                     "file_types": {"type": "array", "items": {"type": "string"}},
                     "exclude_patterns": {"type": "array", "items": {"type": "string"}},
+                    "search_mode": {
+                        "type": "string",
+                        "enum": ["regex", "semantic", "graph"],
+                        "default": "regex"
+                    },
+                    "context_depth": {"type": "integer", "default": 1, "minimum": 1, "maximum": 3},
+                    "include_dependencies": {"type": "boolean", "default": True},
                 },
                 "required": ["codebase_path", "pattern"],
             },
@@ -335,7 +349,10 @@ def get_all_tools_definitions_as_object():
         },
         "summarize_code_section": {
             "name": "summarize_code_section",
-            "description": "Summarizes a specific section of code using a chosen LLM.",
+            "description": (
+                "Enhanced code summarization with performance insights and dependency analysis. "
+                "Provides LLM-based summary along with performance bottleneck predictions and dependency mapping."
+            ),
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -345,6 +362,8 @@ def get_all_tools_definitions_as_object():
                     "llm_model": {"type": "string"},
                     "function_name": {"type": "string"},
                     "class_name": {"type": "string"},
+                    "include_performance_insights": {"type": "boolean", "default": True},
+                    "include_dependency_analysis": {"type": "boolean", "default": True},
                 },
                 "required": ["file_path"],
             },
@@ -1444,6 +1463,98 @@ def get_all_tools_definitions_as_object():
             },
             "type": "function",
         },
+        "analyze_function_dependencies": {
+            "name": "analyze_function_dependencies",
+            "description": (
+                "Analyze function-level dependencies for a specific function or all functions in a file. "
+                "Provides detailed dependency mapping including direct calls, indirect calls, external libraries, "
+                "and complexity scoring based on dependency patterns."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Path to the Python file to analyze"
+                    },
+                    "function_name": {
+                        "type": "string",
+                        "description": "Specific function name to analyze (optional - analyzes all if not provided)"
+                    }
+                },
+                "required": ["file_path"]
+            },
+            "type": "function",
+        },
+        "analyze_external_library_usage": {
+            "name": "analyze_external_library_usage",
+            "description": (
+                "Analyze external library usage across files or a specific file. "
+                "Identifies which external libraries are used, their frequency, and usage patterns."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Specific file path to analyze (optional - analyzes all files if not provided)"
+                    }
+                },
+                "required": []
+            },
+            "type": "function",
+        },
+        "predict_performance_bottlenecks": {
+            "name": "predict_performance_bottlenecks",
+            "description": (
+                "Predict potential performance bottlenecks in code based on structural analysis. "
+                "Identifies nested loops, inefficient operations, large data structures, and other "
+                "performance-critical patterns with severity scoring and recommendations."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Specific file path to analyze (optional - analyzes all files if not provided)"
+                    }
+                },
+                "required": []
+            },
+            "type": "function",
+        },
+        "run_comprehensive_advanced_analysis": {
+            "name": "run_comprehensive_advanced_analysis",
+            "description": (
+                "Run comprehensive advanced analysis combining dependency mapping and performance prediction. "
+                "Provides a complete analysis including function dependencies, external library usage, "
+                "performance bottlenecks, and actionable insights."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Specific file path to analyze (optional - analyzes all files if not provided)"
+                    }
+                },
+                "required": []
+            },
+            "type": "function",
+        },
+        "get_advanced_analysis_stats": {
+            "name": "get_advanced_analysis_stats",
+            "description": (
+                "Get statistics about the advanced analysis capabilities and current state. "
+                "Provides information about supported analyses, graph statistics, and system performance."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            },
+            "type": "function",
+        },
             "type": "function",
         },
     }
@@ -1532,6 +1643,11 @@ TOOL_FUNCTIONS = {
     "analyze_continuous_improvement_opportunities": analyze_continuous_improvement_opportunities_tool,
     "implement_automated_improvements": implement_automated_improvements_tool,
     "monitor_improvement_effectiveness": monitor_improvement_effectiveness_tool,
+    "analyze_function_dependencies": analyze_function_dependencies_tool,
+    "analyze_external_library_usage": analyze_external_library_usage_tool,
+    "predict_performance_bottlenecks": predict_performance_bottlenecks_tool,
+    "run_comprehensive_advanced_analysis": run_comprehensive_advanced_analysis_tool,
+    "get_advanced_analysis_stats": get_advanced_analysis_stats_tool,
 }
 
 
@@ -1852,7 +1968,11 @@ async def handle_jsonrpc_request(request: Request):
             )
     except (json.JSONDecodeError, ValidationError) as e:
         success = False
-        log_exception(e, logger, request_id=request_body.get('id') if isinstance(request_body, dict) else None)
+        # request_body may not be defined if JSON parsing failed
+        request_id = None
+        if 'request_body' in locals() and isinstance(request_body, dict):
+            request_id = request_body.get('id')
+        log_exception(e, logger, request_id=request_id)
         error_response = create_gemini_compatible_error_response(
             "INVALID_REQUEST", f"Invalid JSON-RPC request: {e}"
         )
@@ -1860,9 +1980,9 @@ async def handle_jsonrpc_request(request: Request):
         compatibility_handler = get_compatibility_handler()
         response_data = compatibility_handler.create_compatible_response(
             error=error_response,
-            request_id=request_body.get('id') if isinstance(request_body, dict) else None,
-            request_headers=request_headers,
-            request_body=request_body
+            request_id=request_id,
+            request_headers=request_headers if 'request_headers' in locals() else {},
+            request_body=request_body if 'request_body' in locals() else None
         )
         return GeminiCompatibleJSONResponse(content=response_data)
     finally:

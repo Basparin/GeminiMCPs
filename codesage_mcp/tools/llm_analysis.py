@@ -12,6 +12,7 @@ Tools included:
 
 import ast
 from codesage_mcp.codebase_manager import codebase_manager
+from codesage_mcp.advanced_analysis import AdvancedAnalysisManager
 from codesage_mcp.utils import tool_error_handler
 
 
@@ -23,8 +24,17 @@ def summarize_code_section_tool(
     llm_model: str = None,
     function_name: str = None,
     class_name: str = None,
+    include_performance_insights: bool = True,
+    include_dependency_analysis: bool = True,
 ) -> dict:
-    """Summarizes a specific section of code using a chosen LLM."""
+    """Enhanced code summarization with performance insights and dependency analysis."""
+    # Initialize advanced analysis manager
+    advanced_manager = AdvancedAnalysisManager(codebase_manager.code_model)
+
+    # Determine the code section to analyze
+    target_function = None
+    target_class = None
+
     if function_name or class_name:
         # Find start and end lines for function/class using AST
         with open(file_path, "r", encoding="utf-8") as f:
@@ -39,6 +49,7 @@ def summarize_code_section_tool(
                 and node.name == function_name
             ):
                 found_node = node
+                target_function = function_name
                 break
             if (
                 class_name
@@ -46,6 +57,7 @@ def summarize_code_section_tool(
                 and node.name == class_name
             ):
                 found_node = node
+                target_class = class_name
                 break
 
         if not found_node:
@@ -65,11 +77,72 @@ def summarize_code_section_tool(
     if llm_model is None:
         llm_model = "llama3-8b-8192"  # Default model
 
-    # Use the codebase manager's LLM analysis manager
+    # Get basic LLM summary
     summary = codebase_manager.llm_analysis_manager.summarize_code_section(
         file_path, start_line, end_line, llm_model
     )
-    return {"message": "Code section summarized successfully.", "summary": summary}
+
+    # Enhanced analysis results
+    enhanced_results = {
+        "message": "Code section summarized successfully with advanced analysis.",
+        "summary": summary,
+        "section_info": {
+            "file_path": file_path,
+            "start_line": start_line,
+            "end_line": end_line,
+            "function_name": target_function,
+            "class_name": target_class
+        }
+    }
+
+    # Add performance insights
+    if include_performance_insights:
+        try:
+            perf_analysis = advanced_manager.run_comprehensive_analysis(file_path)
+            enhanced_results["performance_insights"] = {
+                "bottlenecks": perf_analysis.get("performance_analysis", {}).get("bottlenecks", []),
+                "complexity_summary": perf_analysis.get("summary", {})
+            }
+
+            # Filter bottlenecks to the specific section if analyzing a function/class
+            if target_function or target_class:
+                target_name = target_function or target_class
+                filtered_bottlenecks = [
+                    b for b in enhanced_results["performance_insights"]["bottlenecks"]
+                    if b.get("function") == target_name or b.get("class") == target_name
+                ]
+                enhanced_results["performance_insights"]["section_bottlenecks"] = filtered_bottlenecks
+
+        except Exception as e:
+            enhanced_results["performance_insights"] = {
+                "error": f"Failed to analyze performance: {str(e)}"
+            }
+
+    # Add dependency analysis
+    if include_dependency_analysis:
+        try:
+            if target_function:
+                dep_analysis = advanced_manager.dependency_analyzer.analyze_function_dependencies(
+                    file_path, target_function
+                )
+            elif target_class:
+                # For classes, analyze all methods
+                dep_analysis = advanced_manager.dependency_analyzer.analyze_function_dependencies(
+                    file_path
+                )
+            else:
+                # For entire file, get comprehensive analysis
+                dep_analysis = advanced_manager.run_comprehensive_analysis(file_path)
+                dep_analysis = dep_analysis.get("dependency_analysis", {})
+
+            enhanced_results["dependency_analysis"] = dep_analysis
+
+        except Exception as e:
+            enhanced_results["dependency_analysis"] = {
+                "error": f"Failed to analyze dependencies: {str(e)}"
+            }
+
+    return enhanced_results
 
 
 @tool_error_handler

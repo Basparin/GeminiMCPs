@@ -38,6 +38,9 @@ from .chunking import DocumentChunker, chunk_file
 # Import custom exceptions
 from .exceptions import IndexingError, BaseMCPError
 
+# Import code model generation
+from .code_model import CodeGraph, CodeModelGenerator, LayerType, CodeNode
+
 # Set up logger
 logger = logging.getLogger(__name__)
 
@@ -73,6 +76,7 @@ class IndexingManager:
         self.index_file = self.index_dir / "codebase_index.json"
         self.faiss_index_file = self.index_dir / "codebase_index.faiss"
         self.metadata_file = self.index_dir / "codebase_metadata.json"
+        self.code_graph_file = self.index_dir / "code_graph.json"
         self.indexed_codebases = {}
         self.file_paths_map = {}
         self.file_metadata = {}  # Stores file timestamps and metadata
@@ -86,6 +90,10 @@ class IndexingManager:
 
         # Initialize chunker for document processing
         self.chunker = DocumentChunker()
+
+        # Initialize code graph and model generator
+        self.code_graph = CodeGraph()
+        self.code_model_generator = CodeModelGenerator(self.code_graph)
 
         # Thread pool for parallel processing
         self._executor = None
@@ -195,6 +203,17 @@ class IndexingManager:
         else:
             self.file_metadata = {}
 
+        # Load code graph
+        if self.code_graph_file.exists():
+            try:
+                self.code_graph.load_from_file(str(self.code_graph_file))
+                logger.info(f"Loaded code graph with {self.code_graph.get_statistics()['total_nodes']} nodes")
+            except Exception as e:
+                logger.warning(f"Could not load code graph. Error: {e}")
+                # Initialize empty graph
+                self.code_graph = CodeGraph()
+                self.code_model_generator = CodeModelGenerator(self.code_graph)
+
         # Inicializar FAISS con soporte para memory mapping y validación de dimensiones
         if self.faiss_index_file.exists():
             try:
@@ -259,6 +278,9 @@ class IndexingManager:
             metadata_to_save["faiss_dimension"] = self.faiss_index.d
         with open(self.metadata_file, "w") as f:
             json.dump(metadata_to_save, f, indent=4, default=str)
+
+        # Save code graph
+        self.code_graph.save_to_file(str(self.code_graph_file))
 
         if self.faiss_index:
             faiss.write_index(self.faiss_index, str(self.faiss_index_file))
@@ -654,6 +676,11 @@ class IndexingManager:
         # Update dependency graph for new/modified files
         self._update_dependency_graph(path, indexed_files)
 
+        # Update code graph for changed files
+        changed_files_for_graph = set(added_files) | set(modified_files)
+        if changed_files_for_graph:
+            self.update_code_graph_incremental(list(changed_files_for_graph), path)
+
         self._save_index()
 
         print(
@@ -687,6 +714,20 @@ class IndexingManager:
             abs_file_path = root_path / file_path
             if not self._is_ignored(abs_file_path, gitignore_patterns, root_path):
                 try:
+                    # Read file content
+                    with open(abs_file_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+
+                    # Generate code model for Python files
+                    if file_path.endswith('.py'):
+                        try:
+                            code_nodes = self.code_model_generator.generate_from_file(
+                                str(abs_file_path), content
+                            )
+                            logger.debug(f"Generated {len(code_nodes)} code model nodes for {file_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to generate code model for {file_path}: {e}")
+
                     # Use chunked processing for large files
                     chunks = chunk_file(str(abs_file_path))
 
@@ -730,9 +771,6 @@ class IndexingManager:
                                 )
                     else:
                         # Fallback to whole file processing if chunking fails
-                        with open(abs_file_path, "r", encoding="utf-8") as f:
-                            content = f.read()
-
                         # Check cache for existing embedding
                         embedding = None
                         cache_hit = False
@@ -1138,6 +1176,20 @@ class IndexingManager:
         indexed_files = []
 
         try:
+            # Read file content
+            with open(abs_file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Generate code model for Python files
+            if relative_file_path.endswith('.py'):
+                try:
+                    code_nodes = self.code_model_generator.generate_from_file(
+                        str(abs_file_path), content
+                    )
+                    logger.debug(f"Generated {len(code_nodes)} code model nodes for {relative_file_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to generate code model for {relative_file_path}: {e}")
+
             # Use chunked processing for large files
             chunks = chunk_file(str(abs_file_path))
 
@@ -1171,9 +1223,6 @@ class IndexingManager:
                     indexed_files.append(relative_file_path)
             else:
                 # Fallback to whole file processing if chunking fails
-                with open(abs_file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-
                 # Check cache for existing embedding
                 embedding = None
                 cache_hit = False
@@ -1381,6 +1430,18 @@ class IndexingManager:
         # Build initial dependency graph
         self._build_dependency_graph(path)
 
+        # Generate code graph for all Python files
+        python_files = [f for f in indexed_files if f.endswith('.py')]
+        if python_files:
+            print(f"Generating code models for {len(python_files)} Python files...")
+            for file_path in python_files:
+                abs_file_path = root_path / file_path
+                try:
+                    code_nodes = self.code_model_generator.generate_from_file(str(abs_file_path))
+                    logger.debug(f"Generated {len(code_nodes)} code model nodes for {file_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to generate code model for {file_path}: {e}")
+
         self._save_index()
 
         print(f"Indexed {len(indexed_files)} files in codebase at: {path}")
@@ -1528,12 +1589,80 @@ class IndexingManager:
 
         return health_stats
 
+    def update_code_graph_incremental(self, changed_files: List[str], root_path: str) -> None:
+        """Update the code graph incrementally for changed files.
+
+        Args:
+            changed_files: List of relative file paths that have been changed
+            root_path: Root path of the codebase
+        """
+        for file_path in changed_files:
+            if file_path.endswith('.py'):
+                abs_file_path = Path(root_path) / file_path
+                try:
+                    # Remove existing nodes for this file
+                    self.code_graph.remove_file_nodes(str(abs_file_path))
+
+                    # Generate new code model
+                    code_nodes = self.code_model_generator.generate_from_file(str(abs_file_path))
+                    logger.debug(f"Updated code graph with {len(code_nodes)} nodes for {file_path}")
+
+                except Exception as e:
+                    logger.warning(f"Failed to update code graph for {file_path}: {e}")
+
+    def get_code_graph_statistics(self) -> Dict[str, Any]:
+        """Get statistics about the code graph.
+
+        Returns:
+            Dictionary with code graph statistics
+        """
+        return self.code_graph.get_statistics()
+
+    def query_code_graph(self, query: str, layer_type: LayerType = None) -> List[CodeNode]:
+        """Query the code graph for nodes matching the given criteria.
+
+        Args:
+            query: Search query string
+            layer_type: Optional layer type to search in
+
+        Returns:
+            List of matching code nodes
+        """
+        return self.code_graph.find_nodes_by_name(query, layer_type)
+
+    def get_code_node(self, node_id: str, layer_type: LayerType = None) -> Optional[CodeNode]:
+        """Get a specific code node by ID.
+
+        Args:
+            node_id: Node ID to retrieve
+            layer_type: Optional layer type to search in
+
+        Returns:
+            CodeNode if found, None otherwise
+        """
+        return self.code_graph.get_node(node_id, layer_type)
+
+    def get_file_code_nodes(self, file_path: str, layer_type: LayerType = None) -> List[CodeNode]:
+        """Get all code nodes for a specific file.
+
+        Args:
+            file_path: Path to the file
+            layer_type: Optional layer type to search in
+
+        Returns:
+            List of code nodes for the file
+        """
+        return self.code_graph.get_file_nodes(file_path, layer_type)
+
     def cleanup(self) -> None:
         """Clean up resources used by the indexing manager."""
         with self._executor_lock:
             if self._executor is not None:
                 self._executor.shutdown(wait=True)
                 self._executor = None
+
+        # Save code graph
+        self.code_graph.cleanup()
 
         # Save persistent cache if available
         if self.cache:
