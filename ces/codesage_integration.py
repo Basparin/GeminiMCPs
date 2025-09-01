@@ -13,6 +13,8 @@ from typing import Dict, List, Optional, Any, Union
 from datetime import datetime
 import aiohttp
 from dataclasses import dataclass
+import time
+from collections import deque
 
 
 @dataclass
@@ -54,6 +56,14 @@ class CodeSageIntegration:
         self.connected = False
         self.server_info: Optional[Dict[str, Any]] = None
         self.available_tools: Dict[str, Dict[str, Any]] = {}
+
+        # Enhanced features
+        self.retry_attempts = 3
+        self.retry_delay = 1.0
+        self.request_history = deque(maxlen=1000)
+        self.connection_pool_size = 10
+        self.active_requests = 0
+        self.max_concurrent_requests = 5
 
         self.logger.info(f"CodeSage Integration initialized for {server_url}")
 
@@ -135,6 +145,32 @@ class CodeSageIntegration:
         except Exception as e:
             self.logger.error(f"Request failed: {e}")
             return None
+
+    async def _send_request_with_retry(self, request: MCPRequest, max_retries: int = None) -> Optional[MCPResponse]:
+        """Send MCP request with retry logic"""
+        if max_retries is None:
+            max_retries = self.retry_attempts
+
+        last_exception = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                response = await self._send_request(request)
+                if response:
+                    return response
+
+                if attempt < max_retries:
+                    await asyncio.sleep(self.retry_delay * (2 ** attempt))  # Exponential backoff
+
+            except Exception as e:
+                last_exception = e
+                if attempt < max_retries:
+                    self.logger.warning(f"Request attempt {attempt + 1} failed: {e}")
+                    await asyncio.sleep(self.retry_delay * (2 ** attempt))
+                else:
+                    self.logger.error(f"All retry attempts failed: {e}")
+
+        return None
 
     async def _discover_tools(self):
         """Discover available tools from CodeSage server"""
@@ -235,6 +271,113 @@ class CodeSageIntegration:
                 "tool": tool_name,
                 "timestamp": datetime.now().isoformat()
             }
+
+    async def execute_tools_batch(self, tool_requests: List[Dict[str, Any]],
+                                progress_callback: Optional[callable] = None) -> List[Dict[str, Any]]:
+        """
+        Execute multiple tools in batch with progress tracking
+
+        Args:
+            tool_requests: List of {"tool_name": str, "arguments": dict} items
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            List of tool execution results
+        """
+        if not self.connected:
+            return [{
+                "status": "error",
+                "error": "Not connected to CodeSage server",
+                "timestamp": datetime.now().isoformat()
+            }] * len(tool_requests)
+
+        results = []
+        semaphore = asyncio.Semaphore(self.max_concurrent_requests)
+
+        async def execute_single_tool(tool_req: Dict[str, Any], index: int):
+            async with semaphore:
+                tool_name = tool_req["tool_name"]
+                arguments = tool_req.get("arguments", {})
+
+                result = await self.execute_tool(tool_name, arguments)
+                results.append((index, result))
+
+                if progress_callback:
+                    progress_callback(index + 1, len(tool_requests), tool_name, result)
+
+                return result
+
+        # Execute tools concurrently with concurrency control
+        tasks = [execute_single_tool(req, i) for i, req in enumerate(tool_requests)]
+        await asyncio.gather(*tasks)
+
+        # Sort results by original order
+        results.sort(key=lambda x: x[0])
+        return [result for _, result in results]
+
+    async def execute_tool_with_progress(self, tool_name: str, arguments: Dict[str, Any],
+                                       progress_callback: Optional[callable] = None) -> Dict[str, Any]:
+        """
+        Execute a tool with progress tracking for long-running operations
+
+        Args:
+            tool_name: Name of the tool to execute
+            arguments: Tool arguments
+            progress_callback: Optional callback for progress updates
+
+        Returns:
+            Tool execution result
+        """
+        if progress_callback:
+            progress_callback(0, 100, "Starting tool execution", {"status": "starting"})
+
+        result = await self.execute_tool(tool_name, arguments)
+
+        if progress_callback:
+            progress_callback(100, 100, "Tool execution completed", result)
+
+        return result
+
+    async def handle_notification(self, notification: Dict[str, Any]) -> None:
+        """
+        Handle incoming MCP notifications
+
+        Args:
+            notification: MCP notification message
+        """
+        try:
+            method = notification.get("method", "")
+            params = notification.get("params", {})
+
+            if method == "notifications/tools/list_changed":
+                self.logger.info("Tool list changed, refreshing available tools")
+                await self._discover_tools()
+            elif method == "notifications/initialized":
+                self.logger.info("CodeSage server initialized")
+            elif method.startswith("custom/"):
+                # Handle custom notifications
+                self.logger.info(f"Received custom notification: {method}")
+            else:
+                self.logger.debug(f"Unhandled notification: {method}")
+
+        except Exception as e:
+            self.logger.error(f"Error handling notification: {e}")
+
+    def get_request_history(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """Get recent request history"""
+        return list(self.request_history)[-limit:]
+
+    def get_connection_stats(self) -> Dict[str, Any]:
+        """Get connection statistics"""
+        return {
+            "connected": self.connected,
+            "server_url": self.server_url,
+            "active_requests": self.active_requests,
+            "max_concurrent_requests": self.max_concurrent_requests,
+            "retry_attempts": self.retry_attempts,
+            "available_tools_count": len(self.available_tools),
+            "request_history_size": len(self.request_history)
+        }
 
     async def get_server_status(self) -> Dict[str, Any]:
         """Get CodeSage server status"""
@@ -456,3 +599,125 @@ class CESToolExtensions:
             execution_results["error"] = str(e)
 
         return execution_results
+
+    async def batch_analyze_codebase(self, codebase_path: str, analysis_types: List[str] = None) -> Dict[str, Any]:
+        """
+        Perform batch analysis of codebase using multiple tools concurrently
+
+        Args:
+            codebase_path: Path to the codebase
+            analysis_types: List of analysis types to perform
+
+        Returns:
+            Batch analysis results
+        """
+        if analysis_types is None:
+            analysis_types = ["structure", "lines_of_code", "dependencies", "performance"]
+
+        # Prepare tool requests for batch execution
+        tool_requests = []
+
+        if "structure" in analysis_types and "get_file_structure" in self.codesage.available_tools:
+            tool_requests.append({
+                "tool_name": "get_file_structure",
+                "arguments": {"codebase_path": codebase_path, "file_path": "."}
+            })
+
+        if "lines_of_code" in analysis_types and "count_lines_of_code" in self.codesage.available_tools:
+            tool_requests.append({
+                "tool_name": "count_lines_of_code",
+                "arguments": {"codebase_path": codebase_path}
+            })
+
+        if "dependencies" in analysis_types and "get_dependencies_overview" in self.codesage.available_tools:
+            tool_requests.append({
+                "tool_name": "get_dependencies_overview",
+                "arguments": {"codebase_path": codebase_path}
+            })
+
+        if "performance" in analysis_types and "get_performance_metrics" in self.codesage.available_tools:
+            tool_requests.append({
+                "tool_name": "get_performance_metrics",
+                "arguments": {}
+            })
+
+        # Progress tracking
+        progress_updates = []
+
+        def progress_callback(completed: int, total: int, tool_name: str, result: Dict[str, Any]):
+            progress_updates.append({
+                "completed": completed,
+                "total": total,
+                "tool_name": tool_name,
+                "status": result.get("status", "unknown")
+            })
+            self.logger.info(f"Batch analysis progress: {completed}/{total} - {tool_name}")
+
+        # Execute batch analysis
+        results = await self.codesage.execute_tools_batch(tool_requests, progress_callback)
+
+        return {
+            "codebase_path": codebase_path,
+            "analysis_types": analysis_types,
+            "batch_results": results,
+            "progress_updates": progress_updates,
+            "timestamp": datetime.now().isoformat(),
+            "status": "success" if all(r.get("status") == "success" for r in results) else "partial_success"
+        }
+
+    async def intelligent_workflow_execution(self, workflow_steps: List[Dict[str, Any]],
+                                          progress_callback: Optional[callable] = None) -> Dict[str, Any]:
+        """
+        Execute a complex workflow with intelligent tool orchestration
+
+        Args:
+            workflow_steps: List of workflow steps with tool requirements
+            progress_callback: Optional progress callback
+
+        Returns:
+            Workflow execution results
+        """
+        workflow_results = {
+            "workflow_steps": workflow_steps,
+            "step_results": [],
+            "timestamp": datetime.now().isoformat(),
+            "status": "running"
+        }
+
+        try:
+            for i, step in enumerate(workflow_steps):
+                step_name = step.get("name", f"Step {i+1}")
+                tool_requests = step.get("tools", [])
+
+                if progress_callback:
+                    progress_callback(i, len(workflow_steps), step_name, {"status": "starting"})
+
+                # Execute step tools in batch
+                step_results = await self.codesage.execute_tools_batch(tool_requests)
+
+                step_result = {
+                    "step_name": step_name,
+                    "tool_results": step_results,
+                    "status": "success" if all(r.get("status") == "success" for r in step_results) else "error"
+                }
+
+                workflow_results["step_results"].append(step_result)
+
+                if progress_callback:
+                    progress_callback(i + 1, len(workflow_steps), step_name, step_result)
+
+                # Check if workflow should continue
+                if step_result["status"] != "success" and step.get("required", True):
+                    workflow_results["status"] = "failed"
+                    workflow_results["failed_at_step"] = i
+                    break
+
+            if workflow_results["status"] == "running":
+                workflow_results["status"] = "completed"
+
+        except Exception as e:
+            self.logger.error(f"Workflow execution failed: {e}")
+            workflow_results["status"] = "error"
+            workflow_results["error"] = str(e)
+
+        return workflow_results
