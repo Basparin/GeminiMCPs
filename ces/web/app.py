@@ -302,6 +302,91 @@ async def create_task(task: TaskRequest):
         logger.error(f"Task creation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/tasks/{task_id}/execute")
+async def execute_task(task_id: str, execution_request: Dict[str, Any] = None):
+    """Execute a task with AI assistant."""
+    try:
+        # Get task data
+        task = await session_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        if task["status"] != "pending":
+            raise HTTPException(status_code=400, detail=f"Task is already {task['status']}")
+
+        # Determine which assistant to use
+        assistant_name = execution_request.get("assistant", "qwen") if execution_request else "qwen"
+
+        # Update task status to processing
+        task["status"] = "processing"
+        task["assistant"] = assistant_name
+        task["started_at"] = datetime.now().isoformat()
+        await session_manager.store_task(task)
+
+        # Broadcast status update
+        await manager.broadcast(json.dumps({
+            "type": "task_updated",
+            "data": task
+        }))
+
+        # Execute task with AI assistant
+        try:
+            result = await ai_manager.execute_with_assistant(
+                assistant_name,
+                task["description"],
+                context={
+                    "working_directory": "/home/basparin/Escritorio/GeminiMCPs",
+                    "yolo_mode": execution_request.get("yolo_mode", False) if execution_request else False
+                }
+            )
+
+            # Convert result to JSON-serializable format
+            if hasattr(result, '__dict__'):
+                # Handle CLIResult and APIResult objects
+                result_dict = {
+                    "success": getattr(result, 'success', False),
+                    "output": getattr(result, 'output', ''),
+                    "error": getattr(result, 'error', ''),
+                    "execution_time": getattr(result, 'execution_time', 0),
+                    "timestamp": getattr(result, 'timestamp', datetime.now().isoformat())
+                }
+                # Add CLI-specific fields if present
+                if hasattr(result, 'exit_code'):
+                    result_dict["exit_code"] = result.exit_code
+                # Add API-specific fields if present
+                if hasattr(result, 'tokens_used'):
+                    result_dict["tokens_used"] = result.tokens_used
+                    result_dict["response"] = getattr(result, 'response', '')
+            else:
+                # Handle dict results
+                result_dict = result if isinstance(result, dict) else {"output": str(result)}
+
+            # Update task with result
+            task["status"] = "completed"
+            task["result"] = result_dict
+            task["completed_at"] = datetime.now().isoformat()
+
+        except Exception as e:
+            logger.error(f"Task execution failed: {e}")
+            task["status"] = "failed"
+            task["error"] = str(e)
+            task["completed_at"] = datetime.now().isoformat()
+
+        # Store updated task
+        await session_manager.store_task(task)
+
+        # Broadcast final status
+        await manager.broadcast(json.dumps({
+            "type": "task_updated",
+            "data": task
+        }))
+
+        return task
+
+    except Exception as e:
+        logger.error(f"Task execution error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/tasks/{task_id}")
 async def get_task(task_id: str):
     """Get task details."""

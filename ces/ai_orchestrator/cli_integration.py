@@ -395,11 +395,12 @@ class GrokCLIIntegration:
 class QwenCLICoderIntegration:
     """
     Month 3 Enhanced: qwen-cli-coder integration with load balancing and fallback support
+    Updated to use correct command 'qwen' with --prompt flag for non-interactive execution
     """
 
     def __init__(self, load_balancer: Optional[LoadBalancer] = None):
         self.logger = logging.getLogger(__name__)
-        self.command = "qwen-cli-coder"
+        self.command = "qwen"  # Corrected command name
         self.timeout = 300  # 5 minutes
         self.load_balancer = load_balancer
         self.fallback_config = FallbackConfig(
@@ -415,7 +416,7 @@ class QwenCLICoderIntegration:
         self.retry_attempts = 0
 
     def is_available(self) -> bool:
-        """Check if qwen-cli-coder is available"""
+        """Check if qwen CLI is available"""
         try:
             result = subprocess.run(
                 [self.command, "--help"],
@@ -455,18 +456,16 @@ class QwenCLICoderIntegration:
                     self.load_balancer.record_request_end("qwen", False, 0.0)
                 return await self._execute_fallback(task_description, context, start_time, "qwen-cli-coder not available")
 
-            # Prepare command arguments
-            cmd_args = [self.command]
+            # Prepare command arguments for non-interactive execution
+            cmd_args = [self.command, "--prompt", task_description]
 
-            # Add task description
-            cmd_args.extend(["--task", task_description])
+            # Add YOLO mode for automation if requested
+            if context and context.get('yolo_mode', False):
+                cmd_args.append("-y")
 
-            # Add context if available
-            if context:
-                if 'file_path' in context:
-                    cmd_args.extend(["--file", context['file_path']])
-                if 'codebase_path' in context:
-                    cmd_args.extend(["--codebase", context['codebase_path']])
+            # Add working directory context
+            if context and 'working_directory' in context:
+                os.chdir(context['working_directory'])
 
             # Execute command with enhanced error handling
             process = await asyncio.create_subprocess_exec(
@@ -573,12 +572,14 @@ class QwenCLICoderIntegration:
         )
 
     def get_status(self) -> Dict[str, Any]:
-        """Get qwen-cli-coder integration status"""
+        """Get qwen CLI integration status"""
         return {
-            "name": "qwen-cli-coder",
+            "name": "qwen",
             "available": self.is_available(),
             "command": self.command,
             "timeout": self.timeout,
+            "supports_prompt_mode": True,
+            "supports_yolo_mode": True,
             "last_check": datetime.now().isoformat()
         }
 
