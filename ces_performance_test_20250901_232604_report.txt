@@ -1,0 +1,22 @@
+================================================================================
+CES SERVER PERFORMANCE ANALYSIS REPORT
+================================================================================
+Test Timestamp: 2025-09-01T23:26:04.416724
+Server URL: http://127.0.0.1:8001
+
+OVERALL PERFORMANCE SUMMARY
+----------------------------------------
+.2f
+.2f
+.2f
+.2f
+Total Errors: 0
+
+
+PERFORMANCE RECOMMENDATIONS
+----------------------------------------
+1. Low success rate detected. Investigate error patterns and implement better error handling.
+
+================================================================================
+END OF PERFORMANCE REPORT
+================================================================================

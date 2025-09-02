@@ -595,4 +595,4 @@ class AdvancedAnalysisManager:
                 "performance_bottleneck_prediction",
                 "comprehensive_code_analysis"
             ]
-        } }
+        }

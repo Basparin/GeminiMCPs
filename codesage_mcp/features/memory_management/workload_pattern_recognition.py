@@ -1122,4 +1122,4 @@ def get_workload_pattern_recognition() -> WorkloadPatternRecognition:
     global _workload_pattern_recognition
     if _workload_pattern_recognition is None:
         _workload_pattern_recognition = WorkloadPatternRecognition()
-    return _workload_pattern_recognitionon
+    return _workload_pattern_recognition

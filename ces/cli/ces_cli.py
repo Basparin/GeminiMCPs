@@ -95,12 +95,12 @@ class CESCLI:
 
             # Analyze task
             progress.update(task, description="Analyzing task requirements...")
-            analysis = agent.analyze_task(task_description)
+            analysis = await agent.analyze_task(task_description)
             progress.update(task, advance=1, description="Task analysis complete")
 
             # Execute task
             task_exec = progress.add_task("Executing task with AI assistant...", total=1)
-            result = agent.execute_task(task_description)
+            result = await agent.execute_task(task_description)
             progress.update(task_exec, completed=1)
 
             # Record performance metrics

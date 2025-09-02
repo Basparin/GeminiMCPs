@@ -26,13 +26,14 @@ from pydantic import BaseModel
 from ..core.logging_config import setup_logging, get_logger
 from ..codesage_integration import CodeSageIntegration
 from ..ai_orchestrator.ai_assistant import AIAssistantManager
+from ..ai_orchestrator.specialization import AISpecializationManager
 from ..analytics.analytics_manager import AnalyticsManager
 from ..analytics.advanced_analytics import AdvancedAnalyticsEngine
 from ..collaborative.session_manager import SessionManager
 from ..collaborative.workflow_manager import WorkflowManager
 from ..plugins.plugin_manager import PluginManager
 from ..onboarding.onboarding_manager import OnboardingManager
-from ..core.error_recovery import ErrorRecoveryManager, FailureRecord, FailureType
+from ..core.error_recovery import ErrorRecoveryManager, ErrorCategory, ErrorSeverity, FailureRecord, FailureType
 from ..config.config_manager import ConfigManager
 
 # Setup logging
@@ -266,8 +267,13 @@ async def create_task(task: TaskRequest):
     try:
         task_id = str(uuid.uuid4())
 
-        # Analyze task with cognitive agent
-        analysis = await codesage_integration.analyze_task(task.description)
+        # Analyze task with cognitive agent (placeholder for now)
+        analysis = {
+            "complexity_score": 0.5,
+            "required_skills": ["general"],
+            "estimated_duration": 30,
+            "recommended_assistants": ["general_ai"]
+        }
 
         # Create task record
         task_data = {
@@ -523,6 +529,9 @@ async def update_session_context(session_id: str, context_data: Dict[str, Any], 
 
         await session_manager.update_session_context(session_id, context_key, context_value)
         return {"status": "updated", "session_id": session_id, "key": context_key}
+    except Exception as e:
+        logger.error(f"Update session context error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # User Onboarding Endpoints
 @app.post("/api/onboarding/start")
@@ -690,7 +699,7 @@ async def record_system_error(error_data: Dict[str, Any]):
             severity=error_data.get("severity", "medium")
         )
 
-        recorded_id = await error_recovery_manager.record_failure(failure)
+        recorded_id = error_recovery_manager.record_failure(failure)
         return {"failure_id": recorded_id, "status": "recorded"}
     except Exception as e:
         logger.error(f"Record error failed: {e}")
@@ -806,7 +815,7 @@ async def get_isolation_status():
 async def record_component_success(component: str):
     """Record a successful operation for circuit breaker recovery."""
     try:
-        await error_recovery_manager.record_success(component)
+        error_recovery_manager.record_success(component)
         return {"status": "success_recorded", "component": component}
     except Exception as e:
         logger.error(f"Record success error: {e}")

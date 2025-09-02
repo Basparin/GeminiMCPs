@@ -425,6 +425,7 @@ async function sendAIQuery() {
     try {
         // Here you would integrate with the actual AI assistant
         // For now, we'll simulate a response
+        // TODO
         setTimeout(() => {
             loadingDiv.remove();
             addMessageToResponseArea('assistant', `Response from ${assistant}: This is a simulated response to "${query}"`);

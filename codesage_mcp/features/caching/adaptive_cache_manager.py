@@ -920,4 +920,4 @@ def get_adaptive_cache_manager() -> AdaptiveCacheManager:
     global _adaptive_cache_manager
     if _adaptive_cache_manager is None:
         _adaptive_cache_manager = AdaptiveCacheManager()
-    return _adaptive_cache_managerer
+    return _adaptive_cache_manager

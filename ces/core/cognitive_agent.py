@@ -10,7 +10,7 @@ import logging
 import asyncio
 import json
 import uuid
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, TYPE_CHECKING, Callable
 from dataclasses import dataclass
 from datetime import datetime
 import time
@@ -25,9 +25,11 @@ from ..config.ces_config import CESConfig
 from ..codesage_integration import CodeSageIntegration
 from ..core.performance_monitor import get_performance_monitor, get_usage_analyzer
 from ..core.tools import get_ces_tools
-from ..core.task_workflow import get_workflow_orchestrator
 from ..core.human_ai_interaction import HumanAIInteractionManager
 from ..core.error_recovery import ErrorRecoveryManager
+
+if TYPE_CHECKING:
+    from ..core.task_workflow import get_workflow_orchestrator
 
 
 @dataclass
@@ -83,6 +85,7 @@ class CognitiveAgent:
         self.ces_tools = get_ces_tools()
 
         # Workflow orchestrator (adapted from CodeSage)
+        from ..core.task_workflow import get_workflow_orchestrator
         self.workflow_orchestrator = get_workflow_orchestrator(self, self.codesage_integration)
 
         # Human-AI interaction manager for real-time collaboration

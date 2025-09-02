@@ -56,6 +56,18 @@ class RecoveryStrategy(Enum):
     RESET = "reset"
 
 
+class FailureType(Enum):
+    """Types of system failures"""
+    NETWORK_ERROR = "network_error"
+    TIMEOUT_ERROR = "timeout_error"
+    AUTHENTICATION_ERROR = "authentication_error"
+    RESOURCE_ERROR = "resource_error"
+    CONFIGURATION_ERROR = "configuration_error"
+    EXTERNAL_SERVICE_ERROR = "external_service_error"
+    INTERNAL_ERROR = "internal_error"
+    VALIDATION_ERROR = "validation_error"
+
+
 @dataclass
 class ErrorContext:
     """Context information for error handling"""
@@ -93,6 +105,18 @@ class RecoveryResult:
     error_context: ErrorContext
     recovery_metadata: Dict[str, Any] = field(default_factory=dict)
     fallback_used: bool = False
+
+
+@dataclass
+class FailureRecord:
+    """Record of a system failure for tracking and recovery"""
+    id: str
+    timestamp: str
+    failure_type: str
+    component: str
+    error_message: str
+    context: Dict[str, Any] = field(default_factory=dict)
+    severity: str = "medium"
 
 
 class CircuitBreaker:
@@ -572,6 +596,10 @@ class ErrorRecoveryManager:
         if component in self.circuit_breakers:
             self.circuit_breakers[component].record_success()
 
+    def record_success(self, component: str):
+        """Alias for record_operation_success for backward compatibility"""
+        return self.record_operation_success(component)
+
     def record_operation_failure(self, component: str):
         """Record failed operation for circuit breaker"""
         if component in self.circuit_breakers:
@@ -604,6 +632,10 @@ class ErrorRecoveryManager:
             },
             "recovery_strategies_used": dict(self.recovery_stats)
         }
+
+    def get_failure_statistics(self) -> Dict[str, Any]:
+        """Alias for get_error_statistics for backward compatibility"""
+        return self.get_error_statistics()
 
     def get_health_status(self) -> Dict[str, Any]:
         """Get overall system health status based on error patterns"""
@@ -673,6 +705,87 @@ class ErrorRecoveryManager:
             recommendations.append("Optimize operation timeouts and consider async processing")
 
         return recommendations
+
+    def record_failure(self, failure: FailureRecord) -> str:
+        """Record a system failure for tracking and analysis"""
+        try:
+            # Create error context from failure record
+            error_context = ErrorContext(
+                error_id=failure.id,
+                timestamp=datetime.fromisoformat(failure.timestamp) if isinstance(failure.timestamp, str) else failure.timestamp,
+                component=failure.component,
+                operation="system_operation",  # Default operation
+                error_category=self._map_failure_type_to_category(failure.failure_type),
+                error_severity=ErrorSeverity(failure.severity) if isinstance(failure.severity, str) else failure.severity,
+                error_message=failure.error_message,
+                stack_trace="",  # Not available in failure record
+                metadata=failure.context,
+                max_retries=3
+            )
+
+            # Add to error history
+            self.error_history.append(error_context)
+
+            # Update statistics
+            self.error_stats[error_context.error_category.value] += 1
+
+            # Keep only recent error history
+            if len(self.error_history) > 1000:
+                self.error_history = self.error_history[-1000:]
+
+            self.logger.info(f"Recorded failure: {failure.id} - {failure.error_message}")
+            return failure.id
+
+        except Exception as e:
+            self.logger.error(f"Failed to record failure: {e}")
+            raise
+
+    def _map_failure_type_to_category(self, failure_type: str) -> ErrorCategory:
+        """Map failure type to error category"""
+        mapping = {
+            "network_error": ErrorCategory.NETWORK,
+            "timeout_error": ErrorCategory.TIMEOUT,
+            "authentication_error": ErrorCategory.AUTHENTICATION,
+            "resource_error": ErrorCategory.RESOURCE,
+            "configuration_error": ErrorCategory.CONFIGURATION,
+            "external_service_error": ErrorCategory.EXTERNAL_SERVICE,
+            "validation_error": ErrorCategory.VALIDATION,
+        }
+        return mapping.get(failure_type, ErrorCategory.INTERNAL)
+
+    def run_health_checks(self) -> Dict[str, Any]:
+        """Run health checks for all components"""
+        results = {}
+
+        # Check circuit breaker health
+        for component, cb in self.circuit_breakers.items():
+            state = cb.get_state()
+            results[f"{component}_circuit_breaker"] = {
+                "healthy": state.state == "closed",
+                "state": state.state,
+                "failure_rate": state.failure_count / max(state.total_requests, 1)
+            }
+
+        # Check error rates
+        total_errors = len(self.error_history)
+        recent_errors = len([e for e in self.error_history if (datetime.now() - e.timestamp).seconds < 3600])  # Last hour
+
+        results["error_rate_check"] = {
+            "healthy": recent_errors < 10,  # Less than 10 errors per hour
+            "total_errors": total_errors,
+            "recent_errors": recent_errors,
+            "error_rate_per_hour": recent_errors
+        }
+
+        # Overall health
+        all_healthy = all(result["healthy"] for result in results.values())
+        results["overall_health"] = {
+            "healthy": all_healthy,
+            "components_checked": len(results),
+            "healthy_components": sum(1 for r in results.values() if r["healthy"])
+        }
+
+        return results
 
     def reset_error_history(self):
         """Reset error history and statistics"""

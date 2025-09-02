@@ -355,4 +355,3 @@ def get_memory_manager() -> MemoryManager:
                 _memory_manager_instance = MemoryManager()
 
     return _memory_manager_instance
-e

@@ -1170,6 +1170,49 @@ class MemoryManager:
         import gc
         gc.collect()
 
+    def get_memory_stats(self) -> Dict[str, Any]:
+        """Get current memory statistics"""
+        if not self.enable_advanced_features:
+            return {"advanced_features_disabled": True}
+
+        return {
+            "total_memory_mb": psutil.virtual_memory().total / (1024 * 1024),
+            "available_memory_mb": psutil.virtual_memory().available / (1024 * 1024),
+            "used_memory_mb": psutil.virtual_memory().used / (1024 * 1024),
+            "memory_percent": psutil.virtual_memory().percent,
+            "process_memory_mb": self.process.memory_info().rss / (1024 * 1024),
+            "model_cache_size": len(self.model_cache._cache) if hasattr(self, 'model_cache') else 0,
+            "active_connections": self.connection_pool._active_connections if hasattr(self.connection_pool, '_active_connections') else 0
+        }
+
+    def get_memory_usage_mb(self) -> float:
+        """Get current memory usage in MB"""
+        if not self.enable_advanced_features:
+            return 0.0
+        return self.process.memory_info().rss / (1024 * 1024)
+
+    def analyze_context_needs(self, task_description: str) -> List[str]:
+        """Analyze what context is needed for a task"""
+        context_needs = []
+
+        # Basic context analysis based on task keywords
+        task_lower = task_description.lower()
+
+        if any(word in task_lower for word in ['memory', 'cache', 'performance']):
+            context_needs.append('system_metrics')
+
+        if any(word in task_lower for word in ['analyze', 'review', 'check']):
+            context_needs.append('codebase_context')
+
+        if any(word in task_lower for word in ['optimize', 'improve', 'fix']):
+            context_needs.append('performance_history')
+
+        # Default context
+        if not context_needs:
+            context_needs.append('task_history')
+
+        return context_needs
+
     def __del__(self):
         """Cleanup on destruction"""
         try:
