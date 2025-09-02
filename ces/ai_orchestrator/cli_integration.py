@@ -1188,6 +1188,30 @@ class AIAssistantManager:
         max_utilization = max(utilization_values)
         return max_utilization <= 0.7  # No assistant over 70% utilization
 
+    def get_status(self) -> Dict[str, Any]:
+        """Get AI assistant manager status"""
+        available_count = len(self.get_available_assistants())
+        total_count = len(self.assistants)
+
+        return {
+            "status": "operational",
+            "total_assistants": total_count,
+            "available_assistants": available_count,
+            "assistants": list(self.assistants.keys()),
+            "load_balancing_active": True,
+            "capability_mapping_active": True,
+            "last_check": datetime.now().isoformat()
+        }
+
+    def is_healthy(self) -> bool:
+        """Check if AI assistant manager is healthy"""
+        try:
+            # Check if we have assistants and at least basic functionality
+            return len(self.assistants) > 0 and self.load_balancer is not None
+        except Exception as e:
+            self.logger.error(f"Health check failed: {e}")
+            return False
+
     def health_check(self) -> Dict[str, Any]:
         """Perform health check on all assistants with Month 3 enhancements"""
         health_status = {

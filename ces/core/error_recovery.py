@@ -794,3 +794,13 @@ class ErrorRecoveryManager:
         self.error_stats.clear()
         self.recovery_stats.clear()
         self.logger.info("Error history and statistics reset")
+
+    def is_healthy(self) -> bool:
+        """Check if error recovery manager is healthy"""
+        try:
+            # Check if we have basic functionality
+            health_status = self.get_health_status()
+            return health_status.get('status') in ['healthy', 'degraded']
+        except Exception as e:
+            self.logger.error(f"Health check failed: {e}")
+            return False

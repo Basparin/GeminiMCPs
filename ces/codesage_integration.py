@@ -423,6 +423,74 @@ class CodeSageIntegration:
         """Get information about a specific tool"""
         return self.available_tools.get(tool_name)
 
+    async def get_performance_metrics(self) -> Dict[str, Any]:
+        """
+        Get comprehensive performance metrics from CodeSage server
+
+        Returns:
+            Dictionary containing performance metrics
+        """
+        if not self.connected:
+            return {
+                "status": "disconnected",
+                "error": "Not connected to CodeSage server",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        try:
+            # Get performance metrics using available tools
+            metrics = {
+                "timestamp": datetime.now().isoformat(),
+                "server_status": "connected",
+                "connection_stats": self.get_connection_stats(),
+                "tool_count": len(self.available_tools),
+                "active_requests": self.active_requests,
+                "request_history_size": len(self.request_history)
+            }
+
+            # Try to get specific performance metrics if tools are available
+            if "get_performance_metrics" in self.available_tools:
+                perf_result = await self.execute_tool("get_performance_metrics", {})
+                if perf_result.get("status") == "success":
+                    metrics["performance_data"] = perf_result.get("result", {})
+                else:
+                    metrics["performance_data"] = {"error": "Failed to retrieve performance data"}
+
+            # Add system-level metrics
+            import psutil
+            try:
+                metrics["system_metrics"] = {
+                    "cpu_percent": psutil.cpu_percent(interval=0.1),
+                    "memory_percent": psutil.virtual_memory().percent,
+                    "disk_usage_percent": psutil.disk_usage('/').percent
+                }
+            except ImportError:
+                metrics["system_metrics"] = {"error": "psutil not available"}
+
+            return metrics
+
+        except Exception as e:
+            self.logger.error(f"Performance metrics retrieval failed: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+                "timestamp": datetime.now().isoformat()
+            }
+
+    def is_healthy(self) -> bool:
+        """
+        Check if CodeSage integration is healthy
+
+        Returns:
+            True if healthy, False otherwise
+        """
+        try:
+            # Check if connected and has tools available
+            return self.connected and len(self.available_tools) > 0
+        except Exception as e:
+            self.logger.error(f"Health check failed: {e}")
+            return False
+
     async def health_check(self) -> Dict[str, Any]:
         """Perform health check on CodeSage integration"""
         health_status = {

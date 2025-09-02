@@ -238,7 +238,7 @@ async def get_system_status():
         ai_status = ai_manager.get_status()
 
         # Get analytics summary
-        analytics_summary = analytics_manager.get_summary()
+        analytics_summary = await analytics_manager.get_summary()
 
         return {
             "performance": performance_data,
